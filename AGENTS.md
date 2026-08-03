@@ -24,13 +24,23 @@ pins and draws them as runs of the game's `map_dot` texture (native spacing, jit
 flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
 (above the game's dotted connections, below the node icons). Colors come from
 `StsColors`. With five or fewer routes left, a legend panel above the native Share
-button shows them as a table — one row per route ("Route N", no pin score), count
-columns headed by map icons in the fixed order elites / fires / combats / shops /
-chests / events, zeros dimmed — plus a vertical icon-column tooltip (boss end at the
-top) on hover/focus, darkening that route to the traveled-ink color on the map while
-the rest fade. Pinned nodes are stamped with the game's own map_circle art tinted
-rust — always `map_circle_4`, the completed frame: the earlier four are the drawing
-animation and look torn as stills. The controller cursor is the same art in gold.
+button shows them as a table — one row per route, named by a letter in the route's
+line color ("A)", "B)", …), count columns headed by map icons in the fixed order
+elites / fires / combats / shops / chests / events, zeros dimmed — plus a vertical
+icon-column tooltip (boss end at the top) on hover/focus, darkening that route to
+the traveled-ink color on the map while the rest fade. Pinned nodes are stamped with
+the game's own map_circle art tinted rust — always `map_circle_4`, the completed
+frame: the earlier four are the drawing animation and look torn as stills. The
+controller cursor is the same art in gold, shown only while
+`NControllerManager.IsUsingDirectionalNavigation`.
+
+Two lifecycle rules the hard way: the map screen's root stays in the tree when the
+map closes (the game only hides its own contents), so every panel parented to the
+screen root hides itself on `Closed` and shows on open — or it lingers over combat
+and the settings menu. And a locked route is matched by suffix, not equality:
+advancing a floor along it shortens every recomputed route by its head, so the tail
+IS the same plan; deviation clears it naturally because the new position is no
+longer on the stored route.
 
 Pins and the locked route persist across map opens and game restarts via
 `PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)

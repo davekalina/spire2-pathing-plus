@@ -1,6 +1,7 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Runs;
 using PathingPlus.PathingPlusCode.Pathing;
@@ -56,7 +57,13 @@ internal sealed class PathingView : IDisposable
                 _overlay.HideCursor();
         });
         _navigator.NodeFocused += node => Guard.Run("Showing the map cursor", () =>
-            _overlay.ShowCursor(node.Position + node.Size * 0.5f));
+        {
+            // The gold ring is a controller aid; with a mouse the pointer is the cursor.
+            if (NControllerManager.Instance?.IsUsingDirectionalNavigation == true)
+                _overlay.ShowCursor(node.Position + node.Size * 0.5f);
+            else
+                _overlay.HideCursor();
+        });
         _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
         _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
         _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
@@ -73,6 +80,8 @@ internal sealed class PathingView : IDisposable
     public void OnOpened()
     {
         _zoom.Reset();
+        _zoom.SetButtonVisible(true);
+        _panel.SetShellVisible(true);
         Refresh();
     }
 
@@ -160,10 +169,12 @@ internal sealed class PathingView : IDisposable
         _shownRoutes = match.Shown.Select(s => s.Path).ToList();
         _hotRoute = -1;
 
-        // A locked route survives recomputes (and restarts) as long as it still exists.
+        // A locked route survives recomputes (and restarts) as long as it still
+        // exists — including as the tail of itself after advancing a floor along it.
+        // Deviating off it means the new position is not on the stored route, no
+        // suffix matches, and the lock clears.
         _lockedRoute = IndexOfRoute(_lockedRouteIds);
-        if (_lockedRoute < 0)
-            _lockedRouteIds = null;
+        _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
 
         UpdateOverlay();
         UpdatePanel(pathSet.Truncated);
@@ -179,9 +190,21 @@ internal sealed class PathingView : IDisposable
         if (ids is null)
             return -1;
         for (var i = 0; i < _shownRoutes.Count; i++)
-            if (_shownRoutes[i].SequenceEqual(ids))
+            if (IsSuffixOf(_shownRoutes[i], ids))
                 return i;
         return -1;
+    }
+
+    /// <summary>Whether <paramref name="route" /> is the tail of <paramref name="stored" />.</summary>
+    private static bool IsSuffixOf(IReadOnlyList<string> route, IReadOnlyList<string> stored)
+    {
+        if (route.Count > stored.Count)
+            return false;
+        var offset = stored.Count - route.Count;
+        for (var i = 0; i < route.Count; i++)
+            if (stored[offset + i] != route[i])
+                return false;
+        return true;
     }
 
     private void PersistState()
@@ -235,7 +258,11 @@ internal sealed class PathingView : IDisposable
     {
         _zoom.Reset();
         _hotRoute = -1;
-        _panel.HideTooltip();
+        // The screen root stays in the tree when the map closes — the game only hides
+        // its own contents — so panels parented to it must hide themselves, or they
+        // linger over combat and the settings menu.
+        _panel.SetShellVisible(false);
+        _zoom.SetButtonVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });
 
@@ -315,7 +342,7 @@ internal sealed class PathingView : IDisposable
             var columnIcons = ColumnKinds.Select(kinds => MapIcons.For(kinds[0])).ToList();
             var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                $"Route {index + 1}",
+                $"{(char)('A' + index)})",
                 // The tooltip runs vertically like the map: boss end at the top.
                 route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))

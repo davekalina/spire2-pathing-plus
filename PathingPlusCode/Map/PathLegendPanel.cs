@@ -23,10 +23,11 @@ internal sealed class PathLegendPanel : IDisposable
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
     private static readonly Color HintColor = new(0.898f, 0.882f, 0.831f, 0.7f);
 
-    /// <summary>Row geometry: swatch and name, then one count column per category.</summary>
-    private const float ColumnsStartX = 148f;
-    private const float ColumnWidth = 38f;
+    /// <summary>Row geometry: a colored route letter, then one count column per category.</summary>
+    private const float ColumnsStartX = 64f;
+    private const float ColumnWidth = 44f;
     private const float RowHeight = 42f;
+    private const float HeaderIconSize = 39f;
 
     private readonly Control _screen;
     private readonly PanelContainer _panel;
@@ -151,13 +152,13 @@ internal sealed class PathLegendPanel : IDisposable
         WireFocus();
     }
 
-    /// <summary>Category icons above their count columns; the name column stays blank.</summary>
+    /// <summary>Category icons above their count columns; the letter column stays blank.</summary>
     private Control BuildColumnHeader(IReadOnlyList<Texture2D?> icons)
     {
         var header = new Control
         {
             Name = "RouteColumns",
-            CustomMinimumSize = new Vector2(ColumnsStartX + ColumnWidth * icons.Count, 34),
+            CustomMinimumSize = new Vector2(ColumnsStartX + ColumnWidth * icons.Count, HeaderIconSize + 8),
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         for (var c = 0; c < icons.Count; c++)
@@ -170,8 +171,9 @@ internal sealed class PathLegendPanel : IDisposable
                 Texture = icons[c],
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                Position = new Vector2(ColumnsStartX + c * ColumnWidth + (ColumnWidth - 26) / 2, 4),
-                Size = new Vector2(26, 26),
+                Position = new Vector2(
+                    ColumnsStartX + c * ColumnWidth + (ColumnWidth - HeaderIconSize) / 2, 4),
+                Size = new Vector2(HeaderIconSize, HeaderIconSize),
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             });
         }
@@ -214,6 +216,14 @@ internal sealed class PathLegendPanel : IDisposable
     }
 
     public void HideTooltip() => _routeTooltip.Visible = false;
+
+    /// <summary>The whole surface, hidden while the map screen itself is closed.</summary>
+    public void SetShellVisible(bool visible)
+    {
+        _panel.Visible = visible;
+        if (!visible)
+            HideTooltip();
+    }
 
     /// <summary>
     /// Remove before freeing: QueueFree alone leaves the child in the tree until end
@@ -262,17 +272,11 @@ internal sealed class PathLegendPanel : IDisposable
         row.AddChild(lockMark);
         _lockMarks.Add(lockMark);
 
-        row.AddChild(new ColorRect
-        {
-            Color = color,
-            Position = new Vector2(10, 18),
-            Size = new Vector2(30, 6),
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        });
-
-        var label = MakeLabel(20, text);
-        label.Position = new Vector2(54, 0);
-        label.Size = new Vector2(ColumnsStartX - 58, RowHeight);
+        // The route letter carries the route's line color — no separate swatch.
+        var label = MakeLabel(24, text);
+        label.AddThemeColorOverride("font_color", color);
+        label.Position = new Vector2(12, 0);
+        label.Size = new Vector2(ColumnsStartX - 16, RowHeight);
         label.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(label);
 

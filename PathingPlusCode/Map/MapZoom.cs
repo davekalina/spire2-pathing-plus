@@ -35,6 +35,9 @@ internal sealed class MapZoom : IDisposable
     /// <summary>Raised after the state flips, either direction, any cause.</summary>
     public event Action? Toggled;
 
+    /// <summary>The button, hidden while the map screen itself is closed.</summary>
+    public void SetButtonVisible(bool visible) => _tray.Visible = visible;
+
     public MapZoom(NMapScreen screen, Control theMap, Func<IReadOnlyList<Vector2>> nodeCenters)
     {
         _screen = screen;
