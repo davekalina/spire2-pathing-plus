@@ -1,40 +1,49 @@
 using Godot;
+using MegaCrit.Sts2.Core.Helpers;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
-/// The lines and pin rings drawn over the map. Lives in its own layer inserted into
-/// <c>TheMap</c> directly below <c>Points</c>: above the game's dotted connections,
-/// below the node icons, and panning with the map for free. The game's own dots are
-/// never touched, so there is nothing for <c>SetMap</c> or the travel animation to
-/// stomp and nothing to restore.
+/// The route dots and pin rings drawn over the map. Lives in its own layer inserted
+/// into <c>TheMap</c> directly below <c>Points</c>: above the game's dotted
+/// connections, below the node icons, panning with the map for free. The game's own
+/// dots are never touched, so there is nothing for <c>SetMap</c> to stomp.
+///
+/// Routes are runs of the game's <c>map_dot</c> texture with the same hand-placed
+/// wobble the native connections use — spacing, jitter, random flips, rotation noise
+/// — so they read as part of the map rather than lines ruled over it. The wobble is
+/// seeded from the route itself, so a refresh does not make the dots shimmer.
 /// </summary>
 internal sealed class PathOverlay : IDisposable
 {
-    /// <summary>One colour per legend slot; distinct against every act's parchment.</summary>
+    /// <summary>One colour per legend slot, straight from the game's palette.</summary>
     public static readonly Color[] RouteColors =
     [
-        new(0.31f, 0.76f, 0.97f), // sky
-        new(0.94f, 0.42f, 0.38f), // ember
-        new(0.45f, 0.80f, 0.52f), // moss
-        new(0.99f, 0.76f, 0.35f), // amber
-        new(0.73f, 0.50f, 0.88f), // violet
+        StsColors.blue,
+        StsColors.red,
+        StsColors.green,
+        StsColors.orange,
+        StsColors.purple,
     ];
 
-    private static readonly Color UnionColor = new(1f, 1f, 1f, 0.32f);
-    private static readonly Color PinColor = new(1f, 0.83f, 0.36f);
-    private static readonly Color FadedModulate = new(1f, 1f, 1f, 0.12f);
+    private static readonly Color UnionColor = StsColors.darkBlue with { A = 0.4f };
+    private static readonly Color PinColor = StsColors.gold;
 
-    private const float RouteWidth = 5f;
-    private const float HighlightWidth = 9f;
+    /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
+    private static readonly Color HighlightInk = StsColors.pathDotTraveled;
 
-    /// <summary>Parallel routes share edges; a small per-route shift keeps all visible.</summary>
-    private const float RouteSeparation = 6f;
+    private const float DotSpacing = 22f;
+    private const float BaseScale = 1.2f;
+    private const float HighlightScale = 1.5f;
+    private const float FadedAlpha = 0.15f;
+
+    /// <summary>Parallel routes share edges; a per-route shift keeps each run visible.</summary>
+    private const float RouteSeparation = 10f;
 
     private readonly Control _layer;
-    private readonly List<Line2D> _routeLines = [];
+    private readonly List<List<TextureRect>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
-    private readonly List<Line2D> _unionLines = [];
+    private readonly List<TextureRect> _unionDots = [];
     private readonly List<Line2D> _pinRings = [];
 
     public PathOverlay(Control theMap, Control points)
@@ -48,18 +57,17 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>Up to <see cref="RouteColors" />.Length full routes, one colour each.</summary>
     public void ShowRoutes(IReadOnlyList<Vector2[]> routes)
     {
-        ClearLines();
+        ClearDots();
         for (var i = 0; i < routes.Count; i++)
         {
             if (routes[i].Length < 2)
                 continue;
             var shift = new Vector2((i - (routes.Count - 1) * 0.5f) * RouteSeparation, 0f);
             var color = RouteColors[i % RouteColors.Length];
-            var line = MakeLine(color, RouteWidth);
-            line.Points = routes[i].Select(p => p + shift).ToArray();
-            _routeLines.Add(line);
+            var dots = new List<TextureRect>();
+            ScatterDots(routes[i].Select(p => p + shift).ToArray(), color, dots);
+            _routeDots.Add(dots);
             _routeColors.Add(color);
-            _layer.AddChild(line);
         }
     }
 
@@ -69,35 +77,24 @@ internal sealed class PathOverlay : IDisposable
     /// </summary>
     public void ShowUnion(IEnumerable<(Vector2 From, Vector2 To)> edges)
     {
-        ClearLines();
+        ClearDots();
         foreach (var (from, to) in edges)
-        {
-            var line = MakeLine(UnionColor, RouteWidth);
-            line.Points = [from, to];
-            _unionLines.Add(line);
-            _layer.AddChild(line);
-        }
+            ScatterDots([from, to], UnionColor, _unionDots);
     }
 
-    /// <summary>−1 restores every route; otherwise that route goes white and wide while the rest fade.</summary>
+    /// <summary>−1 restores every route; otherwise that route turns to ink while the rest fade.</summary>
     public void SetHighlight(int index)
     {
-        for (var i = 0; i < _routeLines.Count; i++)
+        for (var i = 0; i < _routeDots.Count; i++)
         {
-            var line = _routeLines[i];
-            if (index >= 0 && i == index)
+            var (color, scale) = index < 0 ? (_routeColors[i], BaseScale)
+                : i == index ? (HighlightInk, HighlightScale)
+                : (_routeColors[i] with { A = FadedAlpha }, BaseScale);
+            foreach (var dot in _routeDots[i])
             {
-                line.DefaultColor = Colors.White;
-                line.Width = HighlightWidth;
-                line.Modulate = Colors.White;
-                line.ZIndex = 10;
-            }
-            else
-            {
-                line.DefaultColor = _routeColors[i];
-                line.Width = RouteWidth;
-                line.Modulate = index >= 0 ? FadedModulate : Colors.White;
-                line.ZIndex = 0;
+                dot.Modulate = color;
+                dot.Scale = Vector2.One * scale;
+                dot.ZIndex = index >= 0 && i == index ? 10 : 0;
             }
         }
     }
@@ -111,9 +108,15 @@ internal sealed class PathOverlay : IDisposable
         foreach (var center in centers)
         {
             // The node icon art is 92 px; the ring must clear it, not cut through it.
-            var ring = MakeLine(PinColor, 4f);
-            ring.Points = Circle(52f);
-            ring.Position = center;
+            var ring = new Line2D
+            {
+                Width = 4f,
+                DefaultColor = PinColor,
+                JointMode = Line2D.LineJointMode.Round,
+                Antialiased = true,
+                Points = Circle(52f),
+                Position = center,
+            };
             _pinRings.Add(ring);
             _layer.AddChild(ring);
         }
@@ -121,7 +124,7 @@ internal sealed class PathOverlay : IDisposable
 
     public void Clear()
     {
-        ClearLines();
+        ClearDots();
         ShowPins([]);
     }
 
@@ -131,24 +134,73 @@ internal sealed class PathOverlay : IDisposable
             _layer.QueueFree();
     }
 
-    private void ClearLines()
+    /// <summary>
+    /// The native connection look, from <c>NMapScreen.CreatePath</c>: a dot every
+    /// 22 px, skipping the segment ends so runs stop short of the node art, each dot
+    /// nudged, spun a little, and randomly mirrored.
+    /// </summary>
+    private void ScatterDots(Vector2[] polyline, Color color, List<TextureRect> sink)
     {
-        foreach (var line in _routeLines.Concat(_unionLines))
-            line.QueueFree();
-        _routeLines.Clear();
-        _routeColors.Clear();
-        _unionLines.Clear();
+        var texture = ResourceLoader.Load<Texture2D>(
+            "res://images/atlases/compressed.sprites/map/map_dot.tres",
+            null, ResourceLoader.CacheMode.Reuse);
+        var random = new Random(SeedFor(polyline));
+
+        for (var s = 1; s < polyline.Length; s++)
+        {
+            var start = polyline[s - 1];
+            var direction = (polyline[s] - start).Normalized();
+            var angle = direction.Angle() + MathF.PI / 2f;
+            var count = (int)(start.DistanceTo(polyline[s]) / DotSpacing) + 1;
+            for (var i = 1; i < count; i++)
+            {
+                var center = start + direction * (i * DotSpacing) + new Vector2(
+                    (float)(random.NextDouble() * 6.0 - 3.0),
+                    (float)(random.NextDouble() * 6.0 - 3.0));
+                var dot = new TextureRect
+                {
+                    Texture = texture,
+                    Size = new Vector2(16, 16),
+                    PivotOffset = new Vector2(8, 8),
+                    Position = center - new Vector2(8, 8),
+                    Rotation = angle + Gaussian(random) * 0.1f,
+                    FlipH = random.Next(2) == 0,
+                    Scale = Vector2.One * BaseScale,
+                    Modulate = color,
+                    MouseFilter = Control.MouseFilterEnum.Ignore,
+                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                };
+                sink.Add(dot);
+                _layer.AddChild(dot);
+            }
+        }
     }
 
-    private static Line2D MakeLine(Color color, float width) => new()
+    private void ClearDots()
     {
-        Width = width,
-        DefaultColor = color,
-        JointMode = Line2D.LineJointMode.Round,
-        BeginCapMode = Line2D.LineCapMode.Round,
-        EndCapMode = Line2D.LineCapMode.Round,
-        Antialiased = true,
-    };
+        foreach (var dot in _routeDots.SelectMany(run => run).Concat(_unionDots))
+            dot.QueueFree();
+        _routeDots.Clear();
+        _routeColors.Clear();
+        _unionDots.Clear();
+    }
+
+    /// <summary>Stable per-route seed so the wobble survives a recompute unchanged.</summary>
+    private static int SeedFor(Vector2[] polyline)
+    {
+        var hash = 17;
+        foreach (var point in polyline)
+            hash = unchecked(hash * 31 + ((int)point.X * 397 ^ (int)point.Y));
+        return hash;
+    }
+
+    private static float Gaussian(Random random)
+    {
+        var u1 = 1.0 - random.NextDouble();
+        var u2 = random.NextDouble();
+        return (float)(Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2));
+    }
 
     private static Vector2[] Circle(float radius)
     {

@@ -194,13 +194,15 @@ internal sealed class PathingView : IDisposable
         }
         else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
         {
-            var routes = _shownRoutes.Select((route, index) => (
+            var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
                 $"Route {index + 1}",
-                (IReadOnlyList<Texture2D>)route.Skip(1)
+                // The tooltip runs vertically like the map: boss end at the top.
+                route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
                     .OfType<Texture2D>()
-                    .ToList())).ToList();
+                    .ToList(),
+                Summarize(route))).ToList();
             _panel.SetContent(
                 _shownRoutes.Count == 1 ? "1 route" : $"{_shownRoutes.Count} routes",
                 "Hover a route to preview it", routes);
@@ -211,6 +213,33 @@ internal sealed class PathingView : IDisposable
                 $"{_shownRoutes.Count}{(truncated ? "+" : "")} routes",
                 "Pin map nodes to narrow the routes", []);
         }
+    }
+
+    /// <summary>
+    /// "2 elites, 1 fire, …" — the same categories in the same order for every route,
+    /// zeros included, so two routes can be compared line against line.
+    /// </summary>
+    private IReadOnlyList<string> Summarize(IReadOnlyList<string> route)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var id in route.Skip(1))
+        {
+            var kind = _adapter!.Graph.Node(id).RoomKind;
+            counts[kind] = counts.GetValueOrDefault(kind) + 1;
+        }
+
+        int Of(params string[] kinds) => kinds.Sum(counts.GetValueOrDefault);
+        string Line(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+
+        return
+        [
+            Line(Of(nameof(MapPointType.Elite)), "elite"),
+            Line(Of(nameof(MapPointType.RestSite)), "fire"),
+            Line(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), "event"),
+            Line(Of(nameof(MapPointType.Monster)), "combat"),
+            Line(Of(nameof(MapPointType.Treasure)), "chest"),
+            Line(Of(nameof(MapPointType.Shop)), "shop"),
+        ];
     }
 
     private void Clear()

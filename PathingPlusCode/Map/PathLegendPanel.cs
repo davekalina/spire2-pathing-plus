@@ -29,12 +29,14 @@ internal sealed class PathLegendPanel : IDisposable
     private readonly MegaLabel _header;
     private readonly MegaLabel _hint;
     private readonly PanelContainer _tooltip;
-    private readonly HBoxContainer _tooltipIcons;
+    private readonly MegaLabel _tooltipHeader;
+    private readonly VBoxContainer _tooltipIcons;
+    private readonly VBoxContainer _tooltipSummary;
     private readonly Font? _font;
 
     private readonly List<Control> _rows = [];
     private readonly List<ColorRect> _lockMarks = [];
-    private readonly List<IReadOnlyList<Texture2D>> _rowIcons = [];
+    private readonly List<RouteDisplay> _rowData = [];
     private Control? _nativeNeighbor;
     private NodePath? _nativeNeighborOriginalBottom;
 
@@ -82,18 +84,29 @@ internal sealed class PathLegendPanel : IDisposable
         tooltipMargin.AddThemeConstantOverride("margin_top", 8);
         tooltipMargin.AddThemeConstantOverride("margin_bottom", 8);
         _tooltip.AddChild(tooltipMargin);
-        _tooltipIcons = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _tooltipIcons.AddThemeConstantOverride("separation", 4);
-        tooltipMargin.AddChild(_tooltipIcons);
+
+        // Header on top; below it the route runs vertically like the map itself
+        // (boss end at the top), with the fixed-order summary beside it.
+        var tooltipStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        tooltipStack.AddThemeConstantOverride("separation", 6);
+        tooltipMargin.AddChild(tooltipStack);
+        _tooltipHeader = MakeLabel(20);
+        tooltipStack.AddChild(_tooltipHeader);
+        var tooltipColumns = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        tooltipColumns.AddThemeConstantOverride("separation", 14);
+        tooltipStack.AddChild(tooltipColumns);
+        _tooltipIcons = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _tooltipIcons.AddThemeConstantOverride("separation", 2);
+        tooltipColumns.AddChild(_tooltipIcons);
+        _tooltipSummary = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _tooltipSummary.AddThemeConstantOverride("separation", 0);
+        tooltipColumns.AddChild(_tooltipSummary);
 
         screen.AddChild(_panel);
         screen.AddChild(_tooltip);
     }
 
-    public void SetContent(
-        string headerText,
-        string hintText,
-        IReadOnlyList<(Color Color, string Label, IReadOnlyList<Texture2D> Icons)> routes)
+    public void SetContent(string headerText, string hintText, IReadOnlyList<RouteDisplay> routes)
     {
         _header.Text = headerText;
         _hint.Text = hintText;
@@ -104,13 +117,13 @@ internal sealed class PathLegendPanel : IDisposable
             row.QueueFree();
         _rows.Clear();
         _lockMarks.Clear();
-        _rowIcons.Clear();
+        _rowData.Clear();
 
         for (var i = 0; i < routes.Count; i++)
         {
             var row = BuildRow(i, routes[i].Color, routes[i].Label);
             _rows.Add(row);
-            _rowIcons.Add(routes[i].Icons);
+            _rowData.Add(routes[i]);
             // Rows sit between the header and the hint.
             _list.AddChild(row);
             _list.MoveChild(row, 1 + i);
@@ -129,20 +142,29 @@ internal sealed class PathLegendPanel : IDisposable
     {
         if (index < 0 || index >= _rows.Count)
             return;
+        var route = _rowData[index];
+
+        _tooltipHeader.Text = route.Label;
+        _tooltipHeader.AddThemeColorOverride("font_color", route.Color);
 
         foreach (var child in _tooltipIcons.GetChildren())
             child.QueueFree();
-        foreach (var texture in _rowIcons[index])
+        foreach (var texture in route.Icons)
         {
             _tooltipIcons.AddChild(new TextureRect
             {
                 Texture = texture,
-                CustomMinimumSize = new Vector2(34, 34),
+                CustomMinimumSize = new Vector2(30, 30),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             });
         }
+
+        foreach (var child in _tooltipSummary.GetChildren())
+            child.QueueFree();
+        foreach (var line in route.Summary)
+            _tooltipSummary.AddChild(MakeLabel(16, line));
 
         var size = _tooltip.GetCombinedMinimumSize();
         _tooltip.Size = size;
@@ -286,3 +308,11 @@ internal sealed class PathLegendPanel : IDisposable
         ModulateColor = new Color(0f, 0f, 0f, 0.75f),
     };
 }
+
+/// <param name="Icons">Room icons in map order: the boss end first, the next step last.</param>
+/// <param name="Summary">Category counts, always the same categories in the same order.</param>
+internal sealed record RouteDisplay(
+    Color Color,
+    string Label,
+    IReadOnlyList<Texture2D> Icons,
+    IReadOnlyList<string> Summary);
