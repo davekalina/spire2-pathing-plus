@@ -1,4 +1,4 @@
-# __MOD_NAME__ — repository instructions
+# Pathing Plus — repository instructions
 
 This repository is one Slay the Spire 2 mod. These instructions apply throughout it.
 A more specific `AGENTS.md` may add to or override them for its directory.
@@ -10,11 +10,11 @@ pipeline work. Those are platform facts. This file is how I want the work done.
 
 | | |
 | --- | --- |
-| Mod id | `__MOD_ID__` |
-| Display name | __MOD_NAME__ |
-| Installs to | `<game>/mods/__MOD_ID__/` |
-| Manifest | `__MOD_ID__.json` |
-| Version is also printed in | `__MOD_ID__Code/MainFile.cs` |
+| Mod id | `PathingPlus` |
+| Display name | Pathing Plus |
+| Installs to | `<game>/mods/PathingPlus/` |
+| Manifest | `PathingPlus.json` |
+| Version is also printed in | `PathingPlusCode/MainFile.cs` |
 | Gameplay | Informational only; `affects_gameplay` is `false` |
 | Dependencies | None yet |
 

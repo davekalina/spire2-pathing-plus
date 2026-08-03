@@ -2,7 +2,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 
-namespace __MOD_ID__.__MOD_ID__Code;
+namespace PathingPlus.PathingPlusCode;
 
 [ModInitializer(nameof(Initialize))]
 public partial class MainFile : Node
@@ -12,7 +12,7 @@ public partial class MainFile : Node
     /// because the loader loads "&lt;id&gt;.dll" from "&lt;game&gt;/mods/&lt;id&gt;/".
     /// Changing it after publishing orphans the Workshop item.
     /// </summary>
-    public const string ModId = "__MOD_ID__";
+    public const string ModId = "PathingPlus";
 
     public static MegaCrit.Sts2.Core.Logging.Logger Logger { get; } =
         new(ModId, MegaCrit.Sts2.Core.Logging.LogType.Generic);
@@ -22,6 +22,6 @@ public partial class MainFile : Node
         new Harmony(ModId).PatchAll();
 
         // Keep this string in sync with the manifest version.
-        Logger.Info("__MOD_NAME__ v0.1.0 initialized.");
+        Logger.Info("Pathing Plus v0.1.0 initialized.");
     }
 }

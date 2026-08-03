@@ -1,7 +1,7 @@
-using __MOD_ID__.__MOD_ID__Code;
+using PathingPlus.PathingPlusCode;
 using Xunit;
 
-namespace __MOD_ID__.Tests;
+namespace PathingPlus.Tests;
 
 public class ExampleTests
 {

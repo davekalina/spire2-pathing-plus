@@ -11,7 +11,7 @@
       project: it references sts2.dll, which cannot be loaded outside the game.
       Keep game-independent calculations in their own files so they can be linked here.
     -->
-    <Compile Include="..\__MOD_ID__Code\Example.cs" Link="Example.cs" />
+    <Compile Include="..\PathingPlusCode\Example.cs" Link="Example.cs" />
 
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
