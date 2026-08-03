@@ -42,7 +42,10 @@ Game coupling that a game update can move (verify after every update):
 
 Known gap: pinning needs the mouse — non-travelable nodes are not controller-focusable
 natively. The legend is controller-navigable (chained below the native map legend's
-last item). A controller pin mode is the next planned change.
+last item). Whether to build a controller pin mode is an open question: doing it
+properly may mean replacing much of the map UI, and pathing at the start of an act is
+a mouse activity in practice, so this mod may end up an accepted exception to the
+gamepad rule. Decision deferred; the basics come first.
 
 ### Surfaces to audit
 
