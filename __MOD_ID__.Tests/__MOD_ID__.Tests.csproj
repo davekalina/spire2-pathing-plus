@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+      Link in the pure logic files you want to test. Do NOT ProjectReference the mod
+      project: it references sts2.dll, which cannot be loaded outside the game.
+      Keep game-independent calculations in their own files so they can be linked here.
+    -->
+    <Compile Include="..\__MOD_ID__Code\Example.cs" Link="Example.cs" />
+
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project>
+    <!--
+      Machine-specific build configuration. Copy this file to Directory.Build.props
+      and edit the paths; Directory.Build.props is gitignored.
+
+      Only needed when Sts2PathDiscovery.props cannot find the game automatically,
+      or when exporting a .pck.
+    -->
+    <PropertyGroup>
+        <!-- MegaDot / Godot mono executable used for export-pack when publishing.
+             The game will not load a .pck exported by a newer Godot than it ships
+             with, so keep this pinned to the version the game uses. -->
+        <GodotPath>C:/megadot/MegaDot_v4.5.1-stable_mono_win64.exe</GodotPath>
+
+        <!-- Uncomment and set if the game is not found automatically. -->
+        <!-- <Sts2Path>D:/SteamLibrary/steamapps/common/Slay the Spire 2</Sts2Path> -->
+    </PropertyGroup>
+</Project>

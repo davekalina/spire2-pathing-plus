@@ -1,0 +1,36 @@
+<Project Sdk="Godot.NET.Sdk/4.5.1" InitialTargets="CheckDependencyPaths">
+  <Import Project=".\Sts2PathDiscovery.props" />
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GodotDisabledSourceGenerators>GodotPluginsInitializer</GodotDisabledSourceGenerators>
+    <!-- MSB3270: the game ships a platform-specific build while mods are MSIL. -->
+    <NoWarn>$(NoWarn);MSB3270;STS002</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(Sts2DataDir)')">
+    <Reference Include="0Harmony"><HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="sts2"><HintPath>$(Sts2DataDir)/sts2.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*" />
+    <!-- Uncomment to use BaseLib's config registry, extended saves, and helper APIs.
+         Then add {"id": "BaseLib", "min_version": "..."} to the manifest dependencies. -->
+    <!-- <PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All" /> -->
+    <Compile Remove="$(MSBuildProjectName).Tests/**" />
+    <None Include="$(MSBuildProjectName).json" />
+  </ItemGroup>
+
+  <Target Name="CheckDependencyPaths">
+    <Error Text="Slay the Spire 2 data not found at '$(Sts2DataDir)'. Copy Directory.Build.props.example to Directory.Build.props and set Sts2Path."
+           Condition="'$(Sts2DataDir)' == '' or !Exists('$(Sts2DataDir)')" />
+  </Target>
+
+  <Target Name="CopyToModsFolderOnBuild" AfterTargets="PostBuildEvent" Condition="'$(SkipModInstall)' != 'true'">
+    <Message Text="Copying .dll .pdb and .json to $(ModsPath)$(MSBuildProjectName)/" Importance="high" />
+    <Copy SourceFiles="$(TargetPath);$(MSBuildProjectDirectory)\$(MSBuildProjectName).json;$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" />
+  </Target>
+</Project>

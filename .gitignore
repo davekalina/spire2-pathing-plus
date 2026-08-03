@@ -1,0 +1,27 @@
+# .NET build output
+bin/
+obj/
+publish/
+
+# Godot editor/import cache
+.godot/
+
+# Machine-specific build configuration (copy Directory.Build.props.example)
+Directory.Build.props
+
+# Staged Workshop upload payload; regenerate with scripts/package-workshop.ps1.
+# workshop/mod_id.txt is deliberately NOT ignored: it is the only link between
+# this repository and the published Steam Workshop item.
+workshop/content/
+
+# User- and machine-specific IDE files
+.vs/
+.idea/
+*.user
+*.suo
+*.csproj.user
+
+# Local secrets
+.env
+.env.*
+!.env.example
