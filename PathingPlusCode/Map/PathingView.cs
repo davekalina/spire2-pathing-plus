@@ -25,6 +25,7 @@ internal sealed class PathingView : IDisposable
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
     private readonly PathLegendPanel _panel;
+    private readonly PlanModeController _planMode;
     private readonly WaypointSelection _pins = new();
 
     private MapGraphAdapter? _adapter;
@@ -41,6 +42,7 @@ internal sealed class PathingView : IDisposable
         var points = screen.GetNode<Control>("TheMap/Points");
         _overlay = new PathOverlay(theMap, points);
         _panel = new PathLegendPanel(screen);
+        _planMode = new PlanModeController(screen);
         _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
         _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
         _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
@@ -49,8 +51,11 @@ internal sealed class PathingView : IDisposable
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
 
+    public bool PlanModeActive => _planMode.Active;
+
     public void OnMapChanged()
     {
+        _planMode.Deactivate();
         _adapter = null;
         _pins.Clear();
         if (_screen.IsOpen)
@@ -118,18 +123,40 @@ internal sealed class PathingView : IDisposable
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(-1);
         _panel.SetLocked(-1);
+        _planMode.SetNodes(BuildPlanNodes());
+    }
+
+    /// <summary>Every node on a surviving route, with where it sits on screen.</summary>
+    private List<(NMapPoint Node, int Row, Vector2 Center)> BuildPlanNodes()
+    {
+        var nodes = new List<(NMapPoint, int, Vector2)>();
+        if (_adapter is null || _nodesByCoord is null)
+            return nodes;
+        foreach (var id in _shownRoutes.SelectMany(route => route.Skip(1)).Distinct())
+        {
+            if (!_adapter.TryGetPoint(id, out var point))
+                continue;
+            if (!_nodesByCoord.TryGetValue(point.coord, out var node) ||
+                !GodotObject.IsInstanceValid(node))
+                continue;
+            if (EndpointOf(id) is { } center)
+                nodes.Add((node, point.coord.row, center));
+        }
+        return nodes;
     }
 
     public void Dispose()
     {
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
+        _planMode.Dispose();
         _overlay.Dispose();
         _panel.Dispose();
     }
 
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
+        _planMode.Deactivate();
         _hotRoute = -1;
         _panel.HideTooltip();
         _overlay.SetHighlight(_lockedRoute);
@@ -244,6 +271,8 @@ internal sealed class PathingView : IDisposable
 
     private void Clear()
     {
+        _planMode.Deactivate();
+        _planMode.SetNodes([]);
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();

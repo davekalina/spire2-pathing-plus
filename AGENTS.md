@@ -20,11 +20,20 @@ pipeline work. Those are platform facts. This file is how I want the work done.
 
 The mod adds route planning to the map screen. Clicking a non-travelable map node pins
 it as a waypoint; the mod enumerates every route from the current position through all
-pins and draws them as `Line2D` polylines in its own overlay layer inside `TheMap`
-(above the game's dotted connections, below the node icons). With five or fewer routes
-left, a legend panel above the native Share button lists them in distinct colors;
-hovering, focusing, or selecting a row shows the route's room sequence as an icon-strip
-tooltip and highlights that route white on the map while the rest fade.
+pins and draws them as runs of the game's `map_dot` texture (native spacing, jitter,
+flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
+(above the game's dotted connections, below the node icons). Colors come from
+`StsColors`. With five or fewer routes left, a legend panel above the native Share
+button lists them; hovering, focusing, or selecting a row shows a vertical icon
+tooltip (boss end at the top, matching the map) with a fixed-order category summary,
+and darkens that route to the traveled-ink color on the map while the rest fade.
+
+**Plan Mode** (button beside the native DrawingTools tray) is the controller path:
+while active, every node on a surviving route becomes focusable in a four-way grid
+wired from the drawn layout, the screen's native scroll-on-d-pad handler is skipped,
+the view follows focus, and select toggles a pin on the focused non-travelable node.
+All focus state is snapshotted before wiring and restored on exit, map change, screen
+close, and dispose — the mode must stay inert unless deliberately toggled.
 
 The route enumeration, waypoint filtering (one pin per floor — a later pin on the same
 floor replaces the earlier one), and boss-tail dedupe live in `PathingPlusCode/Pathing/`
@@ -33,27 +42,30 @@ silently.
 
 Game coupling that a game update can move (verify after every update):
 
-- Harmony targets: `NMapScreen.Open` / `SetMap` / `RecalculateTravelability` (private,
-  patched by string name) and `NClickableControl._GuiInput`.
-- Reflection: `NMapScreen._mapPointDictionary` (the only reflected field).
-- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
+- Harmony targets: `NMapScreen.Open` / `SetMap` / `RecalculateTravelability` /
+  `ProcessControllerEvent` (the last two private, patched by string name) and
+  `NClickableControl._GuiInput`.
+- Reflection: `NMapScreen._mapPointDictionary` and `NMapScreen._targetDragPos`.
+- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`,
+  `%ClearButton`.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
-  `images/ui/tiny_nine_patch.png`.
-
-Known gap: pinning needs the mouse — non-travelable nodes are not controller-focusable
-natively. The legend is controller-navigable (chained below the native map legend's
-last item). Whether to build a controller pin mode is an open question: doing it
-properly may mean replacing much of the map UI, and pathing at the start of an act is
-a mouse activity in practice, so this mod may end up an accepted exception to the
-gamepad rule. Decision deferred; the basics come first.
+  `images/atlases/compressed.sprites/map/map_dot.tres`,
+  `images/packed/map/icons/map_ping.png`, `images/ui/tiny_nine_patch.png`,
+  `themes/canvas_item_material_additive_shared.tres`, and the `StsColors` palette.
+- Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
+  [-600, 1800] clamp range from `UpdateScrollPosition`.
 
 ### Surfaces to audit
 
-- The map screen overlay: route lines (individual colors, union view when more than
-  five routes, highlight/fade states) and gold pin rings.
+- The map screen overlay: route dot runs (individual colors, union view when more
+  than five routes, ink highlight / fade states) and gold pin rings.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
-- The route tooltip (icon strip): content, position, and clamping.
+- The route tooltip: header, vertical icon column (boss at top), fixed-order category
+  summary, position, and clamping.
+- Plan Mode: the tray button (idle/active states, focus chain from the native Clear
+  button), node focus wiring and its restoration, focus-follow scrolling, select-to-pin
+  versus select-to-travel, and the suspended native scroll handler.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   quill drawing / erase modes (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).

@@ -1,5 +1,6 @@
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
@@ -46,6 +47,21 @@ internal static class MapScreenPatches
                 view.Refresh();
         });
 
+    /// <summary>
+    /// Natively the vertical d-pad scrolls the map and left/right/select snap the view
+    /// back to the current row. In plan mode focus travel does the navigating and the
+    /// view follows focus, so the native handler has to sit out. Falling back to true
+    /// leaves the game exactly native.
+    /// </summary>
+    [HarmonyPrefix]
+    [HarmonyPatch("ProcessControllerEvent")]
+    private static bool BeforeProcessControllerEvent(NMapScreen __instance) =>
+        Guard.Run("Suspending map scroll in plan mode",
+            () => !PlanModeActive(__instance), true);
+
+    internal static bool PlanModeActive(NMapScreen screen) =>
+        Views.TryGetValue(screen, out var view) && view.PlanModeActive;
+
     internal static void Detach(NMapScreen screen)
     {
         if (Views.Remove(screen, out var view))
@@ -66,10 +82,12 @@ internal static class MapScreenPatches
 }
 
 /// <summary>
-/// Pin clicks. A non-travelable map node is disabled, which suppresses its own click
-/// signals but not its <c>_GuiInput</c> — the one place a click on it can still be
-/// seen. Travelable nodes are left entirely to the game: this only ever acts on
-/// disabled nodes, so a failure here can never cost the player a movement click.
+/// Pin presses. A non-travelable map node is disabled, which suppresses its own click
+/// signals but not its <c>_GuiInput</c> — the one place a press on it can still be
+/// seen. Mouse: a left-click release. Controller: the select action, which only ever
+/// reaches a disabled node while plan mode has focused it. Travelable nodes are left
+/// entirely to the game: this only ever acts on disabled nodes, so a failure here can
+/// never cost the player a movement click.
 /// </summary>
 [HarmonyPatch(typeof(NClickableControl), nameof(NClickableControl._GuiInput))]
 internal static class MapPointPinPatch
@@ -79,11 +97,13 @@ internal static class MapPointPinPatch
     {
         if (__instance is not NMapPoint point)
             return;
-        if (__0 is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
-            return;
         if (point.IsEnabled)
             return;
+        var pressed = __0 is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } ||
+            __0.IsActionPressed(MegaInput.select);
+        if (!pressed)
+            return;
 
-        Guard.Run("Handling a pin click", () => MapScreenPatches.RouteMapPointClick(point));
+        Guard.Run("Handling a pin press", () => MapScreenPatches.RouteMapPointClick(point));
     }
 }
