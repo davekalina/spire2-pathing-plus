@@ -26,7 +26,9 @@ internal sealed class PathOverlay : IDisposable
         StsColors.purple,
     ];
 
-    private static readonly Color UnionColor = StsColors.darkBlue with { A = 0.4f };
+    // Solid enough to read at a glance: this is the whole display before the first
+    // pin narrows an act's routes below the legend threshold.
+    private static readonly Color UnionColor = StsColors.darkBlue with { A = 0.65f };
 
     /// <summary>
     /// The game circles a visited node in near-black ink (map_circle_vfx tints its
@@ -41,7 +43,13 @@ internal sealed class PathOverlay : IDisposable
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
 
     private const float DotSpacing = 22f;
-    private const float BaseScale = 1.2f;
+
+    /// <summary>
+    /// Across the path — the dash's girth. Stretching only the length made the runs
+    /// read thinner than the native dashes; the mod's trails must read heavier.
+    /// </summary>
+    private const float DashWidth = 1.6f;
+
     private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
 
@@ -203,11 +211,12 @@ internal sealed class PathOverlay : IDisposable
                 var center = start + direction * (i * DotSpacing) + new Vector2(
                     (float)(random.NextDouble() * 6.0 - 3.0),
                     (float)(random.NextDouble() * 6.0 - 3.0));
-                // The rotation puts the texture's Y axis along the path, so the
-                // stretch goes on Y: 1.15–1.6 of a dash length, different every dash.
+                // The rotation puts the texture's Y axis along the path: X is girth,
+                // Y is length — 1.4 to 1.9 dash lengths, different every dash, so
+                // neighbours bridge their gaps.
                 var baseScale = new Vector2(
-                    BaseScale,
-                    BaseScale * (1.15f + (float)random.NextDouble() * 0.45f));
+                    DashWidth,
+                    1.4f + (float)random.NextDouble() * 0.5f);
                 var dot = new TextureRect
                 {
                     Texture = texture,

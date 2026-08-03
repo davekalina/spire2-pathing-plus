@@ -138,6 +138,18 @@ internal static class MapScreenPatches
         }
     }
 
+    internal static void RouteMapPointDoubleClick(NMapPoint point)
+    {
+        foreach (var view in Views.Values)
+        {
+            if (view.Owns(point))
+            {
+                view.OnMapPointDoubleClicked(point);
+                return;
+            }
+        }
+    }
+
     internal static void RouteClearDrawings(NMapDrawings drawings)
     {
         foreach (var (screen, view) in Views)
@@ -176,6 +188,13 @@ internal static class MapClearDrawingsPatch
 [HarmonyPatch(typeof(NClickableControl), nameof(NClickableControl._GuiInput))]
 internal static class MapPointPinPatch
 {
+    /// <summary>
+    /// A double-click announces itself on the second PRESS, but the pin action runs
+    /// on releases — so the press arms this, and the matching release becomes the
+    /// select-all-of-type action instead of a third single toggle.
+    /// </summary>
+    private static NMapPoint? _doubleClickArmed;
+
     [HarmonyPrefix]
     private static void BeforeGuiInput(NClickableControl __instance, InputEvent __0)
     {
@@ -183,11 +202,22 @@ internal static class MapPointPinPatch
             return;
         if (point.IsEnabled)
             return;
-        var pressed = __0 is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } ||
-            __0.IsActionPressed(MegaInput.select);
-        if (!pressed)
+
+        if (__0 is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true, DoubleClick: true })
+        {
+            _doubleClickArmed = point;
+            return;
+        }
+
+        var mouseRelease = __0 is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
+        if (!mouseRelease && !__0.IsActionPressed(MegaInput.select))
             return;
 
-        Guard.Run("Handling a pin press", () => MapScreenPatches.RouteMapPointClick(point));
+        var isTypeSelect = mouseRelease && ReferenceEquals(_doubleClickArmed, point);
+        _doubleClickArmed = null;
+        if (isTypeSelect)
+            Guard.Run("Selecting every node of a type", () => MapScreenPatches.RouteMapPointDoubleClick(point));
+        else
+            Guard.Run("Handling a pin press", () => MapScreenPatches.RouteMapPointClick(point));
     }
 }

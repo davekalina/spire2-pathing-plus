@@ -19,11 +19,15 @@ pipeline work. Those are platform facts. This file is how I want the work done.
 | Dependencies | None yet |
 
 The mod adds route planning to the map screen. Clicking a non-travelable map node pins
-it as a waypoint; the mod enumerates every route from the current position through all
-pins and draws them as runs of the game's `map_dot` texture (native spacing, jitter,
-flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
-(above the game's dotted connections, below the node icons). Colors come from
-`StsColors`. With five or fewer routes left, a legend panel above the native Share
+it as a waypoint — double-clicking pins every pinnable node of that kind at once, and
+toggles off when the rest of the kind is already pinned (the double-click's own first
+click flips the clicked node, so the rule judges by the others). The mod enumerates
+every route from the current position through all pins and draws them as runs of the
+game's `map_dot` texture (native spacing, jitter, flips, and rotation noise, seeded
+per route; girth 1.6x native so the trails read heavier than the map's own dashes) in
+its own overlay layer inside `TheMap` (above the game's dotted connections, below the
+node icons). Colors come from `StsColors`; the >threshold union view is darkBlue at
+0.65 alpha — it is the entire display at act start, so it must not be faint. With five or fewer routes left, a legend panel above the native Share
 button shows them as a table — one row per route, named by a letter in the route's
 line color ("A.", "B.", …), sorted most elites first then most fires, count columns
 headed by map icons in the fixed order

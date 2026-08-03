@@ -121,6 +121,46 @@ internal sealed class PathingView : IDisposable
         Refresh();
     }
 
+    /// <summary>
+    /// Double-click: every pinnable node of the clicked node's kind at once — "show
+    /// me the elites" as one gesture. If the rest of the kind is already pinned it
+    /// unpins them all instead, so the gesture toggles. The clicked node itself is
+    /// judged by the others, because the double-click's own first click already
+    /// flipped it.
+    /// </summary>
+    public void OnMapPointDoubleClicked(NMapPoint point)
+    {
+        if (!_screen.IsOpen || _screen.IsTraveling)
+            return;
+        if (_screen.Drawings.GetLocalDrawingMode() != DrawingMode.None)
+            return;
+        if (_adapter is null)
+            return;
+
+        var id = MapGraphAdapter.IdOf(point.Point);
+        if (!_pinnable.Contains(id))
+            return;
+
+        var kind = NormalizedKind(_adapter.Graph.Node(id).RoomKind);
+        var targets = _pinnable
+            .Where(p => NormalizedKind(_adapter.Graph.Node(p).RoomKind) == kind)
+            .ToList();
+        var others = targets.Where(t => t != id).ToList();
+        var unpinAll = others.Count > 0 && others.All(_pins.IsSelected);
+
+        foreach (var target in targets)
+        {
+            if (_pins.IsSelected(target) == !unpinAll)
+                continue;
+            _pins.Toggle(target);
+        }
+        Refresh();
+    }
+
+    /// <summary>"?" nodes come in two kinds that mean the same thing to a player.</summary>
+    private static string NormalizedKind(string kind) =>
+        kind == nameof(MapPointType.Unassigned) ? nameof(MapPointType.Unknown) : kind;
+
     public void Refresh()
     {
         var state = RunManager.Instance?.DebugOnlyGetState();

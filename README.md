@@ -2,7 +2,9 @@
 
 See every route before you commit to one.
 
-On the map screen, click any node ahead of you to pin it: the mod scores every route
+On the map screen, click any node ahead of you to pin it — or **double-click** to
+pin every node of that kind at once (all the elites, all the fires; double-click
+again to clear them). The mod scores every route
 from your position by how many pins it visits and draws the best matches as
 hand-drawn dashed trails in the game's own colors. A route through **all** your pins
 always wins; when the pins conflict, the best achievable coverage shows instead of
@@ -46,7 +48,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.7.2 initialized`.
+logs `Pathing Plus v0.8.0 initialized`.
 
 ## Publish to the Steam Workshop
 
