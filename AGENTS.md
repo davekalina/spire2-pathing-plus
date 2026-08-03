@@ -25,7 +25,8 @@ flips, and rotation noise, seeded per route) in its own overlay layer inside `Th
 (above the game's dotted connections, below the node icons). Colors come from
 `StsColors`. With five or fewer routes left, a legend panel above the native Share
 button shows them as a table — one row per route, named by a letter in the route's
-line color ("A)", "B)", …), count columns headed by map icons in the fixed order
+line color ("A.", "B.", …), sorted most elites first then most fires, count columns
+headed by map icons in the fixed order
 elites / fires / combats / shops / chests / events, zeros dimmed — plus a vertical
 icon-column tooltip (boss end at the top) on hover/focus, darkening that route to
 the traveled-ink color on the map while the rest fade. Pinned nodes are stamped with
@@ -70,7 +71,10 @@ a gold ink ring marks the focused node, and the cursor survives pin presses and 
 game's own focus grabs via a deferred re-grab of the remembered node. Select pins a
 non-travelable node, select on a travelable node travels. All focus state is
 snapshotted before wiring and restored on exit, map change, screen close, and
-dispose — the mode must stay inert unless deliberately toggled.
+dispose — the mode must stay inert unless deliberately toggled. Zoomed out is
+planning, not moving: `OnMapPointSelectedLocally` is suppressed while zoomed and the
+select becomes a pin toggle, travelable nodes included; travel requires zooming back
+in.
 
 The route enumeration, any-pin filtering, and boss-tail dedupe live in
 `PathingPlusCode/Pathing/` — pure logic, linked into `PathingPlus.Tests`, and the
@@ -79,9 +83,9 @@ part that must never regress silently.
 Game coupling that a game update can move (verify after every update):
 
 - Harmony targets: `NMapScreen.Open` / `SetMap` / `_Input` /
-  `RecalculateTravelability` / `ProcessControllerEvent` (the last two private,
-  patched by string name), `NClickableControl._GuiInput`, and
-  `NMapDrawings.ClearDrawnLinesLocal`.
+  `OnMapPointSelectedLocally` / `RecalculateTravelability` /
+  `ProcessControllerEvent` (the last two private, patched by string name),
+  `NClickableControl._GuiInput`, and `NMapDrawings.ClearDrawnLinesLocal`.
 - Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
@@ -91,6 +95,7 @@ Game coupling that a game update can move (verify after every update):
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/compressed.sprites/map/map_dot.tres`,
   `images/atlases/compressed.sprites/map/map_circle_4.tres`,
+  `images/packed/common_ui/submenu_compendium_button.png` (the Zoom button tile),
   `images/ui/tiny_nine_patch.png`, and the `StsColors` palette.
 - Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
   [-600, 1800] clamp range from `UpdateScrollPosition`.

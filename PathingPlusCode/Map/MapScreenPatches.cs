@@ -75,6 +75,22 @@ internal static class MapScreenPatches
         Views.TryGetValue(screen, out var view) && view.ZoomActive;
 
     /// <summary>
+    /// Zoomed out is planning, not moving: selecting any node — travelable included —
+    /// toggles its pin, and travel never fires. Zoom back in to actually move.
+    /// Falling back to true keeps travel native if anything here breaks.
+    /// </summary>
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(NMapScreen.OnMapPointSelectedLocally))]
+    private static bool BeforeMapPointSelected(NMapScreen __instance, NMapPoint __0) =>
+        Guard.Run("Pinning instead of traveling while zoomed", () =>
+        {
+            if (!Views.TryGetValue(__instance, out var view) || !view.ZoomActive)
+                return true;
+            view.OnMapPointClicked(__0);
+            return false;
+        }, true);
+
+    /// <summary>
     /// Right Trigger toggles the zoomed-out view (and with it controller node
     /// navigation) while the map screen is the active context. The trigger is an
     /// axis, so a press produces a stream of motion events past the threshold; the

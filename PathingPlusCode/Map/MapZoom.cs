@@ -27,7 +27,7 @@ internal sealed class MapZoom : IDisposable
     private readonly NMapScreen _screen;
     private readonly Control _theMap;
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
-    private readonly NinePatchRect _tray;
+    private readonly Control _tray;
     private readonly MegaLabel _label;
 
     public bool Zoomed { get; private set; }
@@ -44,24 +44,30 @@ internal sealed class MapZoom : IDisposable
         _theMap = theMap;
         _nodeCenters = nodeCenters;
 
-        _tray = new NinePatchRect
-        {
-            Name = "PathingPlusZoomTray",
-            SelfModulate = new Color(0f, 0f, 0f, 0.752941f),
-            Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
-            PatchMarginLeft = 12,
-            PatchMarginTop = 12,
-            PatchMarginRight = 12,
-            PatchMarginBottom = 12,
-        };
+        // The Compendium tile art, so this reads as a real button and not floating
+        // text — same background, expand, and stretch as compendium_bottom_button.
+        _tray = new Control { Name = "PathingPlusZoomTray" };
         _tray.AnchorLeft = _tray.AnchorRight = 1f;
-        _tray.OffsetLeft = -172f;
+        _tray.OffsetLeft = -220f;
         _tray.OffsetRight = -48f;
         // Below the top bar AND the debug version/modded readout in the corner.
         _tray.OffsetTop = 196f;
-        _tray.OffsetBottom = 252f;
+        _tray.OffsetBottom = 272f;
         _tray.GrowHorizontal = Control.GrowDirection.Begin;
+
+        var background = new TextureRect
+        {
+            Name = "BgPanel",
+            Texture = ResourceLoader.Load<Texture2D>(
+                "res://images/packed/common_ui/submenu_compendium_button.png",
+                null, ResourceLoader.CacheMode.Reuse),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            ClipContents = true,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _tray.AddChild(background);
 
         var button = new Control
         {
@@ -82,9 +88,11 @@ internal sealed class MapZoom : IDisposable
         };
         if (screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font") is { } font)
             _label.AddThemeFontOverride("font", font);
-        _label.AddThemeFontSizeOverride("font_size", 24);
+        _label.AddThemeFontSizeOverride("font_size", 28);
         _label.AddThemeColorOverride("font_color", Parchment);
-        _label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.4f));
+        _label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
+        _label.AddThemeConstantOverride("shadow_offset_x", 4);
+        _label.AddThemeConstantOverride("shadow_offset_y", 3);
         _label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         button.AddChild(_label);
 

@@ -26,7 +26,8 @@ zoomed out, scrolling is switched off entirely — nothing needs it.
 On a controller, pull the **Right Trigger** (or click Zoom): the zoomed-out view is
 also controller mode. The d-pad walks the map node by node — every node, not just
 reachable ones — with a gold ink ring marking the cursor, which stays put after each
-press. Select pins the focused node; select on a travelable node still travels.
+press. While zoomed out you are planning, not moving: select toggles a pin on any
+node, travelable ones included, and travel never fires. Zoom back in to travel.
 
 Informational only: nothing about the run changes, and `?` nodes stay `?`.
 
@@ -45,7 +46,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.7.1 initialized`.
+logs `Pathing Plus v0.7.2 initialized`.
 
 ## Publish to the Steam Workshop
 

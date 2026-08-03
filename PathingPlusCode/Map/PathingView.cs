@@ -166,7 +166,15 @@ internal sealed class PathingView : IDisposable
         _pins.RetainWhere(_pinnable.Contains);
 
         var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.LegendThreshold);
-        _shownRoutes = match.Shown.Select(s => s.Path).ToList();
+        // Table order: richest in elites first, fires breaking ties — the two scarce
+        // resources a route is usually chosen for. Only worth computing when the
+        // routes actually get rows.
+        _shownRoutes = match.Shown.Count <= PathSolver.LegendThreshold
+            ? match.Shown.Select(s => s.Path)
+                .OrderByDescending(route => CountColumns(route)[0])
+                .ThenByDescending(route => CountColumns(route)[1])
+                .ToList()
+            : match.Shown.Select(s => s.Path).ToList();
         _hotRoute = -1;
 
         // A locked route survives recomputes (and restarts) as long as it still
@@ -342,7 +350,7 @@ internal sealed class PathingView : IDisposable
             var columnIcons = ColumnKinds.Select(kinds => MapIcons.For(kinds[0])).ToList();
             var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                $"{(char)('A' + index)})",
+                $"{(char)('A' + index)}.",
                 // The tooltip runs vertically like the map: boss end at the top.
                 route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
