@@ -14,6 +14,10 @@ category table (elites, fires, events, combats, chests, shops — same order eve
 time, so routes compare row by row), and that route darkens to ink on the map while
 the others fade. The map's Clear-drawings button also clears your pins.
 
+Pins and the locked route belong to the map they were made on: they survive closing
+the map screen and even restarting the game. A **Zoom** button in the upper right
+toggles between the standard view and a zoomed-out view of the whole act.
+
 On a controller, pull the **Right Trigger** (or click the button above the drawing
 tools) to toggle **Plan Mode**: the d-pad walks the future map node by node with the
 view following, and select pins the focused node. Select on a reachable node still
@@ -36,7 +40,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.4.0 initialized`.
+logs `Pathing Plus v0.5.0 initialized`.
 
 ## Publish to the Steam Workshop
 

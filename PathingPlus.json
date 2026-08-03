@@ -3,7 +3,7 @@
   "name": "Pathing Plus",
   "author": "realtruegravy",
   "description": "Click map nodes to see every path through them, with a color-coded legend of what each route holds.",
-  "version": "v0.4.0",
+  "version": "v0.5.0",
   "min_game_version": "0.109.0",
   "has_pck": false,
   "has_dll": true,

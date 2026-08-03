@@ -26,6 +26,7 @@ internal sealed class PathingView : IDisposable
     private readonly PathOverlay _overlay;
     private readonly PathLegendPanel _panel;
     private readonly PlanModeController _planMode;
+    private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
 
     private MapGraphAdapter? _adapter;
@@ -33,6 +34,8 @@ internal sealed class PathingView : IDisposable
     private IReadOnlyList<IReadOnlyList<string>> _shownRoutes = [];
     private IReadOnlyList<int> _shownHits = [];
     private HashSet<string> _pinnable = [];
+    private string _mapKey = "";
+    private IReadOnlyList<string>? _lockedRouteIds;
     private int _hotRoute = -1;
     private int _lockedRoute = -1;
 
@@ -44,6 +47,7 @@ internal sealed class PathingView : IDisposable
         _overlay = new PathOverlay(theMap, points);
         _panel = new PathLegendPanel(screen);
         _planMode = new PlanModeController(screen);
+        _zoom = new MapZoom(screen, theMap, NodeCenters);
         _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
         _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
         _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
@@ -69,6 +73,7 @@ internal sealed class PathingView : IDisposable
     public void OnMapChanged()
     {
         _planMode.Deactivate();
+        _zoom.Reset();
         _adapter = null;
         _pins.Clear();
         if (_screen.IsOpen)
@@ -105,7 +110,16 @@ internal sealed class PathingView : IDisposable
         if (_adapter?.Map != map)
         {
             _adapter = MapGraphAdapter.Build(map);
+            _mapKey = PinStore.KeyFor(_adapter.Graph);
             _pins.Clear();
+            _lockedRouteIds = null;
+            // Same map as a previous session: the pins belong to it, bring them back.
+            if (PinStore.Load() is { } saved && saved.MapKey == _mapKey)
+            {
+                foreach (var id in saved.Pins)
+                    _pins.Toggle(id);
+                _lockedRouteIds = saved.LockedRoute;
+            }
         }
 
         _nodesByCoord = ReadPointDictionary();
@@ -131,14 +145,39 @@ internal sealed class PathingView : IDisposable
         _shownRoutes = match.Shown.Select(s => s.Path).ToList();
         _shownHits = match.Shown.Select(s => s.Hits).ToList();
         _hotRoute = -1;
-        _lockedRoute = -1;
+
+        // A locked route survives recomputes (and restarts) as long as it still exists.
+        _lockedRoute = IndexOfRoute(_lockedRouteIds);
+        if (_lockedRoute < 0)
+            _lockedRouteIds = null;
 
         UpdateOverlay();
         UpdatePanel(pathSet.Truncated, match);
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
-        _overlay.SetHighlight(-1);
-        _panel.SetLocked(-1);
+        _overlay.SetHighlight(_lockedRoute);
+        _panel.SetLocked(_lockedRoute);
         _planMode.SetNodes(BuildPlanNodes());
+        PersistState();
+    }
+
+    private int IndexOfRoute(IReadOnlyList<string>? ids)
+    {
+        if (ids is null)
+            return -1;
+        for (var i = 0; i < _shownRoutes.Count; i++)
+            if (_shownRoutes[i].SequenceEqual(ids))
+                return i;
+        return -1;
+    }
+
+    private void PersistState()
+    {
+        if (_mapKey.Length == 0)
+            return;
+        PinStore.SaveIfChanged(new PinStore.Saved(
+            _mapKey,
+            _pins.Ids.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+            _lockedRouteIds?.ToArray()));
     }
 
     /// <summary>Every node on a surviving route, with where it sits on screen.</summary>
@@ -165,9 +204,19 @@ internal sealed class PathingView : IDisposable
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
         _planMode.Dispose();
+        _zoom.Dispose();
         _overlay.Dispose();
         _panel.Dispose();
     }
+
+    /// <summary>Every drawn node's centre, for the zoomed-out framing.</summary>
+    private IReadOnlyList<Vector2> NodeCenters() =>
+        _nodesByCoord is null
+            ? []
+            : _nodesByCoord.Values
+                .Where(GodotObject.IsInstanceValid)
+                .Select(node => node.Position + node.Size * 0.5f)
+                .ToList();
 
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
@@ -195,8 +244,10 @@ internal sealed class PathingView : IDisposable
     private void OnRouteLockToggled(int index)
     {
         _lockedRoute = _lockedRoute == index ? -1 : index;
+        _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
         _panel.SetLocked(_lockedRoute);
         _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
+        PersistState();
     }
 
     private void UpdateOverlay()
@@ -240,6 +291,7 @@ internal sealed class PathingView : IDisposable
                 pinCount > 0
                     ? $"Route {index + 1} — {_shownHits[index]}/{pinCount}"
                     : $"Route {index + 1}",
+                $"Route {index + 1}",
                 // The tooltip runs vertically like the map: boss end at the top.
                 route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
@@ -283,9 +335,10 @@ internal sealed class PathingView : IDisposable
 
     /// <summary>
     /// The same categories in the same order for every route, zeros included, so two
-    /// routes can be compared row against row in the summary table.
+    /// routes can be compared row against row in the summary table. Categories are
+    /// shown as the map's own icons, not words.
     /// </summary>
-    private IReadOnlyList<(int Count, string Noun)> Summarize(IReadOnlyList<string> route)
+    private IReadOnlyList<(int Count, Texture2D? Icon)> Summarize(IReadOnlyList<string> route)
     {
         var counts = new Dictionary<string, int>();
         foreach (var id in route.Skip(1))
@@ -295,16 +348,16 @@ internal sealed class PathingView : IDisposable
         }
 
         int Of(params string[] kinds) => kinds.Sum(counts.GetValueOrDefault);
-        (int, string) Row(int count, string noun) => (count, count == 1 ? noun : noun + "s");
+        (int, Texture2D?) Row(int count, string iconKind) => (count, MapIcons.For(iconKind));
 
         return
         [
-            Row(Of(nameof(MapPointType.Elite)), "elite"),
-            Row(Of(nameof(MapPointType.RestSite)), "fire"),
-            Row(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), "event"),
-            Row(Of(nameof(MapPointType.Monster)), "combat"),
-            Row(Of(nameof(MapPointType.Treasure)), "chest"),
-            Row(Of(nameof(MapPointType.Shop)), "shop"),
+            Row(Of(nameof(MapPointType.Elite)), nameof(MapPointType.Elite)),
+            Row(Of(nameof(MapPointType.RestSite)), nameof(MapPointType.RestSite)),
+            Row(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), nameof(MapPointType.Unknown)),
+            Row(Of(nameof(MapPointType.Monster)), nameof(MapPointType.Monster)),
+            Row(Of(nameof(MapPointType.Treasure)), nameof(MapPointType.Treasure)),
+            Row(Of(nameof(MapPointType.Shop)), nameof(MapPointType.Shop)),
         ];
     }
 

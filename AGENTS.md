@@ -24,10 +24,18 @@ pins and draws them as runs of the game's `map_dot` texture (native spacing, jit
 flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
 (above the game's dotted connections, below the node icons). Colors come from
 `StsColors`. With five or fewer routes left, a legend panel above the native Share
-button lists them; hovering, focusing, or selecting a row shows two tooltips — a
-vertical icon column (boss end at the top, matching the map) and a separate panel
-with a fixed-order category table — and darkens that route to the traveled-ink color
-on the map while the rest fade.
+button lists them; hovering, focusing, or selecting a row shows two tooltips — left
+to right: a category table (counts + map icons, fixed order, headed by the plain
+route name) and a vertical icon column (boss end at the top, matching the map) —
+and darkens that route to the traveled-ink color on the map while the rest fade.
+
+Pins and the locked route persist across map opens and game restarts via
+`PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)
+keyed by a SHA-256 of the map graph, so state only ever restores onto the exact map
+it was made on. The **Zoom** button (upper right) scales `TheMap` around a pivot on
+the screen's horizontal centre line so the native scroll code (which only writes
+X = 0) cannot shove the view sideways; zooming back in snaps to the current row
+using the native formula.
 
 **Pins use best-match scoring** (`PathSolver.MatchByPins`): routes are ranked by how
 many pins they visit. The best tier always shows in full — ALL when a route hits
@@ -56,7 +64,10 @@ Game coupling that a game update can move (verify after every update):
   `RecalculateTravelability` / `ProcessControllerEvent` (the last two private,
   patched by string name), `NClickableControl._GuiInput`, and
   `NMapDrawings.ClearDrawnLinesLocal`.
-- Reflection: `NMapScreen._mapPointDictionary` and `NMapScreen._targetDragPos`.
+- Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and
+  `NMapScreen._distY` (zoom-out restore).
+- Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
+  "-600 + row * _distY" current-row formula.
 - Input action: `Controller.rightTrigger` (`controller_right_trigger`).
 - Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
 - Scenes: `scenes/ui/hotkey_icon.tscn` (root script `NHotkeyIcon`, `UpdateInput`).
@@ -73,8 +84,13 @@ Game coupling that a game update can move (verify after every update):
   than five routes, ink highlight / fade states) and gold pin rings.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
-- The route tooltips: the vertical icon column (boss at top) and the separate summary
-  table (colored header, count column right-aligned), their positions and clamping.
+- The route tooltips: the summary table far left (route-name header, counts
+  right-aligned beside map icons) and the vertical icon column in the middle (boss
+  at top), their positions and clamping.
+- Persistence: pins and locked route restored only onto their own map, pruned when
+  stale, saved on every change; the Clear button empties the file's pin list too.
+- The Zoom button: label states, full-map framing at any act size, drag/wheel while
+  zoomed, and the snap back to the current row.
 - Plan Mode: the tray button (idle/active states, mouse-only), the Right Trigger
   hotkey and its glyph, node focus wiring and its restoration, focus-follow
   scrolling, select-to-pin versus select-to-travel, and the suspended native scroll

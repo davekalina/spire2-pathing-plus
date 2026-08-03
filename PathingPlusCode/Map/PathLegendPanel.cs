@@ -129,7 +129,7 @@ internal sealed class PathLegendPanel : IDisposable
 
         for (var i = 0; i < routes.Count; i++)
         {
-            var row = BuildRow(i, routes[i].Color, routes[i].Label);
+            var row = BuildRow(i, routes[i].Color, routes[i].RowLabel);
             _rows.Add(row);
             _rowData.Add(routes[i]);
             // Rows sit between the header and the hint.
@@ -152,16 +152,24 @@ internal sealed class PathLegendPanel : IDisposable
             return;
         var route = _rowData[index];
 
-        _summaryHeader.Text = route.Label;
+        _summaryHeader.Text = route.Title;
         _summaryHeader.AddThemeColorOverride("font_color", route.Color);
         Empty(_summaryGrid);
-        foreach (var (count, noun) in route.Summary)
+        foreach (var (count, icon) in route.Summary)
         {
             var countLabel = MakeLabel(18, count.ToString());
             countLabel.HorizontalAlignment = HorizontalAlignment.Right;
+            countLabel.VerticalAlignment = VerticalAlignment.Center;
             countLabel.CustomMinimumSize = new Vector2(26, 0);
             _summaryGrid.AddChild(countLabel);
-            _summaryGrid.AddChild(MakeLabel(18, noun));
+            _summaryGrid.AddChild(new TextureRect
+            {
+                Texture = icon,
+                CustomMinimumSize = new Vector2(30, 30),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            });
         }
 
         Empty(_routeTooltipIcons);
@@ -180,17 +188,18 @@ internal sealed class PathLegendPanel : IDisposable
         var rowRect = _rows[index].GetGlobalRect();
         var panelRect = _panel.GetGlobalRect();
 
-        var summarySize = _summaryTooltip.GetCombinedMinimumSize();
-        _summaryTooltip.Size = summarySize;
-        _summaryTooltip.GlobalPosition = Clamp(new Vector2(
-            panelRect.Position.X - summarySize.X - 12f,
-            rowRect.GetCenter().Y - summarySize.Y * 0.5f), summarySize);
-
+        // Left to right: summary table, then the route column, then the legend panel.
         var iconsSize = _routeTooltip.GetCombinedMinimumSize();
         _routeTooltip.Size = iconsSize;
         _routeTooltip.GlobalPosition = Clamp(new Vector2(
-            _summaryTooltip.GlobalPosition.X - iconsSize.X - 12f,
+            panelRect.Position.X - iconsSize.X - 12f,
             rowRect.GetCenter().Y - iconsSize.Y * 0.5f), iconsSize);
+
+        var summarySize = _summaryTooltip.GetCombinedMinimumSize();
+        _summaryTooltip.Size = summarySize;
+        _summaryTooltip.GlobalPosition = Clamp(new Vector2(
+            _routeTooltip.GlobalPosition.X - summarySize.X - 12f,
+            rowRect.GetCenter().Y - summarySize.Y * 0.5f), summarySize);
 
         _summaryTooltip.Visible = true;
         _routeTooltip.Visible = true;
@@ -350,10 +359,13 @@ internal sealed class PathLegendPanel : IDisposable
     };
 }
 
+/// <param name="RowLabel">Legend row text, including the pin score when pins exist.</param>
+/// <param name="Title">Tooltip header: just the route name.</param>
 /// <param name="Icons">Room icons in map order: the boss end first, the next step last.</param>
 /// <param name="Summary">Category counts, always the same categories in the same order.</param>
 internal sealed record RouteDisplay(
     Color Color,
-    string Label,
+    string RowLabel,
+    string Title,
     IReadOnlyList<Texture2D> Icons,
-    IReadOnlyList<(int Count, string Noun)> Summary);
+    IReadOnlyList<(int Count, Texture2D? Icon)> Summary);
