@@ -23,6 +23,11 @@ internal sealed class PathLegendPanel : IDisposable
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
     private static readonly Color HintColor = new(0.898f, 0.882f, 0.831f, 0.7f);
 
+    /// <summary>Row geometry: swatch and name, then one count column per category.</summary>
+    private const float ColumnsStartX = 148f;
+    private const float ColumnWidth = 38f;
+    private const float RowHeight = 42f;
+
     private readonly Control _screen;
     private readonly PanelContainer _panel;
     private readonly VBoxContainer _list;
@@ -30,14 +35,12 @@ internal sealed class PathLegendPanel : IDisposable
     private readonly MegaLabel _hint;
     private readonly PanelContainer _routeTooltip;
     private readonly VBoxContainer _routeTooltipIcons;
-    private readonly PanelContainer _summaryTooltip;
-    private readonly MegaLabel _summaryHeader;
-    private readonly GridContainer _summaryGrid;
     private readonly Font? _font;
 
     private readonly List<Control> _rows = [];
     private readonly List<ColorRect> _lockMarks = [];
     private readonly List<RouteDisplay> _rowData = [];
+    private Control? _columnHeader;
     private Control? _nativeNeighbor;
     private NodePath? _nativeNeighborOriginalBottom;
 
@@ -72,28 +75,15 @@ internal sealed class PathLegendPanel : IDisposable
         _hint.AddThemeColorOverride("font_color", HintColor);
         _list.AddChild(_hint);
 
-        // Two tooltips: the route itself as a vertical icon column (boss end at the
-        // top, matching the map), and beside it a separate compact panel with the
-        // header and the category table.
+        // One tooltip: the route as a vertical icon column, boss end at the top,
+        // matching the map. The category counts live in the panel's own table.
         (_routeTooltip, var routeContent) = MakeTooltipShell("PathingPlusRouteTooltip");
         _routeTooltipIcons = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         _routeTooltipIcons.AddThemeConstantOverride("separation", 2);
         routeContent.AddChild(_routeTooltipIcons);
 
-        (_summaryTooltip, var summaryContent) = MakeTooltipShell("PathingPlusSummaryTooltip");
-        var summaryStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        summaryStack.AddThemeConstantOverride("separation", 6);
-        summaryContent.AddChild(summaryStack);
-        _summaryHeader = MakeLabel(20);
-        summaryStack.AddChild(_summaryHeader);
-        _summaryGrid = new GridContainer { Columns = 2, MouseFilter = Control.MouseFilterEnum.Ignore };
-        _summaryGrid.AddThemeConstantOverride("h_separation", 10);
-        _summaryGrid.AddThemeConstantOverride("v_separation", 0);
-        summaryStack.AddChild(_summaryGrid);
-
         screen.AddChild(_panel);
         screen.AddChild(_routeTooltip);
-        screen.AddChild(_summaryTooltip);
     }
 
     private (PanelContainer Panel, MarginContainer Content) MakeTooltipShell(string name)
@@ -114,7 +104,11 @@ internal sealed class PathLegendPanel : IDisposable
         return (panel, margin);
     }
 
-    public void SetContent(string headerText, string hintText, IReadOnlyList<RouteDisplay> routes)
+    public void SetContent(
+        string headerText,
+        string hintText,
+        IReadOnlyList<Texture2D?> columnIcons,
+        IReadOnlyList<RouteDisplay> routes)
     {
         _header.Text = headerText;
         _hint.Text = hintText;
@@ -122,22 +116,62 @@ internal sealed class PathLegendPanel : IDisposable
 
         HideTooltip();
         foreach (var row in _rows)
+        {
+            _list.RemoveChild(row);
             row.QueueFree();
+        }
         _rows.Clear();
         _lockMarks.Clear();
         _rowData.Clear();
+        if (_columnHeader is { })
+        {
+            _list.RemoveChild(_columnHeader);
+            _columnHeader.QueueFree();
+            _columnHeader = null;
+        }
+
+        if (routes.Count > 0)
+        {
+            _columnHeader = BuildColumnHeader(columnIcons);
+            _list.AddChild(_columnHeader);
+            _list.MoveChild(_columnHeader, 1);
+        }
 
         for (var i = 0; i < routes.Count; i++)
         {
-            var row = BuildRow(i, routes[i].Color, routes[i].RowLabel);
+            var row = BuildRow(i, routes[i].Color, routes[i].Label, routes[i].Counts);
             _rows.Add(row);
             _rowData.Add(routes[i]);
-            // Rows sit between the header and the hint.
+            // Rows sit between the column header and the hint.
             _list.AddChild(row);
-            _list.MoveChild(row, 1 + i);
+            _list.MoveChild(row, 2 + i);
         }
 
         WireFocus();
+    }
+
+    /// <summary>Category icons above their count columns; the name column stays blank.</summary>
+    private Control BuildColumnHeader(IReadOnlyList<Texture2D?> icons)
+    {
+        var header = new Control
+        {
+            Name = "RouteColumns",
+            CustomMinimumSize = new Vector2(ColumnsStartX + ColumnWidth * icons.Count, 34),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        for (var c = 0; c < icons.Count; c++)
+        {
+            header.AddChild(new TextureRect
+            {
+                Texture = icons[c],
+                Position = new Vector2(ColumnsStartX + c * ColumnWidth + (ColumnWidth - 26) / 2, 4),
+                Size = new Vector2(26, 26),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            });
+        }
+        return header;
     }
 
     public void SetLocked(int index)
@@ -151,26 +185,6 @@ internal sealed class PathLegendPanel : IDisposable
         if (index < 0 || index >= _rows.Count)
             return;
         var route = _rowData[index];
-
-        _summaryHeader.Text = route.Title;
-        _summaryHeader.AddThemeColorOverride("font_color", route.Color);
-        Empty(_summaryGrid);
-        foreach (var (count, icon) in route.Summary)
-        {
-            var countLabel = MakeLabel(18, count.ToString());
-            countLabel.HorizontalAlignment = HorizontalAlignment.Right;
-            countLabel.VerticalAlignment = VerticalAlignment.Center;
-            countLabel.CustomMinimumSize = new Vector2(26, 0);
-            _summaryGrid.AddChild(countLabel);
-            _summaryGrid.AddChild(new TextureRect
-            {
-                Texture = icon,
-                CustomMinimumSize = new Vector2(30, 30),
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-            });
-        }
 
         Empty(_routeTooltipIcons);
         foreach (var texture in route.Icons)
@@ -187,29 +201,15 @@ internal sealed class PathLegendPanel : IDisposable
 
         var rowRect = _rows[index].GetGlobalRect();
         var panelRect = _panel.GetGlobalRect();
-
-        // Left to right: summary table, then the route column, then the legend panel.
         var iconsSize = _routeTooltip.GetCombinedMinimumSize();
         _routeTooltip.Size = iconsSize;
         _routeTooltip.GlobalPosition = Clamp(new Vector2(
             panelRect.Position.X - iconsSize.X - 12f,
             rowRect.GetCenter().Y - iconsSize.Y * 0.5f), iconsSize);
-
-        var summarySize = _summaryTooltip.GetCombinedMinimumSize();
-        _summaryTooltip.Size = summarySize;
-        _summaryTooltip.GlobalPosition = Clamp(new Vector2(
-            _routeTooltip.GlobalPosition.X - summarySize.X - 12f,
-            rowRect.GetCenter().Y - summarySize.Y * 0.5f), summarySize);
-
-        _summaryTooltip.Visible = true;
         _routeTooltip.Visible = true;
     }
 
-    public void HideTooltip()
-    {
-        _routeTooltip.Visible = false;
-        _summaryTooltip.Visible = false;
-    }
+    public void HideTooltip() => _routeTooltip.Visible = false;
 
     /// <summary>
     /// Remove before freeing: QueueFree alone leaves the child in the tree until end
@@ -236,16 +236,14 @@ internal sealed class PathLegendPanel : IDisposable
             _panel.QueueFree();
         if (GodotObject.IsInstanceValid(_routeTooltip))
             _routeTooltip.QueueFree();
-        if (GodotObject.IsInstanceValid(_summaryTooltip))
-            _summaryTooltip.QueueFree();
     }
 
-    private Control BuildRow(int index, Color color, string text)
+    private Control BuildRow(int index, Color color, string text, IReadOnlyList<int> counts)
     {
         var row = new Control
         {
             Name = $"Route{index + 1}",
-            CustomMinimumSize = new Vector2(280, 42),
+            CustomMinimumSize = new Vector2(ColumnsStartX + ColumnWidth * counts.Count, RowHeight),
             FocusMode = Control.FocusModeEnum.All,
             MouseFilter = Control.MouseFilterEnum.Stop,
         };
@@ -270,9 +268,22 @@ internal sealed class PathLegendPanel : IDisposable
 
         var label = MakeLabel(20, text);
         label.Position = new Vector2(54, 0);
-        label.Size = new Vector2(220, 42);
+        label.Size = new Vector2(ColumnsStartX - 58, RowHeight);
         label.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(label);
+
+        for (var c = 0; c < counts.Count; c++)
+        {
+            var count = MakeLabel(19, counts[c].ToString());
+            count.Position = new Vector2(ColumnsStartX + c * ColumnWidth, 0);
+            count.Size = new Vector2(ColumnWidth, RowHeight);
+            count.HorizontalAlignment = HorizontalAlignment.Center;
+            count.VerticalAlignment = VerticalAlignment.Center;
+            // Zeros stay for alignment but recede, so the counts that matter pop.
+            if (counts[c] == 0)
+                count.Modulate = new Color(1f, 1f, 1f, 0.35f);
+            row.AddChild(count);
+        }
 
         row.MouseEntered += () => Guard.Run("Route row hover", () => RouteHot?.Invoke(index));
         row.MouseExited += () => Guard.Run("Route row unhover", () => RouteCold?.Invoke(index));
@@ -359,13 +370,10 @@ internal sealed class PathLegendPanel : IDisposable
     };
 }
 
-/// <param name="RowLabel">Legend row text, including the pin score when pins exist.</param>
-/// <param name="Title">Tooltip header: just the route name.</param>
 /// <param name="Icons">Room icons in map order: the boss end first, the next step last.</param>
-/// <param name="Summary">Category counts, always the same categories in the same order.</param>
+/// <param name="Counts">Per-category counts matching the panel's column icons.</param>
 internal sealed record RouteDisplay(
     Color Color,
-    string RowLabel,
-    string Title,
+    string Label,
     IReadOnlyList<Texture2D> Icons,
-    IReadOnlyList<(int Count, Texture2D? Icon)> Summary);
+    IReadOnlyList<int> Counts);

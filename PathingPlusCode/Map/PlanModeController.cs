@@ -39,6 +39,9 @@ internal sealed class PlanModeController : IDisposable
 
     public bool Active { get; private set; }
 
+    /// <summary>When true (e.g. zoomed out), focus changes stop steering the view.</summary>
+    public Func<bool>? ScrollSuppressed { get; set; }
+
     private sealed record SavedFocus(
         Control.FocusModeEnum Mode,
         NodePath Left, NodePath Right, NodePath Top, NodePath Bottom,
@@ -221,7 +224,7 @@ internal sealed class PlanModeController : IDisposable
     /// </summary>
     private void ScrollToward(Vector2 nodeCenter)
     {
-        if (!Active)
+        if (!Active || ScrollSuppressed?.Invoke() == true)
             return;
         var targetY = Mathf.Clamp(FocusViewY - nodeCenter.Y, -600f, 1800f);
         TargetDragPosField?.SetValue(_screen, new Vector2(0f, targetY));

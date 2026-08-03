@@ -24,10 +24,12 @@ pins and draws them as runs of the game's `map_dot` texture (native spacing, jit
 flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
 (above the game's dotted connections, below the node icons). Colors come from
 `StsColors`. With five or fewer routes left, a legend panel above the native Share
-button lists them; hovering, focusing, or selecting a row shows two tooltips — left
-to right: a category table (counts + map icons, fixed order, headed by the plain
-route name) and a vertical icon column (boss end at the top, matching the map) —
-and darkens that route to the traveled-ink color on the map while the rest fade.
+button shows them as a table — one row per route ("Route N", no pin score), count
+columns headed by map icons in the fixed order elites / fires / combats / shops /
+chests / events, zeros dimmed — plus a vertical icon-column tooltip (boss end at the
+top) on hover/focus, darkening that route to the traveled-ink color on the map while
+the rest fade. Pinned nodes are stamped with the game's own map_circle art
+(`map_circle_0..4.tres`, the visited-node ink ring) tinted a lighter ink.
 
 Pins and the locked route persist across map opens and game restarts via
 `PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)
@@ -35,7 +37,11 @@ keyed by a SHA-256 of the map graph, so state only ever restores onto the exact 
 it was made on. The **Zoom** button (upper right) scales `TheMap` around a pivot on
 the screen's horizontal centre line so the native scroll code (which only writes
 X = 0) cannot shove the view sideways; zooming back in snaps to the current row
-using the native formula.
+using the native formula. While zoomed, all native scrolling is suspended — the
+controller handler and the screen's own `_GuiInput` (drag, wheel, and with it quill
+drawing starts) — because the whole map is on screen and movement is pure noise;
+this is also what lets plan-mode controller navigation work without the view
+fighting it.
 
 **Pins use best-match scoring** (`PathSolver.MatchByPins`): routes are ranked by how
 many pins they visit. The best tier always shows in full — ALL when a route hits
@@ -73,6 +79,7 @@ Game coupling that a game update can move (verify after every update):
 - Scenes: `scenes/ui/hotkey_icon.tscn` (root script `NHotkeyIcon`, `UpdateInput`).
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/compressed.sprites/map/map_dot.tres`,
+  `images/atlases/compressed.sprites/map/map_circle_[0-4].tres`,
   `images/packed/map/icons/map_ping.png`, `images/ui/tiny_nine_patch.png`,
   `themes/canvas_item_material_additive_shared.tres`, and the `StsColors` palette.
 - Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
@@ -84,9 +91,9 @@ Game coupling that a game update can move (verify after every update):
   than five routes, ink highlight / fade states) and gold pin rings.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
-- The route tooltips: the summary table far left (route-name header, counts
-  right-aligned beside map icons) and the vertical icon column in the middle (boss
-  at top), their positions and clamping.
+- The routes table: column header icons, per-row counts (zeros dimmed), fixed
+  category order, row hover/focus/select, and the vertical icon-column tooltip
+  (boss at top) with its position and clamping.
 - Persistence: pins and locked route restored only onto their own map, pruned when
   stale, saved on every change; the Clear button empties the file's pin list too.
 - The Zoom button: label states, full-map framing at any act size, drag/wheel while

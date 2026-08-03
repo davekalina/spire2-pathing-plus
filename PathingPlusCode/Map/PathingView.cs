@@ -32,7 +32,6 @@ internal sealed class PathingView : IDisposable
     private MapGraphAdapter? _adapter;
     private Dictionary<MapCoord, NMapPoint>? _nodesByCoord;
     private IReadOnlyList<IReadOnlyList<string>> _shownRoutes = [];
-    private IReadOnlyList<int> _shownHits = [];
     private HashSet<string> _pinnable = [];
     private string _mapKey = "";
     private IReadOnlyList<string>? _lockedRouteIds;
@@ -48,6 +47,9 @@ internal sealed class PathingView : IDisposable
         _panel = new PathLegendPanel(screen);
         _planMode = new PlanModeController(screen);
         _zoom = new MapZoom(screen, theMap, NodeCenters);
+        // Zoomed out, the whole map is visible: nothing should scroll, including
+        // plan mode's own focus-follow.
+        _planMode.ScrollSuppressed = () => _zoom.Zoomed;
         _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
         _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
         _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
@@ -57,6 +59,8 @@ internal sealed class PathingView : IDisposable
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
 
     public bool PlanModeActive => _planMode.Active;
+
+    public bool ZoomActive => _zoom.Zoomed;
 
     public void TogglePlanMode() => _planMode.Toggle();
 
@@ -143,7 +147,6 @@ internal sealed class PathingView : IDisposable
 
         var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.LegendThreshold);
         _shownRoutes = match.Shown.Select(s => s.Path).ToList();
-        _shownHits = match.Shown.Select(s => s.Hits).ToList();
         _hotRoute = -1;
 
         // A locked route survives recomputes (and restarts) as long as it still exists.
@@ -277,33 +280,55 @@ internal sealed class PathingView : IDisposable
         }
     }
 
+    /// <summary>
+    /// The panel's count columns, in this fixed order everywhere: elites, fires,
+    /// combats, shops, chests, events. "Events" are the unknown "?" nodes.
+    /// </summary>
+    private static readonly string[][] ColumnKinds =
+    [
+        [nameof(MapPointType.Elite)],
+        [nameof(MapPointType.RestSite)],
+        [nameof(MapPointType.Monster)],
+        [nameof(MapPointType.Shop)],
+        [nameof(MapPointType.Treasure)],
+        [nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)],
+    ];
+
     private void UpdatePanel(bool truncated, PinMatch match)
     {
-        var pinCount = _pins.Count;
         if (_shownRoutes.Count == 0)
         {
-            _panel.SetContent("No routes", "", []);
+            _panel.SetContent("No routes", "", [], []);
         }
         else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
         {
+            var columnIcons = ColumnKinds.Select(kinds => MapIcons.For(kinds[0])).ToList();
             var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                pinCount > 0
-                    ? $"Route {index + 1} — {_shownHits[index]}/{pinCount}"
-                    : $"Route {index + 1}",
                 $"Route {index + 1}",
                 // The tooltip runs vertically like the map: boss end at the top.
                 route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
                     .OfType<Texture2D>()
                     .ToList(),
-                Summarize(route))).ToList();
-            _panel.SetContent(Header(truncated, match), Hint(match), routes);
+                CountColumns(route))).ToList();
+            _panel.SetContent(Header(truncated, match), Hint(match), columnIcons, routes);
         }
         else
         {
-            _panel.SetContent(Header(truncated, match), Hint(match), []);
+            _panel.SetContent(Header(truncated, match), Hint(match), [], []);
         }
+    }
+
+    private IReadOnlyList<int> CountColumns(IReadOnlyList<string> route)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var id in route.Skip(1))
+        {
+            var kind = _adapter!.Graph.Node(id).RoomKind;
+            counts[kind] = counts.GetValueOrDefault(kind) + 1;
+        }
+        return ColumnKinds.Select(kinds => kinds.Sum(counts.GetValueOrDefault)).ToList();
     }
 
     private string Header(bool truncated, PinMatch match)
@@ -322,44 +347,10 @@ internal sealed class PathingView : IDisposable
         return $"Best match {match.MaxHits}/{_pins.Count} pins — {match.CountAtMax} {routesWord}";
     }
 
-    private string Hint(PinMatch match)
-    {
-        if (_pins.Count == 0)
-            return _shownRoutes.Count <= PathSolver.LegendThreshold
-                ? "Hover a route to preview it"
-                : "Pin map nodes to narrow the routes";
-        return match.MaxHits < _pins.Count
-            ? "No single route hits every pin"
-            : "Hover a route to preview it";
-    }
-
-    /// <summary>
-    /// The same categories in the same order for every route, zeros included, so two
-    /// routes can be compared row against row in the summary table. Categories are
-    /// shown as the map's own icons, not words.
-    /// </summary>
-    private IReadOnlyList<(int Count, Texture2D? Icon)> Summarize(IReadOnlyList<string> route)
-    {
-        var counts = new Dictionary<string, int>();
-        foreach (var id in route.Skip(1))
-        {
-            var kind = _adapter!.Graph.Node(id).RoomKind;
-            counts[kind] = counts.GetValueOrDefault(kind) + 1;
-        }
-
-        int Of(params string[] kinds) => kinds.Sum(counts.GetValueOrDefault);
-        (int, Texture2D?) Row(int count, string iconKind) => (count, MapIcons.For(iconKind));
-
-        return
-        [
-            Row(Of(nameof(MapPointType.Elite)), nameof(MapPointType.Elite)),
-            Row(Of(nameof(MapPointType.RestSite)), nameof(MapPointType.RestSite)),
-            Row(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), nameof(MapPointType.Unknown)),
-            Row(Of(nameof(MapPointType.Monster)), nameof(MapPointType.Monster)),
-            Row(Of(nameof(MapPointType.Treasure)), nameof(MapPointType.Treasure)),
-            Row(Of(nameof(MapPointType.Shop)), nameof(MapPointType.Shop)),
-        ];
-    }
+    private string Hint(PinMatch match) =>
+        _pins.Count == 0 && _shownRoutes.Count > PathSolver.LegendThreshold
+            ? "Pin map nodes to narrow the routes"
+            : "";
 
     private void Clear()
     {
@@ -368,7 +359,7 @@ internal sealed class PathingView : IDisposable
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();
-        _panel.SetContent("", "", []);
+        _panel.SetContent("", "", [], []);
         _panel.HideTooltip();
     }
 

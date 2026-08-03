@@ -6,17 +6,22 @@ On the map screen, click any node ahead of you to pin it: the mod scores every r
 from your position by how many pins it visits and draws the best matches as
 hand-drawn dashed trails in the game's own colors. A route through **all** your pins
 always wins; when the pins conflict, the best achievable coverage shows instead of
-nothing; and near-miss routes (up to two pins short) fill the spare legend slots when
-they fit. Each legend row shows its score ("Route 1 — 6/7"). Unpin as you commit and
-the picture sharpens. Hover or select a legend row to preview it: one tooltip shows
-the route's rooms vertically like the map (boss at the top), a second shows a
-category table (elites, fires, events, combats, chests, shops — same order every
-time, so routes compare row by row), and that route darkens to ink on the map while
-the others fade. The map's Clear-drawings button also clears your pins.
+nothing; and near-miss routes (up to two pins short) fill the spare table rows when
+they fit. Unpin as you commit and the picture sharpens.
+
+Up to five routes show in the routes table: one colored row per route, with count
+columns for elites, fires, combats, shops, chests, and events (map icons as column
+headers), so what each route offers is a one-look decision — say, farming three
+elites. Hover or select a row to preview it: a tooltip shows the route's rooms
+vertically like the map (boss at the top), and that route darkens to ink on the map
+while the others fade. Pinned nodes are circled with the game's own hand-inked ring
+in a lighter shade than a visited node's. The map's Clear-drawings button also
+clears your pins.
 
 Pins and the locked route belong to the map they were made on: they survive closing
 the map screen and even restarting the game. A **Zoom** button in the upper right
-toggles between the standard view and a zoomed-out view of the whole act.
+toggles between the standard view and a zoomed-out view of the whole act; while
+zoomed out, scrolling is switched off entirely — nothing needs it.
 
 On a controller, pull the **Right Trigger** (or click the button above the drawing
 tools) to toggle **Plan Mode**: the d-pad walks the future map node by node with the
@@ -40,7 +45,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.5.0 initialized`.
+logs `Pathing Plus v0.6.0 initialized`.
 
 ## Publish to the Steam Workshop
 

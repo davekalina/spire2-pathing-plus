@@ -27,7 +27,13 @@ internal sealed class PathOverlay : IDisposable
     ];
 
     private static readonly Color UnionColor = StsColors.darkBlue with { A = 0.4f };
-    private static readonly Color PinColor = StsColors.gold;
+
+    /// <summary>
+    /// The game circles a visited node in near-black ink (map_circle_vfx tints its
+    /// white art to 0.14/0.12/0.10); pins use the same art in a much lighter ink so a
+    /// planned stop cannot be mistaken for a visited one.
+    /// </summary>
+    private static readonly Color PinInk = new(0.52f, 0.42f, 0.31f, 0.95f);
 
     /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
@@ -44,7 +50,7 @@ internal sealed class PathOverlay : IDisposable
     private readonly List<List<(TextureRect Dot, Vector2 BaseScale)>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
-    private readonly List<Line2D> _pinRings = [];
+    private readonly List<TextureRect> _pinRings = [];
 
     public PathOverlay(Control theMap, Control points)
     {
@@ -107,15 +113,24 @@ internal sealed class PathOverlay : IDisposable
 
         foreach (var center in centers)
         {
-            // The node icon art is 92 px; the ring must clear it, not cut through it.
-            var ring = new Line2D
+            // The hand-inked circle the game stamps on visited nodes, from the same
+            // five frames, with the vfx's own rotation-and-shrink treatment. Variant
+            // and rotation derive from the position so a refresh redraws it unchanged.
+            var variant = Math.Abs((int)center.X * 31 + (int)center.Y) % 5;
+            var ring = new TextureRect
             {
-                Width = 4f,
-                DefaultColor = PinColor,
-                JointMode = Line2D.LineJointMode.Round,
-                Antialiased = true,
-                Points = Circle(52f),
-                Position = center,
+                Texture = ResourceLoader.Load<Texture2D>(
+                    $"res://images/atlases/compressed.sprites/map/map_circle_{variant}.tres",
+                    null, ResourceLoader.CacheMode.Reuse),
+                Size = new Vector2(200, 200),
+                PivotOffset = new Vector2(100, 100),
+                Position = center - new Vector2(100, 100),
+                RotationDegrees = MathF.Abs(center.X * 7.3f + center.Y * 3.1f) % 360f,
+                Scale = Vector2.One * 0.87f,
+                Modulate = PinInk,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             };
             _pinRings.Add(ring);
             _layer.AddChild(ring);
@@ -208,17 +223,5 @@ internal sealed class PathOverlay : IDisposable
         var u1 = 1.0 - random.NextDouble();
         var u2 = random.NextDouble();
         return (float)(Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2));
-    }
-
-    private static Vector2[] Circle(float radius)
-    {
-        const int segments = 24;
-        var points = new Vector2[segments + 1];
-        for (var i = 0; i <= segments; i++)
-        {
-            var angle = Mathf.Tau * i / segments;
-            points[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-        }
-        return points;
     }
 }

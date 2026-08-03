@@ -134,8 +134,10 @@ internal sealed class MapZoom : IDisposable
 
         var min = centers.Aggregate((a, b) => a.Min(b));
         var max = centers.Aggregate((a, b) => a.Max(b));
-        const float margin = 200f; // boss art alone runs ~150 px past its centre
-        var extent = max - min + Vector2.One * (margin * 2f);
+        // The boss art towers well above its node centre; give the top extra room.
+        min -= new Vector2(160f, 330f);
+        max += new Vector2(160f, 150f);
+        var extent = max - min;
         var scale = Mathf.Min(1f,
             Mathf.Min((_screen.Size.X - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
 

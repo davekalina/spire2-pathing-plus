@@ -51,17 +51,32 @@ internal static class MapScreenPatches
     /// <summary>
     /// Natively the vertical d-pad scrolls the map and left/right/select snap the view
     /// back to the current row. In plan mode focus travel does the navigating and the
-    /// view follows focus, so the native handler has to sit out. Falling back to true
-    /// leaves the game exactly native.
+    /// view follows focus; zoomed out, the whole map is visible and scrolling is
+    /// pointless. Either way the native handler sits out. Falling back to true leaves
+    /// the game exactly native.
     /// </summary>
     [HarmonyPrefix]
     [HarmonyPatch("ProcessControllerEvent")]
     private static bool BeforeProcessControllerEvent(NMapScreen __instance) =>
-        Guard.Run("Suspending map scroll in plan mode",
-            () => !PlanModeActive(__instance), true);
+        Guard.Run("Suspending native map scroll",
+            () => !ScrollSuspended(__instance), true);
+
+    /// <summary>
+    /// Zoomed out, the screen's own mouse handling — drag-to-pan, the wheel, and
+    /// quill drawing starts — is frozen too. Node clicks are unaffected: map points
+    /// receive their own gui input.
+    /// </summary>
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(NMapScreen._GuiInput))]
+    private static bool BeforeScreenGuiInput(NMapScreen __instance) =>
+        Guard.Run("Freezing map input while zoomed out",
+            () => !(Views.TryGetValue(__instance, out var view) && view.ZoomActive), true);
 
     internal static bool PlanModeActive(NMapScreen screen) =>
         Views.TryGetValue(screen, out var view) && view.PlanModeActive;
+
+    private static bool ScrollSuspended(NMapScreen screen) =>
+        Views.TryGetValue(screen, out var view) && (view.PlanModeActive || view.ZoomActive);
 
     /// <summary>
     /// Right Trigger toggles plan mode while the map screen is the active context.
