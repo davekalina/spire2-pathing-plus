@@ -52,16 +52,46 @@ public static class PathSolver
     }
 
     /// <summary>
-    /// Routes that visit at least one waypoint. ANY, not ALL, deliberately: pins are
-    /// candidates under comparison, not constraints — pin the nodes being considered,
-    /// see every route that reaches any of them, and narrow by unpinning as decisions
-    /// firm up. No waypoints means every route.
+    /// How far below the best pin coverage a route may fall and still be offered as a
+    /// near-miss alternative.
     /// </summary>
-    public static IReadOnlyList<IReadOnlyList<string>> Filter(
-        IReadOnlyList<IReadOnlyList<string>> paths, IReadOnlyCollection<string> waypoints)
+    public const int NearMissTolerance = 2;
+
+    /// <summary>
+    /// Best-match pin filtering. Routes are scored by how many pins they visit; the
+    /// best-scoring tier is always shown in full (ALL when a route hits every pin,
+    /// the best achievable coverage when the pins conflict — never an empty result).
+    /// Lower tiers, down to <see cref="NearMissTolerance" /> below the best, are
+    /// appended one whole tier at a time while everything still fits the legend, so
+    /// near-miss alternatives appear without an arbitrary subset of them. A route
+    /// that visits no pin at all is never shown while pins exist. With no pins,
+    /// every route is one tier and all are shown.
+    /// </summary>
+    public static PinMatch MatchByPins(
+        IReadOnlyList<IReadOnlyList<string>> paths,
+        IReadOnlyCollection<string> pins,
+        int legendLimit)
     {
-        if (waypoints.Count == 0) return paths;
-        return paths.Where(p => waypoints.Any(p.Contains)).ToList();
+        var scored = paths
+            .Select(path => (Path: path, Hits: pins.Count == 0 ? 0 : pins.Count(path.Contains)))
+            .ToList();
+        var maxHits = scored.Count == 0 ? 0 : scored.Max(s => s.Hits);
+        var countAtMax = scored.Count(s => s.Hits == maxHits);
+
+        var shown = new List<(IReadOnlyList<string> Path, int Hits)>();
+        var minTier = pins.Count == 0 ? 0 : Math.Max(1, maxHits - NearMissTolerance);
+        for (var tier = maxHits; tier >= minTier; tier--)
+        {
+            var tierPaths = scored.Where(s => s.Hits == tier).ToList();
+            if (tierPaths.Count == 0)
+                continue;
+            if (tier != maxHits && shown.Count + tierPaths.Count > legendLimit)
+                break;
+            shown.AddRange(tierPaths.Select(s => (s.Path, s.Hits)));
+            if (shown.Count >= legendLimit)
+                break;
+        }
+        return new PinMatch(shown, maxHits, countAtMax);
     }
 
     /// <summary>
@@ -90,3 +120,11 @@ public static class PathSolver
 }
 
 public sealed record PathSet(IReadOnlyList<IReadOnlyList<string>> Paths, bool Truncated);
+
+/// <param name="Shown">Routes to display, best pin coverage first, stable order within a tier.</param>
+/// <param name="MaxHits">The best pin coverage any route achieves.</param>
+/// <param name="CountAtMax">How many routes achieve it.</param>
+public sealed record PinMatch(
+    IReadOnlyList<(IReadOnlyList<string> Path, int Hits)> Shown,
+    int MaxHits,
+    int CountAtMax);

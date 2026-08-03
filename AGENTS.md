@@ -29,9 +29,13 @@ vertical icon column (boss end at the top, matching the map) and a separate pane
 with a fixed-order category table — and darkens that route to the traveled-ink color
 on the map while the rest fade.
 
-**Pins are ANY, not ALL**: the filter keeps routes that reach at least one pin. Pins
-mark candidates under comparison; the player narrows by unpinning, not by stacking
-constraints. Same-floor pins are therefore meaningful and allowed.
+**Pins use best-match scoring** (`PathSolver.MatchByPins`): routes are ranked by how
+many pins they visit. The best tier always shows in full — ALL when a route hits
+every pin, best-achievable coverage when pins conflict, never an empty result — and
+lower tiers (at most two below the best, never zero-hit routes) are appended one
+whole tier at a time while they fit the legend. Legend rows carry the score
+("Route 1 — 6/7"). Same-floor pins are meaningful and allowed. The native Clear
+drawings button clears the pins too.
 
 **Plan Mode** (Right Trigger, or the mouse-only button stacked above the native
 DrawingTools tray — deliberately outside that tray's hotkey context and focus chain)
@@ -50,7 +54,8 @@ Game coupling that a game update can move (verify after every update):
 
 - Harmony targets: `NMapScreen.Open` / `SetMap` / `_Input` /
   `RecalculateTravelability` / `ProcessControllerEvent` (the last two private,
-  patched by string name) and `NClickableControl._GuiInput`.
+  patched by string name), `NClickableControl._GuiInput`, and
+  `NMapDrawings.ClearDrawnLinesLocal`.
 - Reflection: `NMapScreen._mapPointDictionary` and `NMapScreen._targetDragPos`.
 - Input action: `Controller.rightTrigger` (`controller_right_trigger`).
 - Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.

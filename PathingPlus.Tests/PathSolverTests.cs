@@ -64,48 +64,90 @@ public class PathSolverTests
     }
 
     [Fact]
-    public void One_waypoint_keeps_only_routes_through_it()
+    public void No_pins_shows_every_route_in_one_tier()
     {
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
-        var filtered = PathSolver.Filter(all, new[] { "c1" });
+        var match = PathSolver.MatchByPins(all, Array.Empty<string>(), 5);
 
-        Assert.Equal(2, filtered.Count);
-        Assert.All(filtered, p => Assert.Contains("c1", p));
+        Assert.Equal(3, match.Shown.Count);
+        Assert.Equal(0, match.MaxHits);
+        Assert.All(match.Shown, s => Assert.Equal(0, s.Hits));
     }
 
     [Fact]
-    public void Waypoints_on_different_routes_union_rather_than_intersect()
+    public void Full_coverage_route_comes_first_with_near_misses_behind()
     {
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
-        // b1 and c2 never share a route; ANY-semantics keeps both candidates visible.
-        var filtered = PathSolver.Filter(all, new[] { "b1", "c2" });
+        // a2-b2-c1 hits both pins; the other two routes hit one each and fit the
+        // legend, so they follow as near-misses.
+        var match = PathSolver.MatchByPins(all, new[] { "b2", "c1" }, 5);
 
-        Assert.Equal(2, filtered.Count);
-        Assert.Contains(filtered, p => p.Contains("b1"));
-        Assert.Contains(filtered, p => p.Contains("c2"));
+        Assert.Equal(3, match.Shown.Count);
+        Assert.Equal(2, match.MaxHits);
+        Assert.Equal(1, match.CountAtMax);
+        Assert.Equal(new[] { "a2", "b2", "c1", "boss" }, match.Shown[0].Path);
+        Assert.Equal(2, match.Shown[0].Hits);
+        Assert.All(match.Shown.Skip(1), s => Assert.Equal(1, s.Hits));
     }
 
     [Fact]
-    public void A_route_through_several_waypoints_appears_once()
+    public void Conflicting_pins_degrade_to_best_coverage_instead_of_nothing()
     {
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
-        // Every route matches: a1-b1-c1 via c1, a2-b2-c1 via both, a2-b2-c2 via b2 —
-        // and the route matching two pins is not duplicated.
-        var filtered = PathSolver.Filter(all, new[] { "b2", "c1" });
+        // No route holds both b1 and c2; each candidate stays visible at 1/2.
+        var match = PathSolver.MatchByPins(all, new[] { "b1", "c2" }, 5);
 
-        Assert.Equal(3, filtered.Count);
-        Assert.Single(filtered, p => p.SequenceEqual(new[] { "a2", "b2", "c1", "boss" }));
+        Assert.Equal(1, match.MaxHits);
+        Assert.Equal(2, match.CountAtMax);
+        Assert.Equal(2, match.Shown.Count);
     }
 
     [Fact]
-    public void No_waypoints_returns_the_input_unchanged()
+    public void Routes_hitting_no_pin_are_never_shown()
     {
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
-        Assert.Same(all, PathSolver.Filter(all, Array.Empty<string>()));
+        var match = PathSolver.MatchByPins(all, new[] { "b1" }, 5);
+
+        Assert.Single(match.Shown);
+        Assert.Contains("b1", match.Shown[0].Path);
+    }
+
+    [Fact]
+    public void A_lower_tier_that_does_not_fit_the_legend_is_left_out_whole()
+    {
+        // One full match plus six 1-hit near-misses.
+        var paths = new IReadOnlyList<string>[]
+        {
+            new[] { "p1", "p2", "top" },
+            new[] { "p1", "n1" }, new[] { "p1", "n2" }, new[] { "p1", "n3" },
+            new[] { "p1", "n4" }, new[] { "p1", "n5" }, new[] { "p1", "n6" },
+        };
+
+        var match = PathSolver.MatchByPins(paths, new[] { "p1", "p2" }, 5);
+
+        // The 1-hit tier holds six routes; 1 + 6 > 5, so only the full match shows.
+        Assert.Single(match.Shown);
+        Assert.Equal(2, match.Shown[0].Hits);
+    }
+
+    [Fact]
+    public void Tiers_more_than_two_below_the_best_are_never_shown()
+    {
+        var paths = new IReadOnlyList<string>[]
+        {
+            new[] { "p1", "p2", "p3", "p4" },
+            new[] { "p1", "x" },
+        };
+
+        var match = PathSolver.MatchByPins(paths, new[] { "p1", "p2", "p3", "p4" }, 5);
+
+        // The second route hits 1 of 4 — three below the best; tolerance is two.
+        Assert.Single(match.Shown);
+        Assert.Equal(4, match.Shown[0].Hits);
     }
 
     [Fact]

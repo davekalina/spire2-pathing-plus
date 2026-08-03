@@ -109,6 +109,32 @@ internal static class MapScreenPatches
             }
         }
     }
+
+    internal static void RouteClearDrawings(NMapDrawings drawings)
+    {
+        foreach (var (screen, view) in Views)
+        {
+            if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
+            {
+                view.ClearPins();
+                return;
+            }
+        }
+    }
+}
+
+/// <summary>
+/// The Clear drawings button resets the player's plan; the pins are part of that plan,
+/// so they go with it. <c>ClearDrawnLinesLocal</c> is the local-player clear action —
+/// remote players' clears arrive by another path and do not touch local pins.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.ClearDrawnLinesLocal))]
+internal static class MapClearDrawingsPatch
+{
+    [HarmonyPostfix]
+    private static void AfterClear(NMapDrawings __instance) =>
+        Guard.Run("Clearing pins with the drawings",
+            () => MapScreenPatches.RouteClearDrawings(__instance));
 }
 
 /// <summary>

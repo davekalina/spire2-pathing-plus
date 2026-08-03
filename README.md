@@ -2,15 +2,17 @@
 
 See every route before you commit to one.
 
-On the map screen, click any node ahead of you to pin it: the mod draws every route
-from your position that reaches **any** of your pins, as hand-drawn dashed trails in
-the game's own colors. Pins are the candidates you are weighing — pin freely to lay
-the possibilities side by side, then unpin as you commit and the options narrow. Once
-five or fewer routes remain, each gets its own color and a legend entry — hover or
-select a legend row to preview it: one tooltip shows the route's rooms vertically
-like the map (boss at the top), a second shows a category table (elites, fires,
-events, combats, chests, shops — same order every time, so routes compare row by
-row), and that route darkens to ink on the map while the others fade.
+On the map screen, click any node ahead of you to pin it: the mod scores every route
+from your position by how many pins it visits and draws the best matches as
+hand-drawn dashed trails in the game's own colors. A route through **all** your pins
+always wins; when the pins conflict, the best achievable coverage shows instead of
+nothing; and near-miss routes (up to two pins short) fill the spare legend slots when
+they fit. Each legend row shows its score ("Route 1 — 6/7"). Unpin as you commit and
+the picture sharpens. Hover or select a legend row to preview it: one tooltip shows
+the route's rooms vertically like the map (boss at the top), a second shows a
+category table (elites, fires, events, combats, chests, shops — same order every
+time, so routes compare row by row), and that route darkens to ink on the map while
+the others fade. The map's Clear-drawings button also clears your pins.
 
 On a controller, pull the **Right Trigger** (or click the button above the drawing
 tools) to toggle **Plan Mode**: the d-pad walks the future map node by node with the
@@ -34,7 +36,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.3.0 initialized`.
+logs `Pathing Plus v0.4.0 initialized`.
 
 ## Publish to the Steam Workshop
 

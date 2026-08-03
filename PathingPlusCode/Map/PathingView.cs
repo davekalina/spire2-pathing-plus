@@ -31,6 +31,7 @@ internal sealed class PathingView : IDisposable
     private MapGraphAdapter? _adapter;
     private Dictionary<MapCoord, NMapPoint>? _nodesByCoord;
     private IReadOnlyList<IReadOnlyList<string>> _shownRoutes = [];
+    private IReadOnlyList<int> _shownHits = [];
     private HashSet<string> _pinnable = [];
     private int _hotRoute = -1;
     private int _lockedRoute = -1;
@@ -54,6 +55,16 @@ internal sealed class PathingView : IDisposable
     public bool PlanModeActive => _planMode.Active;
 
     public void TogglePlanMode() => _planMode.Toggle();
+
+    /// <summary>The native Clear button wipes the quill drawings; it wipes this too.</summary>
+    public void ClearPins()
+    {
+        _pins.Clear();
+        _hotRoute = -1;
+        _lockedRoute = -1;
+        if (_screen.IsOpen)
+            Refresh();
+    }
 
     public void OnMapChanged()
     {
@@ -116,12 +127,14 @@ internal sealed class PathingView : IDisposable
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
 
-        _shownRoutes = PathSolver.Filter(routes, _pins.Ids);
+        var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.LegendThreshold);
+        _shownRoutes = match.Shown.Select(s => s.Path).ToList();
+        _shownHits = match.Shown.Select(s => s.Hits).ToList();
         _hotRoute = -1;
         _lockedRoute = -1;
 
         UpdateOverlay();
-        UpdatePanel(pathSet.Truncated);
+        UpdatePanel(pathSet.Truncated, match);
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(-1);
         _panel.SetLocked(-1);
@@ -213,35 +226,59 @@ internal sealed class PathingView : IDisposable
         }
     }
 
-    private void UpdatePanel(bool truncated)
+    private void UpdatePanel(bool truncated, PinMatch match)
     {
+        var pinCount = _pins.Count;
         if (_shownRoutes.Count == 0)
         {
-            _panel.SetContent(
-                _pins.Count > 0 ? "No route fits the pins" : "No routes",
-                _pins.Count > 0 ? "Select a pinned node to unpin it" : "", []);
+            _panel.SetContent("No routes", "", []);
         }
         else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
         {
             var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                $"Route {index + 1}",
+                pinCount > 0
+                    ? $"Route {index + 1} — {_shownHits[index]}/{pinCount}"
+                    : $"Route {index + 1}",
                 // The tooltip runs vertically like the map: boss end at the top.
                 route.Skip(1).Reverse()
                     .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
                     .OfType<Texture2D>()
                     .ToList(),
                 Summarize(route))).ToList();
-            _panel.SetContent(
-                _shownRoutes.Count == 1 ? "1 route" : $"{_shownRoutes.Count} routes",
-                "Hover a route to preview it", routes);
+            _panel.SetContent(Header(truncated, match), Hint(match), routes);
         }
         else
         {
-            _panel.SetContent(
-                $"{_shownRoutes.Count}{(truncated ? "+" : "")} routes",
-                "Pin map nodes to narrow the routes", []);
+            _panel.SetContent(Header(truncated, match), Hint(match), []);
         }
+    }
+
+    private string Header(bool truncated, PinMatch match)
+    {
+        if (_pins.Count == 0)
+        {
+            var count = $"{_shownRoutes.Count}{(truncated ? "+" : "")}";
+            return _shownRoutes.Count == 1 ? "1 route" : $"{count} routes";
+        }
+        var routesWord = match.CountAtMax == 1 ? "route" : "routes";
+        if (match.MaxHits == _pins.Count)
+        {
+            var pinsWord = _pins.Count == 1 ? "the pin" : $"all {_pins.Count} pins";
+            return $"{match.CountAtMax} {routesWord} through {pinsWord}";
+        }
+        return $"Best match {match.MaxHits}/{_pins.Count} pins — {match.CountAtMax} {routesWord}";
+    }
+
+    private string Hint(PinMatch match)
+    {
+        if (_pins.Count == 0)
+            return _shownRoutes.Count <= PathSolver.LegendThreshold
+                ? "Hover a route to preview it"
+                : "Pin map nodes to narrow the routes";
+        return match.MaxHits < _pins.Count
+            ? "No single route hits every pin"
+            : "Hover a route to preview it";
     }
 
     /// <summary>
