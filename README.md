@@ -1,8 +1,18 @@
 # Pathing Plus
 
+See every route before you commit to one.
 
+On the map screen, click any node ahead of you to pin it: the mod draws every route
+from your position that passes through your pins. Stack pins to narrow the options.
+Once five or fewer routes remain, each gets its own color and a legend entry —
+hover or select a legend row to see the route's room sequence as icons
+(fight, ?, elite, rest, …) and watch that route light up white on the map while the
+others fade. Click a pinned node again to unpin it.
 
-An informational Slay the Spire 2 mod.
+Informational only: nothing about the run changes, and `?` nodes stay `?`.
+
+Known gap: pinning nodes currently needs the mouse. The route legend is fully
+controller-navigable (reach it downward from the map legend).
 
 ## Build
 

@@ -18,19 +18,42 @@ pipeline work. Those are platform facts. This file is how I want the work done.
 | Gameplay | Informational only; `affects_gameplay` is `false` |
 | Dependencies | None yet |
 
-> **Fill this in.** Replace the paragraph below with what the mod actually does and which
-> parts must not regress silently, then keep it current. An agent reading only this file
-> should understand the mod's shape without reading the source.
+The mod adds route planning to the map screen. Clicking a non-travelable map node pins
+it as a waypoint; the mod enumerates every route from the current position through all
+pins and draws them as `Line2D` polylines in its own overlay layer inside `TheMap`
+(above the game's dotted connections, below the node icons). With five or fewer routes
+left, a legend panel above the native Share button lists them in distinct colors;
+hovering, focusing, or selecting a row shows the route's room sequence as an icon-strip
+tooltip and highlights that route white on the map while the rest fade.
 
-_No behavior implemented yet._
+The route enumeration, waypoint filtering (one pin per floor — a later pin on the same
+floor replaces the earlier one), and boss-tail dedupe live in `PathingPlusCode/Pathing/`
+— pure logic, linked into `PathingPlus.Tests`, and the part that must never regress
+silently.
+
+Game coupling that a game update can move (verify after every update):
+
+- Harmony targets: `NMapScreen.Open` / `SetMap` / `RecalculateTravelability` (private,
+  patched by string name) and `NClickableControl._GuiInput`.
+- Reflection: `NMapScreen._mapPointDictionary` (the only reflected field).
+- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
+- Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
+  `images/ui/tiny_nine_patch.png`.
+
+Known gap: pinning needs the mouse — non-travelable nodes are not controller-focusable
+natively. The legend is controller-navigable (chained below the native map legend's
+last item). A controller pin mode is the next planned change.
 
 ### Surfaces to audit
 
-> **Fill this in.** List every screen, overlay, control, and state this mod touches. A
-> directional change has to be applied across all of them, and this list is what makes
-> that checkable.
-
-- _none yet_
+- The map screen overlay: route lines (individual colors, union view when more than
+  five routes, highlight/fade states) and gold pin rings.
+- The routes panel: header count, hint line, up to five route rows, lock marker,
+  hover/focus/select behavior, and its focus chain from the native map legend.
+- The route tooltip (icon strip): content, position, and clamping.
+- Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
+  quill drawing / erase modes (pins must not fire during them), and travel animation.
+- Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).
 
 ## Mod UI: match the game
 

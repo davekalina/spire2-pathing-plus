@@ -14,6 +14,9 @@ public partial class MainFile : Node
     /// </summary>
     public const string ModId = "PathingPlus";
 
+    /// <summary>Shown in log lines; the manifest name.</summary>
+    public const string ModName = "Pathing Plus";
+
     public static MegaCrit.Sts2.Core.Logging.Logger Logger { get; } =
         new(ModId, MegaCrit.Sts2.Core.Logging.LogType.Generic);
 
