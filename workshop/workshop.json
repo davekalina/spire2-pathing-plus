@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
   "visibility": "unlisted",
-  "changeNote": "v0.7.2 - Zoomed-out view is now pure planning: select pins/unpins any node and never triggers travel (zoom back in to move). Routes table sorted by elites then fires, rows labeled with colored letters. Pin rings are complete and colored. Mod panels no longer linger over combat or the settings menu. Controller cursor ring only shows on gamepad, locked routes survive advancing along them, and the Zoom button got real button art.",
+  "changeNote": "v0.8.0 - Route trails are drawn heavier so they stand out from the map's own dashes, and the all-routes view at act start is much more readable. New: double-click a node to pin every node of that kind at once (all elites, all fires...); double-click again to clear them.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []
