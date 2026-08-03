@@ -3,18 +3,19 @@
 See every route before you commit to one.
 
 On the map screen, click any node ahead of you to pin it: the mod draws every route
-from your position that passes through your pins, as hand-placed dotted trails in the
-game's own colors. Stack pins to narrow the options. Once five or fewer routes remain,
-each gets its own color and a legend entry — hover or select a legend row to preview
-it: the route's room sequence appears vertically like the map (boss at the top) with
-a consistent category summary (elites, fires, events, combats, chests, shops), and
-that route darkens to ink on the map while the others fade. Click a pinned node again
-to unpin it.
+from your position that reaches **any** of your pins, as hand-drawn dashed trails in
+the game's own colors. Pins are the candidates you are weighing — pin freely to lay
+the possibilities side by side, then unpin as you commit and the options narrow. Once
+five or fewer routes remain, each gets its own color and a legend entry — hover or
+select a legend row to preview it: one tooltip shows the route's rooms vertically
+like the map (boss at the top), a second shows a category table (elites, fires,
+events, combats, chests, shops — same order every time, so routes compare row by
+row), and that route darkens to ink on the map while the others fade.
 
-On a controller, toggle **Plan Mode** — the button beside the drawing tools. The
-d-pad then walks the future map node by node (the view follows), and select pins the
-focused node. Select on a reachable node still travels, and the route legend is
-reachable downward from the native map legend.
+On a controller, pull the **Right Trigger** (or click the button above the drawing
+tools) to toggle **Plan Mode**: the d-pad walks the future map node by node with the
+view following, and select pins the focused node. Select on a reachable node still
+travels, and the route legend is reachable downward from the native map legend.
 
 Informational only: nothing about the run changes, and `?` nodes stay `?`.
 
@@ -33,7 +34,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.2.0 initialized`.
+logs `Pathing Plus v0.3.0 initialized`.
 
 ## Publish to the Steam Workshop
 

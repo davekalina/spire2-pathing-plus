@@ -1,6 +1,8 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.ControllerInput;
+using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using System.Reflection;
 
@@ -30,10 +32,7 @@ internal sealed class PlanModeController : IDisposable
 
     private readonly NMapScreen _screen;
     private readonly NinePatchRect _tray;
-    private readonly Control _button;
     private readonly TextureRect _buttonIcon;
-    private Control? _clearButton;
-    private NodePath? _clearButtonOriginalRight;
 
     private IReadOnlyList<(NMapPoint Node, int Row, Vector2 Center)> _nodes = [];
     private readonly Dictionary<NMapPoint, SavedFocus> _saved = [];
@@ -49,7 +48,10 @@ internal sealed class PlanModeController : IDisposable
     {
         _screen = screen;
 
-        // A one-button tray to the right of the native DrawingTools, in its style.
+        // A one-button tray stacked above the native DrawingTools, in its style but
+        // deliberately not part of it: the drawing tray is its own hotkey context, and
+        // joining its focus chain buried the toggle inside that mode. This button is
+        // mouse-only; the controller path is the Right Trigger hotkey.
         _tray = new NinePatchRect
         {
             Name = "PathingPlusPlanTray",
@@ -62,23 +64,20 @@ internal sealed class PlanModeController : IDisposable
             PatchMarginBottom = 12,
         };
         _tray.AnchorTop = _tray.AnchorBottom = 1f;
-        _tray.OffsetLeft = 272f;
-        _tray.OffsetRight = 340f;
-        _tray.OffsetTop = -108f;
-        _tray.OffsetBottom = -40f;
+        _tray.OffsetLeft = 56f;
+        _tray.OffsetRight = 124f;
+        _tray.OffsetTop = -184f;
+        _tray.OffsetBottom = -116f;
         _tray.GrowVertical = Control.GrowDirection.Begin;
 
-        _button = new Control
+        var button = new Control
         {
             Name = "PlanModeButton",
-            CustomMinimumSize = new Vector2(60, 60),
-            FocusMode = Control.FocusModeEnum.All,
+            FocusMode = Control.FocusModeEnum.None,
             MouseFilter = Control.MouseFilterEnum.Stop,
         };
-        _button.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
-        _button.Position = new Vector2(4, 4);
-        _button.Size = new Vector2(60, 60);
-        _tray.AddChild(_button);
+        button.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _tray.AddChild(button);
 
         _buttonIcon = new TextureRect
         {
@@ -87,37 +86,51 @@ internal sealed class PlanModeController : IDisposable
             Material = ResourceLoader.Load<Material>(
                 "res://themes/canvas_item_material_additive_shared.tres", null, ResourceLoader.CacheMode.Reuse),
             SelfModulate = new Color(1f, 1f, 1f, 0.501961f),
-            Scale = new Vector2(1.1f, 1.1f),
-            PivotOffset = new Vector2(30, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
         };
         _buttonIcon.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _button.AddChild(_buttonIcon);
+        _buttonIcon.OffsetLeft = 10f;
+        _buttonIcon.OffsetTop = 10f;
+        _buttonIcon.OffsetRight = -10f;
+        _buttonIcon.OffsetBottom = -10f;
+        button.AddChild(_buttonIcon);
 
-        _button.GuiInput += inputEvent => Guard.Run("Plan mode button", () =>
+        button.GuiInput += inputEvent => Guard.Run("Plan mode button", () =>
         {
-            var pressed = inputEvent.IsActionPressed(MegaInput.select) ||
-                inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
-            if (pressed)
+            if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
                 Toggle();
         });
 
         screen.AddChild(_tray);
-        WireButtonFocus();
+
+        Guard.Run("Plan mode hotkey glyph", () =>
+        {
+            var hotkeyIcon = SceneHelper.Instantiate<NHotkeyIcon>("ui/hotkey_icon");
+            hotkeyIcon.CustomMinimumSize = new Vector2(48, 48);
+            hotkeyIcon.AnchorTop = hotkeyIcon.AnchorBottom = 0.5f;
+            hotkeyIcon.OffsetLeft = -52f;
+            hotkeyIcon.OffsetRight = -4f;
+            hotkeyIcon.OffsetTop = -24f;
+            hotkeyIcon.OffsetBottom = 24f;
+            _tray.AddChild(hotkeyIcon);
+            hotkeyIcon.UpdateInput(Controller.rightTrigger);
+        });
     }
 
     public void Toggle()
     {
         Active = !Active;
-        _buttonIcon.SelfModulate = Active
-            ? MegaCrit.Sts2.Core.Helpers.StsColors.gold
-            : new Color(1f, 1f, 1f, 0.501961f);
+        _buttonIcon.SelfModulate = Active ? StsColors.gold : new Color(1f, 1f, 1f, 0.501961f);
         if (Active)
         {
             ApplyWiring();
-            _screen.DefaultFocusedControl?.CallDeferred(Control.MethodName.GrabFocus);
+            // Start focus on a node the wiring covers, or d-pad presses go nowhere.
+            var start = _screen.DefaultFocusedControl as NMapPoint;
+            if (start is null || !_saved.ContainsKey(start))
+                start = _saved.Keys.FirstOrDefault(GodotObject.IsInstanceValid);
+            start?.CallDeferred(Control.MethodName.GrabFocus);
         }
         else
         {
@@ -146,8 +159,6 @@ internal sealed class PlanModeController : IDisposable
     public void Dispose()
     {
         RestoreWiring();
-        if (_clearButton is { } clear && GodotObject.IsInstanceValid(clear))
-            clear.FocusNeighborRight = _clearButtonOriginalRight ?? new NodePath();
         if (GodotObject.IsInstanceValid(_tray))
             _tray.QueueFree();
     }
@@ -219,25 +230,4 @@ internal sealed class PlanModeController : IDisposable
     private static NMapPoint NearestByX(
         List<(NMapPoint Node, int Row, Vector2 Center)> row, float x) =>
         row.MinBy(n => Math.Abs(n.Center.X - x)).Node;
-
-    /// <summary>Reachable with the controller as one step right of the native Clear button.</summary>
-    private void WireButtonFocus()
-    {
-        var self = new NodePath(".");
-        _button.FocusNeighborRight = self;
-        _button.FocusNeighborTop = self;
-        _button.FocusNeighborBottom = self;
-
-        _clearButton = _screen.GetNodeOrNull<Control>("%ClearButton");
-        if (_clearButton is { })
-        {
-            _clearButtonOriginalRight = _clearButton.FocusNeighborRight;
-            _clearButton.FocusNeighborRight = _clearButton.GetPathTo(_button);
-            _button.FocusNeighborLeft = _button.GetPathTo(_clearButton);
-        }
-        else
-        {
-            _button.FocusNeighborLeft = self;
-        }
-    }
 }

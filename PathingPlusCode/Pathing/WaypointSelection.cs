@@ -1,39 +1,32 @@
 namespace PathingPlus.PathingPlusCode.Pathing;
 
 /// <summary>
-/// The set of map nodes the player has pinned. A route crosses each floor exactly once,
-/// so at most one waypoint per row can ever be satisfied — selecting a node replaces any
-/// earlier selection on the same row instead of dead-ending the filter.
+/// The set of map nodes the player has pinned. Any node, any floor, any number — pins
+/// mark candidates being compared, and the route filter is "reaches at least one pin",
+/// so overlapping or same-floor pins are meaningful rather than contradictory.
 /// </summary>
 public sealed class WaypointSelection
 {
-    private readonly Dictionary<int, string> _byRow = new();
+    private readonly HashSet<string> _ids = [];
 
-    public IReadOnlyCollection<string> Ids => _byRow.Values;
+    public IReadOnlyCollection<string> Ids => _ids;
 
-    public int Count => _byRow.Count;
+    public int Count => _ids.Count;
 
-    public bool IsSelected(string id) => _byRow.ContainsValue(id);
+    public bool IsSelected(string id) => _ids.Contains(id);
 
     /// <returns>True if the node is selected after the call.</returns>
-    public bool Toggle(string id, int row)
+    public bool Toggle(string id)
     {
-        if (_byRow.TryGetValue(row, out var existing) && existing == id)
-        {
-            _byRow.Remove(row);
+        if (_ids.Remove(id))
             return false;
-        }
-
-        _byRow[row] = id;
+        _ids.Add(id);
         return true;
     }
 
-    public void Clear() => _byRow.Clear();
+    public void Clear() => _ids.Clear();
 
     /// <summary>Drop waypoints that no longer exist, e.g. after the map model changes.</summary>
-    public void RetainWhere(Func<string, bool> stillValid)
-    {
-        foreach (var row in _byRow.Where(kv => !stillValid(kv.Value)).Select(kv => kv.Key).ToList())
-            _byRow.Remove(row);
-    }
+    public void RetainWhere(Func<string, bool> stillValid) =>
+        _ids.RemoveWhere(id => !stillValid(id));
 }

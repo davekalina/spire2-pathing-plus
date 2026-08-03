@@ -53,6 +53,8 @@ internal sealed class PathingView : IDisposable
 
     public bool PlanModeActive => _planMode.Active;
 
+    public void TogglePlanMode() => _planMode.Toggle();
+
     public void OnMapChanged()
     {
         _planMode.Deactivate();
@@ -75,7 +77,7 @@ internal sealed class PathingView : IDisposable
         if (!_pinnable.Contains(id))
             return;
 
-        _pins.Toggle(id, point.Point.coord.row);
+        _pins.Toggle(id);
         Refresh();
     }
 
@@ -243,10 +245,10 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>
-    /// "2 elites, 1 fire, …" — the same categories in the same order for every route,
-    /// zeros included, so two routes can be compared line against line.
+    /// The same categories in the same order for every route, zeros included, so two
+    /// routes can be compared row against row in the summary table.
     /// </summary>
-    private IReadOnlyList<string> Summarize(IReadOnlyList<string> route)
+    private IReadOnlyList<(int Count, string Noun)> Summarize(IReadOnlyList<string> route)
     {
         var counts = new Dictionary<string, int>();
         foreach (var id in route.Skip(1))
@@ -256,16 +258,16 @@ internal sealed class PathingView : IDisposable
         }
 
         int Of(params string[] kinds) => kinds.Sum(counts.GetValueOrDefault);
-        string Line(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+        (int, string) Row(int count, string noun) => (count, count == 1 ? noun : noun + "s");
 
         return
         [
-            Line(Of(nameof(MapPointType.Elite)), "elite"),
-            Line(Of(nameof(MapPointType.RestSite)), "fire"),
-            Line(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), "event"),
-            Line(Of(nameof(MapPointType.Monster)), "combat"),
-            Line(Of(nameof(MapPointType.Treasure)), "chest"),
-            Line(Of(nameof(MapPointType.Shop)), "shop"),
+            Row(Of(nameof(MapPointType.Elite)), "elite"),
+            Row(Of(nameof(MapPointType.RestSite)), "fire"),
+            Row(Of(nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)), "event"),
+            Row(Of(nameof(MapPointType.Monster)), "combat"),
+            Row(Of(nameof(MapPointType.Treasure)), "chest"),
+            Row(Of(nameof(MapPointType.Shop)), "shop"),
         ];
     }
 

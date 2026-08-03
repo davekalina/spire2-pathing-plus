@@ -34,16 +34,16 @@ internal sealed class PathOverlay : IDisposable
 
     private const float DotSpacing = 22f;
     private const float BaseScale = 1.2f;
-    private const float HighlightScale = 1.5f;
+    private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
 
     /// <summary>Parallel routes share edges; a per-route shift keeps each run visible.</summary>
     private const float RouteSeparation = 10f;
 
     private readonly Control _layer;
-    private readonly List<List<TextureRect>> _routeDots = [];
+    private readonly List<List<(TextureRect Dot, Vector2 BaseScale)>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
-    private readonly List<TextureRect> _unionDots = [];
+    private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
     private readonly List<Line2D> _pinRings = [];
 
     public PathOverlay(Control theMap, Control points)
@@ -64,7 +64,7 @@ internal sealed class PathOverlay : IDisposable
                 continue;
             var shift = new Vector2((i - (routes.Count - 1) * 0.5f) * RouteSeparation, 0f);
             var color = RouteColors[i % RouteColors.Length];
-            var dots = new List<TextureRect>();
+            var dots = new List<(TextureRect, Vector2)>();
             ScatterDots(routes[i].Select(p => p + shift).ToArray(), color, dots);
             _routeDots.Add(dots);
             _routeColors.Add(color);
@@ -87,13 +87,13 @@ internal sealed class PathOverlay : IDisposable
     {
         for (var i = 0; i < _routeDots.Count; i++)
         {
-            var (color, scale) = index < 0 ? (_routeColors[i], BaseScale)
-                : i == index ? (HighlightInk, HighlightScale)
-                : (_routeColors[i] with { A = FadedAlpha }, BaseScale);
-            foreach (var dot in _routeDots[i])
+            var (color, factor) = index < 0 ? (_routeColors[i], 1f)
+                : i == index ? (HighlightInk, HighlightScaleFactor)
+                : (_routeColors[i] with { A = FadedAlpha }, 1f);
+            foreach (var (dot, baseScale) in _routeDots[i])
             {
                 dot.Modulate = color;
-                dot.Scale = Vector2.One * scale;
+                dot.Scale = baseScale * factor;
                 dot.ZIndex = index >= 0 && i == index ? 10 : 0;
             }
         }
@@ -137,9 +137,12 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>
     /// The native connection look, from <c>NMapScreen.CreatePath</c>: a dot every
     /// 22 px, skipping the segment ends so runs stop short of the node art, each dot
-    /// nudged, spun a little, and randomly mirrored.
+    /// nudged, spun a little, and randomly mirrored. On top of the native recipe, each
+    /// dash is stretched along the direction of travel by a random amount, so
+    /// neighbouring dashes bridge their gaps and the run reads as a drawn stroke
+    /// rather than a row of dots.
     /// </summary>
-    private void ScatterDots(Vector2[] polyline, Color color, List<TextureRect> sink)
+    private void ScatterDots(Vector2[] polyline, Color color, List<(TextureRect, Vector2)> sink)
     {
         var texture = ResourceLoader.Load<Texture2D>(
             "res://images/atlases/compressed.sprites/map/map_dot.tres",
@@ -157,6 +160,11 @@ internal sealed class PathOverlay : IDisposable
                 var center = start + direction * (i * DotSpacing) + new Vector2(
                     (float)(random.NextDouble() * 6.0 - 3.0),
                     (float)(random.NextDouble() * 6.0 - 3.0));
+                // The rotation puts the texture's Y axis along the path, so the
+                // stretch goes on Y: 1.15–1.6 of a dash length, different every dash.
+                var baseScale = new Vector2(
+                    BaseScale,
+                    BaseScale * (1.15f + (float)random.NextDouble() * 0.45f));
                 var dot = new TextureRect
                 {
                     Texture = texture,
@@ -165,13 +173,13 @@ internal sealed class PathOverlay : IDisposable
                     Position = center - new Vector2(8, 8),
                     Rotation = angle + Gaussian(random) * 0.1f,
                     FlipH = random.Next(2) == 0,
-                    Scale = Vector2.One * BaseScale,
+                    Scale = baseScale,
                     Modulate = color,
                     MouseFilter = Control.MouseFilterEnum.Ignore,
                     StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                     ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 };
-                sink.Add(dot);
+                sink.Add((dot, baseScale));
                 _layer.AddChild(dot);
             }
         }
@@ -179,7 +187,7 @@ internal sealed class PathOverlay : IDisposable
 
     private void ClearDots()
     {
-        foreach (var dot in _routeDots.SelectMany(run => run).Concat(_unionDots))
+        foreach (var (dot, _) in _routeDots.SelectMany(run => run).Concat(_unionDots))
             dot.QueueFree();
         _routeDots.Clear();
         _routeColors.Clear();

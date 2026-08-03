@@ -28,10 +28,11 @@ internal sealed class PathLegendPanel : IDisposable
     private readonly VBoxContainer _list;
     private readonly MegaLabel _header;
     private readonly MegaLabel _hint;
-    private readonly PanelContainer _tooltip;
-    private readonly MegaLabel _tooltipHeader;
-    private readonly VBoxContainer _tooltipIcons;
-    private readonly VBoxContainer _tooltipSummary;
+    private readonly PanelContainer _routeTooltip;
+    private readonly VBoxContainer _routeTooltipIcons;
+    private readonly PanelContainer _summaryTooltip;
+    private readonly MegaLabel _summaryHeader;
+    private readonly GridContainer _summaryGrid;
     private readonly Font? _font;
 
     private readonly List<Control> _rows = [];
@@ -71,39 +72,46 @@ internal sealed class PathLegendPanel : IDisposable
         _hint.AddThemeColorOverride("font_color", HintColor);
         _list.AddChild(_hint);
 
-        _tooltip = new PanelContainer
+        // Two tooltips: the route itself as a vertical icon column (boss end at the
+        // top, matching the map), and beside it a separate compact panel with the
+        // header and the category table.
+        (_routeTooltip, var routeContent) = MakeTooltipShell("PathingPlusRouteTooltip");
+        _routeTooltipIcons = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _routeTooltipIcons.AddThemeConstantOverride("separation", 2);
+        routeContent.AddChild(_routeTooltipIcons);
+
+        (_summaryTooltip, var summaryContent) = MakeTooltipShell("PathingPlusSummaryTooltip");
+        var summaryStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        summaryStack.AddThemeConstantOverride("separation", 6);
+        summaryContent.AddChild(summaryStack);
+        _summaryHeader = MakeLabel(20);
+        summaryStack.AddChild(_summaryHeader);
+        _summaryGrid = new GridContainer { Columns = 2, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _summaryGrid.AddThemeConstantOverride("h_separation", 10);
+        _summaryGrid.AddThemeConstantOverride("v_separation", 0);
+        summaryStack.AddChild(_summaryGrid);
+
+        screen.AddChild(_panel);
+        screen.AddChild(_routeTooltip);
+        screen.AddChild(_summaryTooltip);
+    }
+
+    private (PanelContainer Panel, MarginContainer Content) MakeTooltipShell(string name)
+    {
+        var panel = new PanelContainer
         {
-            Name = "PathingPlusRouteTooltip",
+            Name = name,
             Visible = false,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        _tooltip.AddThemeStyleboxOverride("panel", MakePanelStyle());
-        var tooltipMargin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        tooltipMargin.AddThemeConstantOverride("margin_left", 12);
-        tooltipMargin.AddThemeConstantOverride("margin_right", 12);
-        tooltipMargin.AddThemeConstantOverride("margin_top", 8);
-        tooltipMargin.AddThemeConstantOverride("margin_bottom", 8);
-        _tooltip.AddChild(tooltipMargin);
-
-        // Header on top; below it the route runs vertically like the map itself
-        // (boss end at the top), with the fixed-order summary beside it.
-        var tooltipStack = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        tooltipStack.AddThemeConstantOverride("separation", 6);
-        tooltipMargin.AddChild(tooltipStack);
-        _tooltipHeader = MakeLabel(20);
-        tooltipStack.AddChild(_tooltipHeader);
-        var tooltipColumns = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        tooltipColumns.AddThemeConstantOverride("separation", 14);
-        tooltipStack.AddChild(tooltipColumns);
-        _tooltipIcons = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _tooltipIcons.AddThemeConstantOverride("separation", 2);
-        tooltipColumns.AddChild(_tooltipIcons);
-        _tooltipSummary = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _tooltipSummary.AddThemeConstantOverride("separation", 0);
-        tooltipColumns.AddChild(_tooltipSummary);
-
-        screen.AddChild(_panel);
-        screen.AddChild(_tooltip);
+        panel.AddThemeStyleboxOverride("panel", MakePanelStyle());
+        var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        margin.AddThemeConstantOverride("margin_left", 12);
+        margin.AddThemeConstantOverride("margin_right", 12);
+        margin.AddThemeConstantOverride("margin_top", 8);
+        margin.AddThemeConstantOverride("margin_bottom", 8);
+        panel.AddChild(margin);
+        return (panel, margin);
     }
 
     public void SetContent(string headerText, string hintText, IReadOnlyList<RouteDisplay> routes)
@@ -144,50 +152,83 @@ internal sealed class PathLegendPanel : IDisposable
             return;
         var route = _rowData[index];
 
-        _tooltipHeader.Text = route.Label;
-        _tooltipHeader.AddThemeColorOverride("font_color", route.Color);
+        _summaryHeader.Text = route.Label;
+        _summaryHeader.AddThemeColorOverride("font_color", route.Color);
+        Empty(_summaryGrid);
+        foreach (var (count, noun) in route.Summary)
+        {
+            var countLabel = MakeLabel(18, count.ToString());
+            countLabel.HorizontalAlignment = HorizontalAlignment.Right;
+            countLabel.CustomMinimumSize = new Vector2(26, 0);
+            _summaryGrid.AddChild(countLabel);
+            _summaryGrid.AddChild(MakeLabel(18, noun));
+        }
 
-        foreach (var child in _tooltipIcons.GetChildren())
-            child.QueueFree();
+        Empty(_routeTooltipIcons);
         foreach (var texture in route.Icons)
         {
-            _tooltipIcons.AddChild(new TextureRect
+            _routeTooltipIcons.AddChild(new TextureRect
             {
                 Texture = texture,
-                CustomMinimumSize = new Vector2(30, 30),
+                CustomMinimumSize = new Vector2(60, 60),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             });
         }
 
-        foreach (var child in _tooltipSummary.GetChildren())
-            child.QueueFree();
-        foreach (var line in route.Summary)
-            _tooltipSummary.AddChild(MakeLabel(16, line));
-
-        var size = _tooltip.GetCombinedMinimumSize();
-        _tooltip.Size = size;
         var rowRect = _rows[index].GetGlobalRect();
         var panelRect = _panel.GetGlobalRect();
-        var position = new Vector2(
-            panelRect.Position.X - size.X - 12f,
-            rowRect.GetCenter().Y - size.Y * 0.5f);
-        position.X = Mathf.Max(position.X, 8f);
-        position.Y = Mathf.Clamp(position.Y, 8f, _screen.Size.Y - size.Y - 8f);
-        _tooltip.GlobalPosition = position;
-        _tooltip.Visible = true;
+
+        var summarySize = _summaryTooltip.GetCombinedMinimumSize();
+        _summaryTooltip.Size = summarySize;
+        _summaryTooltip.GlobalPosition = Clamp(new Vector2(
+            panelRect.Position.X - summarySize.X - 12f,
+            rowRect.GetCenter().Y - summarySize.Y * 0.5f), summarySize);
+
+        var iconsSize = _routeTooltip.GetCombinedMinimumSize();
+        _routeTooltip.Size = iconsSize;
+        _routeTooltip.GlobalPosition = Clamp(new Vector2(
+            _summaryTooltip.GlobalPosition.X - iconsSize.X - 12f,
+            rowRect.GetCenter().Y - iconsSize.Y * 0.5f), iconsSize);
+
+        _summaryTooltip.Visible = true;
+        _routeTooltip.Visible = true;
     }
 
-    public void HideTooltip() => _tooltip.Visible = false;
+    public void HideTooltip()
+    {
+        _routeTooltip.Visible = false;
+        _summaryTooltip.Visible = false;
+    }
+
+    /// <summary>
+    /// Remove before freeing: QueueFree alone leaves the child in the tree until end
+    /// of frame, and a rebuild in the same frame would double the panel's minimum
+    /// size — the giant empty tooltip bug.
+    /// </summary>
+    private static void Empty(Node container)
+    {
+        foreach (var child in container.GetChildren())
+        {
+            container.RemoveChild(child);
+            child.QueueFree();
+        }
+    }
+
+    private Vector2 Clamp(Vector2 position, Vector2 size) => new(
+        Mathf.Max(position.X, 8f),
+        Mathf.Clamp(position.Y, 8f, _screen.Size.Y - size.Y - 8f));
 
     public void Dispose()
     {
         RestoreNativeNeighbor();
         if (GodotObject.IsInstanceValid(_panel))
             _panel.QueueFree();
-        if (GodotObject.IsInstanceValid(_tooltip))
-            _tooltip.QueueFree();
+        if (GodotObject.IsInstanceValid(_routeTooltip))
+            _routeTooltip.QueueFree();
+        if (GodotObject.IsInstanceValid(_summaryTooltip))
+            _summaryTooltip.QueueFree();
     }
 
     private Control BuildRow(int index, Color color, string text)
@@ -315,4 +356,4 @@ internal sealed record RouteDisplay(
     Color Color,
     string Label,
     IReadOnlyList<Texture2D> Icons,
-    IReadOnlyList<string> Summary);
+    IReadOnlyList<(int Count, string Noun)> Summary);

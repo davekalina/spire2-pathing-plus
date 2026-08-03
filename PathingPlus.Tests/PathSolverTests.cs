@@ -75,14 +75,29 @@ public class PathSolverTests
     }
 
     [Fact]
-    public void Stacked_waypoints_intersect()
+    public void Waypoints_on_different_routes_union_rather_than_intersect()
     {
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
+        // b1 and c2 never share a route; ANY-semantics keeps both candidates visible.
+        var filtered = PathSolver.Filter(all, new[] { "b1", "c2" });
+
+        Assert.Equal(2, filtered.Count);
+        Assert.Contains(filtered, p => p.Contains("b1"));
+        Assert.Contains(filtered, p => p.Contains("c2"));
+    }
+
+    [Fact]
+    public void A_route_through_several_waypoints_appears_once()
+    {
+        var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
+
+        // Every route matches: a1-b1-c1 via c1, a2-b2-c1 via both, a2-b2-c2 via b2 —
+        // and the route matching two pins is not duplicated.
         var filtered = PathSolver.Filter(all, new[] { "b2", "c1" });
 
-        Assert.Single(filtered);
-        Assert.Equal(new[] { "a2", "b2", "c1", "boss" }, filtered[0]);
+        Assert.Equal(3, filtered.Count);
+        Assert.Single(filtered, p => p.SequenceEqual(new[] { "a2", "b2", "c1", "boss" }));
     }
 
     [Fact]
@@ -91,14 +106,6 @@ public class PathSolverTests
         var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
 
         Assert.Same(all, PathSolver.Filter(all, Array.Empty<string>()));
-    }
-
-    [Fact]
-    public void Unsatisfiable_waypoints_yield_no_routes()
-    {
-        var all = PathSolver.EnumeratePaths(Graph(), new[] { "a1", "a2" }).Paths;
-
-        Assert.Empty(PathSolver.Filter(all, new[] { "b1", "c2" }));
     }
 
     [Fact]

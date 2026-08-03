@@ -3,6 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -61,6 +62,35 @@ internal static class MapScreenPatches
 
     internal static bool PlanModeActive(NMapScreen screen) =>
         Views.TryGetValue(screen, out var view) && view.PlanModeActive;
+
+    /// <summary>
+    /// Right Trigger toggles plan mode while the map screen is the active context.
+    /// The trigger is an axis, so a press produces a stream of motion events past the
+    /// threshold; the held latch turns that into one toggle per pull.
+    /// </summary>
+    private static bool _rightTriggerHeld;
+
+    [HarmonyPostfix]
+    [HarmonyPatch(nameof(NMapScreen._Input))]
+    private static void AfterInput(NMapScreen __instance, InputEvent __0) =>
+        Guard.Run("Plan mode hotkey", () =>
+        {
+            if (__0.IsActionReleased(Controller.rightTrigger))
+            {
+                _rightTriggerHeld = false;
+                return;
+            }
+            if (!__0.IsActionPressed(Controller.rightTrigger) || _rightTriggerHeld)
+                return;
+            _rightTriggerHeld = true;
+            if (!__instance.IsOpen || !ActiveScreenContext.Instance.IsCurrent(__instance))
+                return;
+            if (Views.TryGetValue(__instance, out var view))
+            {
+                view.TogglePlanMode();
+                __instance.GetViewport().SetInputAsHandled();
+            }
+        });
 
     internal static void Detach(NMapScreen screen)
     {

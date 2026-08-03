@@ -51,12 +51,17 @@ public static class PathSolver
         }
     }
 
-    /// <summary>Routes that visit every waypoint. No waypoints means every route.</summary>
+    /// <summary>
+    /// Routes that visit at least one waypoint. ANY, not ALL, deliberately: pins are
+    /// candidates under comparison, not constraints — pin the nodes being considered,
+    /// see every route that reaches any of them, and narrow by unpinning as decisions
+    /// firm up. No waypoints means every route.
+    /// </summary>
     public static IReadOnlyList<IReadOnlyList<string>> Filter(
         IReadOnlyList<IReadOnlyList<string>> paths, IReadOnlyCollection<string> waypoints)
     {
         if (waypoints.Count == 0) return paths;
-        return paths.Where(p => waypoints.All(p.Contains)).ToList();
+        return paths.Where(p => waypoints.Any(p.Contains)).ToList();
     }
 
     /// <summary>

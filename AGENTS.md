@@ -24,30 +24,37 @@ pins and draws them as runs of the game's `map_dot` texture (native spacing, jit
 flips, and rotation noise, seeded per route) in its own overlay layer inside `TheMap`
 (above the game's dotted connections, below the node icons). Colors come from
 `StsColors`. With five or fewer routes left, a legend panel above the native Share
-button lists them; hovering, focusing, or selecting a row shows a vertical icon
-tooltip (boss end at the top, matching the map) with a fixed-order category summary,
-and darkens that route to the traveled-ink color on the map while the rest fade.
+button lists them; hovering, focusing, or selecting a row shows two tooltips — a
+vertical icon column (boss end at the top, matching the map) and a separate panel
+with a fixed-order category table — and darkens that route to the traveled-ink color
+on the map while the rest fade.
 
-**Plan Mode** (button beside the native DrawingTools tray) is the controller path:
-while active, every node on a surviving route becomes focusable in a four-way grid
-wired from the drawn layout, the screen's native scroll-on-d-pad handler is skipped,
-the view follows focus, and select toggles a pin on the focused non-travelable node.
-All focus state is snapshotted before wiring and restored on exit, map change, screen
-close, and dispose — the mode must stay inert unless deliberately toggled.
+**Pins are ANY, not ALL**: the filter keeps routes that reach at least one pin. Pins
+mark candidates under comparison; the player narrows by unpinning, not by stacking
+constraints. Same-floor pins are therefore meaningful and allowed.
 
-The route enumeration, waypoint filtering (one pin per floor — a later pin on the same
-floor replaces the earlier one), and boss-tail dedupe live in `PathingPlusCode/Pathing/`
-— pure logic, linked into `PathingPlus.Tests`, and the part that must never regress
-silently.
+**Plan Mode** (Right Trigger, or the mouse-only button stacked above the native
+DrawingTools tray — deliberately outside that tray's hotkey context and focus chain)
+is the controller path: while active, every node on a surviving route becomes
+focusable in a four-way grid wired from the drawn layout, the screen's native
+scroll-on-d-pad handler is skipped, the view follows focus, and select toggles a pin
+on the focused non-travelable node. All focus state is snapshotted before wiring and
+restored on exit, map change, screen close, and dispose — the mode must stay inert
+unless deliberately toggled.
+
+The route enumeration, any-pin filtering, and boss-tail dedupe live in
+`PathingPlusCode/Pathing/` — pure logic, linked into `PathingPlus.Tests`, and the
+part that must never regress silently.
 
 Game coupling that a game update can move (verify after every update):
 
-- Harmony targets: `NMapScreen.Open` / `SetMap` / `RecalculateTravelability` /
-  `ProcessControllerEvent` (the last two private, patched by string name) and
-  `NClickableControl._GuiInput`.
+- Harmony targets: `NMapScreen.Open` / `SetMap` / `_Input` /
+  `RecalculateTravelability` / `ProcessControllerEvent` (the last two private,
+  patched by string name) and `NClickableControl._GuiInput`.
 - Reflection: `NMapScreen._mapPointDictionary` and `NMapScreen._targetDragPos`.
-- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`,
-  `%ClearButton`.
+- Input action: `Controller.rightTrigger` (`controller_right_trigger`).
+- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
+- Scenes: `scenes/ui/hotkey_icon.tscn` (root script `NHotkeyIcon`, `UpdateInput`).
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/compressed.sprites/map/map_dot.tres`,
   `images/packed/map/icons/map_ping.png`, `images/ui/tiny_nine_patch.png`,
@@ -61,11 +68,12 @@ Game coupling that a game update can move (verify after every update):
   than five routes, ink highlight / fade states) and gold pin rings.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
-- The route tooltip: header, vertical icon column (boss at top), fixed-order category
-  summary, position, and clamping.
-- Plan Mode: the tray button (idle/active states, focus chain from the native Clear
-  button), node focus wiring and its restoration, focus-follow scrolling, select-to-pin
-  versus select-to-travel, and the suspended native scroll handler.
+- The route tooltips: the vertical icon column (boss at top) and the separate summary
+  table (colored header, count column right-aligned), their positions and clamping.
+- Plan Mode: the tray button (idle/active states, mouse-only), the Right Trigger
+  hotkey and its glyph, node focus wiring and its restoration, focus-follow
+  scrolling, select-to-pin versus select-to-travel, and the suspended native scroll
+  handler.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   quill drawing / erase modes (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).
