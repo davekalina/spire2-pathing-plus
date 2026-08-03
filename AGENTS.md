@@ -28,8 +28,9 @@ button shows them as a table — one row per route ("Route N", no pin score), co
 columns headed by map icons in the fixed order elites / fires / combats / shops /
 chests / events, zeros dimmed — plus a vertical icon-column tooltip (boss end at the
 top) on hover/focus, darkening that route to the traveled-ink color on the map while
-the rest fade. Pinned nodes are stamped with the game's own map_circle art
-(`map_circle_0..4.tres`, the visited-node ink ring) tinted a lighter ink.
+the rest fade. Pinned nodes are stamped with the game's own map_circle art tinted
+rust — always `map_circle_4`, the completed frame: the earlier four are the drawing
+animation and look torn as stills. The controller cursor is the same art in gold.
 
 Pins and the locked route persist across map opens and game restarts via
 `PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)
@@ -51,14 +52,15 @@ whole tier at a time while they fit the legend. Legend rows carry the score
 ("Route 1 — 6/7"). Same-floor pins are meaningful and allowed. The native Clear
 drawings button clears the pins too.
 
-**Plan Mode** (Right Trigger, or the mouse-only button stacked above the native
-DrawingTools tray — deliberately outside that tray's hotkey context and focus chain)
-is the controller path: while active, every node on a surviving route becomes
-focusable in a four-way grid wired from the drawn layout, the screen's native
-scroll-on-d-pad handler is skipped, the view follows focus, and select toggles a pin
-on the focused non-travelable node. All focus state is snapshotted before wiring and
-restored on exit, map change, screen close, and dispose — the mode must stay inert
-unless deliberately toggled.
+**The zoomed-out view is the controller mode** (Right Trigger or the Zoom button;
+every map open starts un-zoomed). While zoomed: all native scrolling and screen
+mouse handling is frozen, every drawn node — the whole map, not just route members —
+becomes focusable in a four-way grid wired from the drawn layout (`NodeNavigator`),
+a gold ink ring marks the focused node, and the cursor survives pin presses and the
+game's own focus grabs via a deferred re-grab of the remembered node. Select pins a
+non-travelable node, select on a travelable node travels. All focus state is
+snapshotted before wiring and restored on exit, map change, screen close, and
+dispose — the mode must stay inert unless deliberately toggled.
 
 The route enumeration, any-pin filtering, and boss-tail dedupe live in
 `PathingPlusCode/Pathing/` — pure logic, linked into `PathingPlus.Tests`, and the
@@ -76,12 +78,10 @@ Game coupling that a game update can move (verify after every update):
   "-600 + row * _distY" current-row formula.
 - Input action: `Controller.rightTrigger` (`controller_right_trigger`).
 - Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
-- Scenes: `scenes/ui/hotkey_icon.tscn` (root script `NHotkeyIcon`, `UpdateInput`).
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/compressed.sprites/map/map_dot.tres`,
-  `images/atlases/compressed.sprites/map/map_circle_[0-4].tres`,
-  `images/packed/map/icons/map_ping.png`, `images/ui/tiny_nine_patch.png`,
-  `themes/canvas_item_material_additive_shared.tres`, and the `StsColors` palette.
+  `images/atlases/compressed.sprites/map/map_circle_4.tres`,
+  `images/ui/tiny_nine_patch.png`, and the `StsColors` palette.
 - Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
   [-600, 1800] clamp range from `UpdateScrollPosition`.
 
@@ -98,10 +98,10 @@ Game coupling that a game update can move (verify after every update):
   stale, saved on every change; the Clear button empties the file's pin list too.
 - The Zoom button: label states, full-map framing at any act size, drag/wheel while
   zoomed, and the snap back to the current row.
-- Plan Mode: the tray button (idle/active states, mouse-only), the Right Trigger
-  hotkey and its glyph, node focus wiring and its restoration, focus-follow
-  scrolling, select-to-pin versus select-to-travel, and the suspended native scroll
-  handler.
+- Controller mode: the Right Trigger hotkey, all-node focus wiring and its
+  restoration, the gold cursor ring, cursor retention across pin presses,
+  select-to-pin versus select-to-travel, and the frozen native scroll/mouse
+  handlers while zoomed.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   quill drawing / erase modes (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).

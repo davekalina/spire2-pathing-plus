@@ -1,8 +1,8 @@
 {
   "title": "Pathing Plus",
-  "description": "Click map nodes to see every path through them, with a color-coded legend of what each route holds.",
-  "visibility": "private",
-  "changeNote": "Initial release.",
+  "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
+  "visibility": "unlisted",
+  "changeNote": "First pass: route planning with pins, a per-route table, a zoom-out view, and controller navigation.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []

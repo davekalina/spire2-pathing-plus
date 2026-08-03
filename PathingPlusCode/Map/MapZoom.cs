@@ -32,6 +32,9 @@ internal sealed class MapZoom : IDisposable
 
     public bool Zoomed { get; private set; }
 
+    /// <summary>Raised after the state flips, either direction, any cause.</summary>
+    public event Action? Toggled;
+
     public MapZoom(NMapScreen screen, Control theMap, Func<IReadOnlyList<Vector2>> nodeCenters)
     {
         _screen = screen;
@@ -52,8 +55,9 @@ internal sealed class MapZoom : IDisposable
         _tray.AnchorLeft = _tray.AnchorRight = 1f;
         _tray.OffsetLeft = -172f;
         _tray.OffsetRight = -48f;
-        _tray.OffsetTop = 132f;
-        _tray.OffsetBottom = 188f;
+        // Below the top bar AND the debug version/modded readout in the corner.
+        _tray.OffsetTop = 196f;
+        _tray.OffsetBottom = 252f;
         _tray.GrowHorizontal = Control.GrowDirection.Begin;
 
         var button = new Control
@@ -94,15 +98,17 @@ internal sealed class MapZoom : IDisposable
     {
         Zoomed = !Zoomed;
         Apply();
+        Toggled?.Invoke();
     }
 
-    /// <summary>Back to the standard view, e.g. when the map itself changes.</summary>
+    /// <summary>Back to the standard view — on map change, map close, and map open.</summary>
     public void Reset()
     {
         if (!Zoomed)
             return;
         Zoomed = false;
         Apply();
+        Toggled?.Invoke();
     }
 
     public void Dispose()

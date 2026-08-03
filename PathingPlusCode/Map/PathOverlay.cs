@@ -30,10 +30,12 @@ internal sealed class PathOverlay : IDisposable
 
     /// <summary>
     /// The game circles a visited node in near-black ink (map_circle_vfx tints its
-    /// white art to 0.14/0.12/0.10); pins use the same art in a much lighter ink so a
-    /// planned stop cannot be mistaken for a visited one.
+    /// white art); pins use the same art in rust so a planned stop reads strongly and
+    /// still cannot be mistaken for a visited one.
     /// </summary>
-    private static readonly Color PinInk = new(0.52f, 0.42f, 0.31f, 0.95f);
+    private static readonly Color PinInk = new(0.72f, 0.35f, 0.18f);
+
+    private static readonly Color CursorInk = StsColors.gold;
 
     /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
@@ -51,6 +53,7 @@ internal sealed class PathOverlay : IDisposable
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
     private readonly List<TextureRect> _pinRings = [];
+    private TextureRect? _cursor;
 
     public PathOverlay(Control theMap, Control points)
     {
@@ -113,34 +116,59 @@ internal sealed class PathOverlay : IDisposable
 
         foreach (var center in centers)
         {
-            // The hand-inked circle the game stamps on visited nodes, from the same
-            // five frames, with the vfx's own rotation-and-shrink treatment. Variant
-            // and rotation derive from the position so a refresh redraws it unchanged.
-            var variant = Math.Abs((int)center.X * 31 + (int)center.Y) % 5;
-            var ring = new TextureRect
-            {
-                Texture = ResourceLoader.Load<Texture2D>(
-                    $"res://images/atlases/compressed.sprites/map/map_circle_{variant}.tres",
-                    null, ResourceLoader.CacheMode.Reuse),
-                Size = new Vector2(200, 200),
-                PivotOffset = new Vector2(100, 100),
-                Position = center - new Vector2(100, 100),
-                RotationDegrees = MathF.Abs(center.X * 7.3f + center.Y * 3.1f) % 360f,
-                Scale = Vector2.One * 0.87f,
-                Modulate = PinInk,
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            };
+            var ring = MakeInkRing(center, PinInk, 0.87f);
             _pinRings.Add(ring);
             _layer.AddChild(ring);
         }
     }
 
+    /// <summary>The controller cursor: a gold ink ring on whichever node holds focus.</summary>
+    public void ShowCursor(Vector2 center)
+    {
+        if (_cursor is null || !GodotObject.IsInstanceValid(_cursor))
+        {
+            _cursor = MakeInkRing(center, CursorInk, 1.02f);
+            _cursor.ZIndex = 20;
+            _layer.AddChild(_cursor);
+        }
+        _cursor.Position = center - new Vector2(100, 100);
+        _cursor.RotationDegrees = MathF.Abs(center.X * 7.3f + center.Y * 3.1f) % 360f;
+        _cursor.Visible = true;
+    }
+
+    public void HideCursor()
+    {
+        if (_cursor is { } cursor && GodotObject.IsInstanceValid(cursor))
+            cursor.Visible = false;
+    }
+
+    /// <summary>
+    /// The hand-inked circle the game stamps on visited nodes — always the last of
+    /// its five frames: the earlier ones are the drawing animation and look torn when
+    /// used as stills. Rotation derives from the position so a refresh redraws it
+    /// unchanged.
+    /// </summary>
+    private static TextureRect MakeInkRing(Vector2 center, Color color, float scale) => new()
+    {
+        Texture = ResourceLoader.Load<Texture2D>(
+            "res://images/atlases/compressed.sprites/map/map_circle_4.tres",
+            null, ResourceLoader.CacheMode.Reuse),
+        ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+        StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+        Size = new Vector2(200, 200),
+        PivotOffset = new Vector2(100, 100),
+        Position = center - new Vector2(100, 100),
+        RotationDegrees = MathF.Abs(center.X * 7.3f + center.Y * 3.1f) % 360f,
+        Scale = Vector2.One * scale,
+        Modulate = color,
+        MouseFilter = Control.MouseFilterEnum.Ignore,
+    };
+
     public void Clear()
     {
         ClearDots();
         ShowPins([]);
+        HideCursor();
     }
 
     public void Dispose()
@@ -183,6 +211,8 @@ internal sealed class PathOverlay : IDisposable
                 var dot = new TextureRect
                 {
                     Texture = texture,
+                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                     Size = new Vector2(16, 16),
                     PivotOffset = new Vector2(8, 8),
                     Position = center - new Vector2(8, 8),
@@ -191,8 +221,6 @@ internal sealed class PathOverlay : IDisposable
                     Scale = baseScale,
                     Modulate = color,
                     MouseFilter = Control.MouseFilterEnum.Ignore,
-                    StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                    ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 };
                 sink.Add((dot, baseScale));
                 _layer.AddChild(dot);

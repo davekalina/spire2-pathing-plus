@@ -23,10 +23,10 @@ the map screen and even restarting the game. A **Zoom** button in the upper righ
 toggles between the standard view and a zoomed-out view of the whole act; while
 zoomed out, scrolling is switched off entirely — nothing needs it.
 
-On a controller, pull the **Right Trigger** (or click the button above the drawing
-tools) to toggle **Plan Mode**: the d-pad walks the future map node by node with the
-view following, and select pins the focused node. Select on a reachable node still
-travels, and the route legend is reachable downward from the native map legend.
+On a controller, pull the **Right Trigger** (or click Zoom): the zoomed-out view is
+also controller mode. The d-pad walks the map node by node — every node, not just
+reachable ones — with a gold ink ring marking the cursor, which stays put after each
+press. Select pins the focused node; select on a travelable node still travels.
 
 Informational only: nothing about the run changes, and `?` nodes stay `?`.
 
@@ -45,7 +45,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.6.0 initialized`.
+logs `Pathing Plus v0.7.0 initialized`.
 
 ## Publish to the Steam Workshop
 

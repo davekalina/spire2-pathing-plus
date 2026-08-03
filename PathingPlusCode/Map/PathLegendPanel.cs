@@ -111,6 +111,7 @@ internal sealed class PathLegendPanel : IDisposable
         IReadOnlyList<RouteDisplay> routes)
     {
         _header.Text = headerText;
+        _header.Visible = headerText.Length > 0;
         _hint.Text = hintText;
         _hint.Visible = hintText.Length > 0;
 
@@ -161,13 +162,16 @@ internal sealed class PathLegendPanel : IDisposable
         };
         for (var c = 0; c < icons.Count; c++)
         {
+            // ExpandMode must be set before Size: a control cannot be smaller than
+            // its minimum, and until IgnoreSize is applied the minimum is the
+            // texture's own ~90 px — Size assigned first silently clamps to that.
             header.AddChild(new TextureRect
             {
                 Texture = icons[c],
-                Position = new Vector2(ColumnsStartX + c * ColumnWidth + (ColumnWidth - 26) / 2, 4),
-                Size = new Vector2(26, 26),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                Position = new Vector2(ColumnsStartX + c * ColumnWidth + (ColumnWidth - 26) / 2, 4),
+                Size = new Vector2(26, 26),
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             });
         }

@@ -23,7 +23,7 @@ internal static class MapScreenPatches
                 Views.Add(__instance, view);
                 __instance.TreeExiting += () => Detach(__instance);
             }
-            view.Refresh();
+            view.OnOpened();
         });
 
     [HarmonyPostfix]
@@ -49,17 +49,16 @@ internal static class MapScreenPatches
         });
 
     /// <summary>
-    /// Natively the vertical d-pad scrolls the map and left/right/select snap the view
-    /// back to the current row. In plan mode focus travel does the navigating and the
-    /// view follows focus; zoomed out, the whole map is visible and scrolling is
-    /// pointless. Either way the native handler sits out. Falling back to true leaves
-    /// the game exactly native.
+    /// Natively the vertical d-pad scrolls the map and left/right/select snap the
+    /// view back to the current row. Zoomed out, the whole map is visible, the d-pad
+    /// belongs to the node grid, and scrolling is pure noise — the native handler
+    /// sits out. Falling back to true leaves the game exactly native.
     /// </summary>
     [HarmonyPrefix]
     [HarmonyPatch("ProcessControllerEvent")]
     private static bool BeforeProcessControllerEvent(NMapScreen __instance) =>
         Guard.Run("Suspending native map scroll",
-            () => !ScrollSuspended(__instance), true);
+            () => !ZoomActive(__instance), true);
 
     /// <summary>
     /// Zoomed out, the screen's own mouse handling — drag-to-pan, the wheel, and
@@ -70,25 +69,23 @@ internal static class MapScreenPatches
     [HarmonyPatch(nameof(NMapScreen._GuiInput))]
     private static bool BeforeScreenGuiInput(NMapScreen __instance) =>
         Guard.Run("Freezing map input while zoomed out",
-            () => !(Views.TryGetValue(__instance, out var view) && view.ZoomActive), true);
+            () => !ZoomActive(__instance), true);
 
-    internal static bool PlanModeActive(NMapScreen screen) =>
-        Views.TryGetValue(screen, out var view) && view.PlanModeActive;
-
-    private static bool ScrollSuspended(NMapScreen screen) =>
-        Views.TryGetValue(screen, out var view) && (view.PlanModeActive || view.ZoomActive);
+    private static bool ZoomActive(NMapScreen screen) =>
+        Views.TryGetValue(screen, out var view) && view.ZoomActive;
 
     /// <summary>
-    /// Right Trigger toggles plan mode while the map screen is the active context.
-    /// The trigger is an axis, so a press produces a stream of motion events past the
-    /// threshold; the held latch turns that into one toggle per pull.
+    /// Right Trigger toggles the zoomed-out view (and with it controller node
+    /// navigation) while the map screen is the active context. The trigger is an
+    /// axis, so a press produces a stream of motion events past the threshold; the
+    /// held latch turns that into one toggle per pull.
     /// </summary>
     private static bool _rightTriggerHeld;
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NMapScreen._Input))]
     private static void AfterInput(NMapScreen __instance, InputEvent __0) =>
-        Guard.Run("Plan mode hotkey", () =>
+        Guard.Run("Zoom hotkey", () =>
         {
             if (__0.IsActionReleased(Controller.rightTrigger))
             {
@@ -102,7 +99,7 @@ internal static class MapScreenPatches
                 return;
             if (Views.TryGetValue(__instance, out var view))
             {
-                view.TogglePlanMode();
+                view.ToggleZoom();
                 __instance.GetViewport().SetInputAsHandled();
             }
         });

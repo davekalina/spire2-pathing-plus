@@ -25,7 +25,7 @@ internal sealed class PathingView : IDisposable
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
     private readonly PathLegendPanel _panel;
-    private readonly PlanModeController _planMode;
+    private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
 
@@ -45,11 +45,18 @@ internal sealed class PathingView : IDisposable
         var points = screen.GetNode<Control>("TheMap/Points");
         _overlay = new PathOverlay(theMap, points);
         _panel = new PathLegendPanel(screen);
-        _planMode = new PlanModeController(screen);
+        _navigator = new NodeNavigator(screen);
         _zoom = new MapZoom(screen, theMap, NodeCenters);
-        // Zoomed out, the whole map is visible: nothing should scroll, including
-        // plan mode's own focus-follow.
-        _planMode.ScrollSuppressed = () => _zoom.Zoomed;
+        // Zoomed out is the controller mode: the whole map is visible, scrolling is
+        // frozen, and the d-pad walks the node grid with a gold cursor ring.
+        _zoom.Toggled += () => Guard.Run("Syncing map navigation", () =>
+        {
+            _navigator.SetActive(_zoom.Zoomed);
+            if (!_zoom.Zoomed)
+                _overlay.HideCursor();
+        });
+        _navigator.NodeFocused += node => Guard.Run("Showing the map cursor", () =>
+            _overlay.ShowCursor(node.Position + node.Size * 0.5f));
         _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
         _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
         _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
@@ -58,11 +65,16 @@ internal sealed class PathingView : IDisposable
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
 
-    public bool PlanModeActive => _planMode.Active;
-
     public bool ZoomActive => _zoom.Zoomed;
 
-    public void TogglePlanMode() => _planMode.Toggle();
+    public void ToggleZoom() => _zoom.Toggle();
+
+    /// <summary>Every map open starts in the normal view, never zoomed out.</summary>
+    public void OnOpened()
+    {
+        _zoom.Reset();
+        Refresh();
+    }
 
     /// <summary>The native Clear button wipes the quill drawings; it wipes this too.</summary>
     public void ClearPins()
@@ -76,7 +88,6 @@ internal sealed class PathingView : IDisposable
 
     public void OnMapChanged()
     {
-        _planMode.Deactivate();
         _zoom.Reset();
         _adapter = null;
         _pins.Clear();
@@ -155,11 +166,11 @@ internal sealed class PathingView : IDisposable
             _lockedRouteIds = null;
 
         UpdateOverlay();
-        UpdatePanel(pathSet.Truncated, match);
+        UpdatePanel(pathSet.Truncated);
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(_lockedRoute);
         _panel.SetLocked(_lockedRoute);
-        _planMode.SetNodes(BuildPlanNodes());
+        _navigator.SetNodes(BuildNavNodes());
         PersistState();
     }
 
@@ -183,21 +194,20 @@ internal sealed class PathingView : IDisposable
             _lockedRouteIds?.ToArray()));
     }
 
-    /// <summary>Every node on a surviving route, with where it sits on screen.</summary>
-    private List<(NMapPoint Node, int Row, Vector2 Center)> BuildPlanNodes()
+    /// <summary>
+    /// Every drawn node, for the d-pad grid — the whole map, not just surviving
+    /// routes: weighing options means visiting nodes the current plan skips.
+    /// </summary>
+    private List<(NMapPoint Node, int Row, Vector2 Center)> BuildNavNodes()
     {
         var nodes = new List<(NMapPoint, int, Vector2)>();
-        if (_adapter is null || _nodesByCoord is null)
+        if (_nodesByCoord is null)
             return nodes;
-        foreach (var id in _shownRoutes.SelectMany(route => route.Skip(1)).Distinct())
+        foreach (var (coord, node) in _nodesByCoord)
         {
-            if (!_adapter.TryGetPoint(id, out var point))
+            if (!GodotObject.IsInstanceValid(node))
                 continue;
-            if (!_nodesByCoord.TryGetValue(point.coord, out var node) ||
-                !GodotObject.IsInstanceValid(node))
-                continue;
-            if (EndpointOf(id) is { } center)
-                nodes.Add((node, point.coord.row, center));
+            nodes.Add((node, coord.row, node.Position + node.Size * 0.5f));
         }
         return nodes;
     }
@@ -206,7 +216,7 @@ internal sealed class PathingView : IDisposable
     {
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
-        _planMode.Dispose();
+        _navigator.Dispose();
         _zoom.Dispose();
         _overlay.Dispose();
         _panel.Dispose();
@@ -223,7 +233,7 @@ internal sealed class PathingView : IDisposable
 
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
-        _planMode.Deactivate();
+        _zoom.Reset();
         _hotRoute = -1;
         _panel.HideTooltip();
         _overlay.SetHighlight(_lockedRoute);
@@ -294,7 +304,7 @@ internal sealed class PathingView : IDisposable
         [nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)],
     ];
 
-    private void UpdatePanel(bool truncated, PinMatch match)
+    private void UpdatePanel(bool truncated)
     {
         if (_shownRoutes.Count == 0)
         {
@@ -312,11 +322,14 @@ internal sealed class PathingView : IDisposable
                     .OfType<Texture2D>()
                     .ToList(),
                 CountColumns(route))).ToList();
-            _panel.SetContent(Header(truncated, match), Hint(match), columnIcons, routes);
+            // No header over the table: the rows explain themselves.
+            _panel.SetContent("", "", columnIcons, routes);
         }
         else
         {
-            _panel.SetContent(Header(truncated, match), Hint(match), [], []);
+            var count = $"{_shownRoutes.Count}{(truncated ? "+" : "")}";
+            _panel.SetContent($"{count} routes",
+                _pins.Count == 0 ? "Pin map nodes to narrow the routes" : "", [], []);
         }
     }
 
@@ -331,31 +344,10 @@ internal sealed class PathingView : IDisposable
         return ColumnKinds.Select(kinds => kinds.Sum(counts.GetValueOrDefault)).ToList();
     }
 
-    private string Header(bool truncated, PinMatch match)
-    {
-        if (_pins.Count == 0)
-        {
-            var count = $"{_shownRoutes.Count}{(truncated ? "+" : "")}";
-            return _shownRoutes.Count == 1 ? "1 route" : $"{count} routes";
-        }
-        var routesWord = match.CountAtMax == 1 ? "route" : "routes";
-        if (match.MaxHits == _pins.Count)
-        {
-            var pinsWord = _pins.Count == 1 ? "the pin" : $"all {_pins.Count} pins";
-            return $"{match.CountAtMax} {routesWord} through {pinsWord}";
-        }
-        return $"Best match {match.MaxHits}/{_pins.Count} pins — {match.CountAtMax} {routesWord}";
-    }
-
-    private string Hint(PinMatch match) =>
-        _pins.Count == 0 && _shownRoutes.Count > PathSolver.LegendThreshold
-            ? "Pin map nodes to narrow the routes"
-            : "";
-
     private void Clear()
     {
-        _planMode.Deactivate();
-        _planMode.SetNodes([]);
+        _zoom.Reset();
+        _navigator.SetNodes([]);
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();
