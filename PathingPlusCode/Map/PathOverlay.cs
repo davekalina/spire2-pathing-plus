@@ -110,8 +110,9 @@ internal sealed class PathOverlay : IDisposable
 
         foreach (var center in centers)
         {
+            // The node icon art is 92 px; the ring must clear it, not cut through it.
             var ring = MakeLine(PinColor, 4f);
-            ring.Points = Circle(42f);
+            ring.Points = Circle(52f);
             ring.Position = center;
             _pinRings.Add(ring);
             _layer.AddChild(ring);

@@ -223,9 +223,12 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>
-    /// Where a route line meets a node, in <c>TheMap</c> space — the same answer the
-    /// game's <c>GetLineEndpoint</c> gives: a normal point's position is its centre,
-    /// everything else offsets by half its size.
+    /// Where a route line meets a node, in <c>TheMap</c> space. Every map point scene
+    /// root is center-anchored with a center pivot, so read at runtime (post-layout)
+    /// the visual centre is position plus half size for all three node types. The
+    /// game's <c>GetLineEndpoint</c> looks different only because it runs pre-layout
+    /// during <c>SetMap</c> and corrects on the dot side; copying its raw-position
+    /// case put these lines half a node up-left of the art.
     /// </summary>
     private Vector2? EndpointOf(string id)
     {
@@ -236,7 +239,7 @@ internal sealed class PathingView : IDisposable
         if (!_nodesByCoord.TryGetValue(point.coord, out var node) ||
             !GodotObject.IsInstanceValid(node))
             return null;
-        return node is NNormalMapPoint ? node.Position : node.Position + node.Size * 0.5f;
+        return node.Position + node.Size * 0.5f;
     }
 
     private Dictionary<MapCoord, NMapPoint> ReadPointDictionary() =>
