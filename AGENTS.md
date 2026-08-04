@@ -39,6 +39,12 @@ frame: the earlier four are the drawing animation and look torn as stills. The
 controller cursor is the same art in gold, shown only while
 `NControllerManager.IsUsingDirectionalNavigation`.
 
+Overlay stacking is tree order only — **never `ZIndex`**: a nonzero ZIndex is
+canvas-global and draws over screens the game layers above the map (a z-10 route
+highlight once cut a black line across the deck screen). The overlay keeps dot, pin,
+and cursor sub-layers, and highlight prominence is a `MoveChild` within the dot
+sub-layer.
+
 Two lifecycle rules the hard way: the map screen's root stays in the tree when the
 map closes (the game only hides its own contents), so every panel parented to the
 screen root hides itself on `Closed` and shows on open — or it lingers over combat

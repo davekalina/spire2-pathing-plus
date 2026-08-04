@@ -61,6 +61,9 @@ internal sealed class PathOverlay : IDisposable
     private const float RouteSeparation = 10f;
 
     private readonly Control _layer;
+    private readonly Control _dotLayer;
+    private readonly Control _pinLayer;
+    private readonly Control _cursorLayer;
     private readonly List<List<(TextureRect Dot, Vector2 BaseScale)>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
@@ -73,6 +76,21 @@ internal sealed class PathOverlay : IDisposable
         _layer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         theMap.AddChild(_layer);
         theMap.MoveChild(_layer, points.GetIndex());
+
+        // Stacking is tree order only, NEVER ZIndex: a nonzero ZIndex is
+        // canvas-global and draws over screens the game layers above the map —
+        // a z-10 highlight once cut a black line across the deck screen.
+        _dotLayer = MakeSubLayer("Dots");
+        _pinLayer = MakeSubLayer("Pins");
+        _cursorLayer = MakeSubLayer("Cursor");
+    }
+
+    private Control MakeSubLayer(string name)
+    {
+        var layer = new Control { Name = name, MouseFilter = Control.MouseFilterEnum.Ignore };
+        layer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _layer.AddChild(layer);
+        return layer;
     }
 
     /// <summary>Up to <see cref="RouteColors" />.Length full routes, one colour each.</summary>
@@ -115,9 +133,13 @@ internal sealed class PathOverlay : IDisposable
             {
                 dot.Modulate = color;
                 dot.Scale = baseScale * factor;
-                dot.ZIndex = index >= 0 && i == index ? 10 : 0;
             }
         }
+
+        // Prominence by tree order within our own sub-layer, never by ZIndex.
+        if (index >= 0 && index < _routeDots.Count)
+            foreach (var (dot, _) in _routeDots[index])
+                _dotLayer.MoveChild(dot, _dotLayer.GetChildCount() - 1);
     }
 
     public void ShowPins(IEnumerable<Vector2> centers)
@@ -130,7 +152,7 @@ internal sealed class PathOverlay : IDisposable
         {
             var ring = MakeInkRing(center, PinInk, 0.87f);
             _pinRings.Add(ring);
-            _layer.AddChild(ring);
+            _pinLayer.AddChild(ring);
         }
     }
 
@@ -140,8 +162,7 @@ internal sealed class PathOverlay : IDisposable
         if (_cursor is null || !GodotObject.IsInstanceValid(_cursor))
         {
             _cursor = MakeInkRing(center, CursorInk, 1.02f);
-            _cursor.ZIndex = 20;
-            _layer.AddChild(_cursor);
+            _cursorLayer.AddChild(_cursor);
         }
         _cursor.Position = center - new Vector2(100, 100);
         _cursor.RotationDegrees = MathF.Abs(center.X * 7.3f + center.Y * 3.1f) % 360f;
@@ -236,7 +257,7 @@ internal sealed class PathOverlay : IDisposable
                     MouseFilter = Control.MouseFilterEnum.Ignore,
                 };
                 sink.Add((dot, baseScale));
-                _layer.AddChild(dot);
+                _dotLayer.AddChild(dot);
             }
         }
     }
