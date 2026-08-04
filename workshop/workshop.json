@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
   "visibility": "unlisted",
-  "changeNote": "v0.8.0 - Route trails are drawn heavier so they stand out from the map's own dashes, and the all-routes view at act start is much more readable. New: double-click a node to pin every node of that kind at once (all elites, all fires...); double-click again to clear them.",
+  "changeNote": "v0.8.1 - Route trails now draw as continuous hand-drawn strokes: overlapping dashes, thicker and longer, instead of a dotted line.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []
