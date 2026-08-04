@@ -31,6 +31,10 @@
 
   <Target Name="CopyToModsFolderOnBuild" AfterTargets="PostBuildEvent" Condition="'$(SkipModInstall)' != 'true'">
     <Message Text="Copying .dll .pdb and .json to $(ModsPath)$(MSBuildProjectName)/" Importance="high" />
-    <Copy SourceFiles="$(TargetPath);$(MSBuildProjectDirectory)\$(MSBuildProjectName).json;$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" />
+    <!-- The DLL goes first, alone: when the game is running it is locked and this
+         task fails — which must happen BEFORE the manifest is touched, or the install
+         ends up a new-version manifest over an old-version DLL. -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\$(MSBuildProjectName).json;$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" />
   </Target>
 </Project>

@@ -42,13 +42,17 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
 
-    private const float DotSpacing = 22f;
+    /// <summary>
+    /// Tighter than the native 22 px: with the dash lengths below, neighbours overlap
+    /// and the run reads as one continuous hand-drawn stroke, not a dotted line.
+    /// </summary>
+    private const float DotSpacing = 14f;
 
     /// <summary>
     /// Across the path — the dash's girth. Stretching only the length made the runs
     /// read thinner than the native dashes; the mod's trails must read heavier.
     /// </summary>
-    private const float DashWidth = 1.6f;
+    private const float DashWidth = 1.9f;
 
     private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
@@ -212,11 +216,11 @@ internal sealed class PathOverlay : IDisposable
                     (float)(random.NextDouble() * 6.0 - 3.0),
                     (float)(random.NextDouble() * 6.0 - 3.0));
                 // The rotation puts the texture's Y axis along the path: X is girth,
-                // Y is length — 1.4 to 1.9 dash lengths, different every dash, so
-                // neighbours bridge their gaps.
+                // Y is length — 1.6 to 2.2 dash lengths against the 14 px spacing,
+                // so every dash overlaps its neighbours and the stroke connects.
                 var baseScale = new Vector2(
                     DashWidth,
-                    1.4f + (float)random.NextDouble() * 0.5f);
+                    1.6f + (float)random.NextDouble() * 0.6f);
                 var dot = new TextureRect
                 {
                     Texture = texture,
