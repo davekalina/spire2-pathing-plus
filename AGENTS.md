@@ -89,16 +89,22 @@ screen close, and dispose. Zoomed is planning, not moving:
 `OnMapPointSelectedLocally` is suppressed while zoomed and select becomes a pin
 toggle, travelable nodes included; travel requires cycling back to Normal.
 
-**The replacement Legend** (`RouteLegendPanel`) covers the native legend's rect,
-widened 75% leftward, on the native `map_legend` parchment. Transposed: type rows in
-the native legend's order (unknown / shop / treasure / rest / monster / elite), one
-column per route (up to eight) headed by its colored letter. Type icon hover/focus
-fires the game's own `HighlightPointType` broadcast; column hover previews the
-route, select locks it. The native legend is `Visible = false` for the view's
-lifetime (restored on dispose) and its hotkey handler `OnLegendHotkeyPressed` is
-prefix-rerouted into this panel with the same toggle semantics. The mod's own routes
-table (bottom right) remains alongside until the legend design is settled — with
-more than five routes the two can overlap on the right edge.
+**The replacement Legend** (`RouteLegendPanel`) sits bottom right — the space the
+mod's retired routes table held, clear of the rotated view — on the native
+`map_legend` parchment. Transposed: type rows in the native legend's order
+(unknown / shop / treasure / rest / monster / elite), one column per route (up to
+six, which is what the width fits; `LegendThreshold` matches) headed by its colored
+letter. Type icon hover/focus fires the game's own `HighlightPointType` broadcast;
+column hover tints the column and previews the route, select locks it (stronger
+tint). The native legend is `Visible = false` for the view's lifetime (restored on
+dispose) and its hotkey handler `OnLegendHotkeyPressed` is prefix-rerouted into this
+panel with the same toggle semantics.
+
+In the Rotated view every node icon counter-spins a quarter turn in step with the
+map tween so the art stays upright; base rotations (each node carries a small random
+tilt) are captured on first sight — always outside the rotated state — and restored
+on the way back. Toggling the view also kills any node hover tip left open, one
+deferred frame later so the tip conjured by the mode's own focus grab dies too.
 
 The route enumeration, any-pin filtering, and boss-tail dedupe live in
 `PathingPlusCode/Pathing/` — pure logic, linked into `PathingPlus.Tests`, and the

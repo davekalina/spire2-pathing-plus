@@ -2,6 +2,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Runs;
 using PathingPlus.PathingPlusCode.Pathing;
@@ -25,11 +26,11 @@ internal sealed class PathingView : IDisposable
 
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
-    private readonly PathLegendPanel _panel;
     private readonly RouteLegendPanel _legend;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
+    private readonly Dictionary<NMapPoint, float> _iconBaseRotations = [];
     private Control? _nativeLegend;
 
     private MapGraphAdapter? _adapter;
@@ -47,18 +48,22 @@ internal sealed class PathingView : IDisposable
         var theMap = screen.GetNode<Control>("TheMap");
         var points = screen.GetNode<Control>("TheMap/Points");
         _overlay = new PathOverlay(theMap, points);
-        _panel = new PathLegendPanel(screen);
         _navigator = new NodeNavigator(screen);
         _zoom = new MapZoom(screen, theMap, NodeCenters);
         // Zoomed out is the controller mode: the whole map is visible, scrolling is
         // frozen, and the d-pad walks the node grid with a gold cursor ring. The
-        // rotated view re-wires the grid so right means bossward.
+        // rotated view re-wires the grid so right means bossward, and the node icons
+        // counter-spin so they stay upright while the map turns under them.
         _zoom.Toggled += () => Guard.Run("Syncing map navigation", () =>
         {
             _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
             _navigator.SetActive(_zoom.Zoomed);
             if (!_zoom.Zoomed)
                 _overlay.HideCursor();
+            SyncIconRotation();
+            // After the deferred focus grab, so the tip that grab conjures dies too.
+            Callable.From(() => Guard.Run("Hiding stale map hover tips", HideNodeHoverTips))
+                .CallDeferred();
         });
 
         // The replacement legend covers the native one; the native stays hidden and
@@ -74,9 +79,14 @@ internal sealed class PathingView : IDisposable
         _legend.ColumnHot += index => Guard.Run("Highlighting a legend route", () =>
         {
             _hotRoute = index;
+            _legend.SetHot(index);
             _overlay.SetHighlight(index);
         });
-        _legend.ColumnCold += index => Guard.Run("Unhighlighting a legend route", () => OnRouteCold(index));
+        _legend.ColumnCold += index => Guard.Run("Unhighlighting a legend route", () =>
+        {
+            _legend.SetHot(-1);
+            OnRouteCold(index);
+        });
         _legend.ColumnLockToggled += index => Guard.Run("Locking a legend route", () => OnRouteLockToggled(index));
         _navigator.NodeFocused += node => Guard.Run("Showing the map cursor", () =>
         {
@@ -86,10 +96,41 @@ internal sealed class PathingView : IDisposable
             else
                 _overlay.HideCursor();
         });
-        _panel.RouteHot += index => Guard.Run("Highlighting a route", () => OnRouteHot(index));
-        _panel.RouteCold += index => Guard.Run("Unhighlighting a route", () => OnRouteCold(index));
-        _panel.RouteLockToggled += index => Guard.Run("Locking a route", () => OnRouteLockToggled(index));
         _screen.Closed += OnScreenClosed;
+    }
+
+    /// <summary>
+    /// In the rotated view every node icon counter-spins a quarter turn, in step with
+    /// the map's own tween, so the art reads upright while the map lies on its side.
+    /// Base rotations (the game gives each node a small random tilt) are captured the
+    /// first time a node is seen — always outside the rotated state, so never
+    /// mid-animation — and restored on the way back.
+    /// </summary>
+    private void SyncIconRotation()
+    {
+        if (_nodesByCoord is null)
+            return;
+        foreach (var node in _nodesByCoord.Values)
+        {
+            if (!GodotObject.IsInstanceValid(node))
+                continue;
+            if (!_iconBaseRotations.TryGetValue(node, out var baseRotation))
+                _iconBaseRotations[node] = baseRotation = node.RotationDegrees;
+            var target = _zoom.Rotated ? baseRotation - 90f : baseRotation;
+            node.CreateTween()
+                .TweenProperty(node, "rotation_degrees", target, MapZoom.TweenDuration)
+                .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+        }
+    }
+
+    /// <summary>Any node hover tip left open when the view changes stays until dismissed; kill them.</summary>
+    private void HideNodeHoverTips()
+    {
+        if (_nodesByCoord is null)
+            return;
+        foreach (var node in _nodesByCoord.Values)
+            if (GodotObject.IsInstanceValid(node))
+                NHoverTipSet.Remove(node);
     }
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
@@ -103,7 +144,6 @@ internal sealed class PathingView : IDisposable
     {
         _zoom.Reset();
         _zoom.SetButtonVisible(true);
-        _panel.SetShellVisible(true);
         _legend.SetShellVisible(true);
         Refresh();
     }
@@ -136,6 +176,7 @@ internal sealed class PathingView : IDisposable
     public void OnMapChanged()
     {
         _zoom.Reset();
+        _iconBaseRotations.Clear();
         _adapter = null;
         _pins.Clear();
         if (_screen.IsOpen)
@@ -263,10 +304,9 @@ internal sealed class PathingView : IDisposable
         _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
 
         UpdateOverlay();
-        UpdatePanel(pathSet.Truncated);
+        UpdateLegend();
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(_lockedRoute);
-        _panel.SetLocked(_lockedRoute);
         _legend.SetLocked(_lockedRoute);
         _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
         PersistState();
@@ -329,7 +369,6 @@ internal sealed class PathingView : IDisposable
         _navigator.Dispose();
         _zoom.Dispose();
         _overlay.Dispose();
-        _panel.Dispose();
         _legend.Dispose();
         if (_nativeLegend is { } nativeLegend && GodotObject.IsInstanceValid(nativeLegend))
             nativeLegend.Visible = true;
@@ -351,24 +390,15 @@ internal sealed class PathingView : IDisposable
         // The screen root stays in the tree when the map closes — the game only hides
         // its own contents — so panels parented to it must hide themselves, or they
         // linger over combat and the settings menu.
-        _panel.SetShellVisible(false);
         _legend.SetShellVisible(false);
         _zoom.SetButtonVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });
 
-    private void OnRouteHot(int index)
-    {
-        _hotRoute = index;
-        _panel.ShowTooltip(index);
-        _overlay.SetHighlight(index);
-    }
-
     private void OnRouteCold(int index)
     {
         if (_hotRoute == index)
             _hotRoute = -1;
-        _panel.HideTooltip();
         _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
     }
 
@@ -376,7 +406,6 @@ internal sealed class PathingView : IDisposable
     {
         _lockedRoute = _lockedRoute == index ? -1 : index;
         _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
-        _panel.SetLocked(_lockedRoute);
         _legend.SetLocked(_lockedRoute);
         _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
         PersistState();
@@ -409,52 +438,22 @@ internal sealed class PathingView : IDisposable
         }
     }
 
-    /// <summary>
-    /// The panel's count columns, in this fixed order everywhere: elites, fires,
-    /// combats, shops, chests, events. "Events" are the unknown "?" nodes.
-    /// </summary>
+    /// <summary>Sort keys for the legend: elites first, fires breaking ties.</summary>
     private static readonly string[][] ColumnKinds =
     [
         [nameof(MapPointType.Elite)],
         [nameof(MapPointType.RestSite)],
-        [nameof(MapPointType.Monster)],
-        [nameof(MapPointType.Shop)],
-        [nameof(MapPointType.Treasure)],
-        [nameof(MapPointType.Unknown), nameof(MapPointType.Unassigned)],
     ];
 
-    private void UpdatePanel(bool truncated)
+    private void UpdateLegend()
     {
-        if (_shownRoutes.Count == 0)
-        {
-            _panel.SetContent("No routes", "", [], []);
-        }
-        else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
-        {
-            var columnIcons = ColumnKinds.Select(kinds => MapIcons.For(kinds[0])).ToList();
-            var routes = _shownRoutes.Select((route, index) => new RouteDisplay(
-                PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                $"{(char)('A' + index)}.",
-                // The tooltip runs vertically like the map: boss end at the top.
-                route.Skip(1).Reverse()
-                    .Select(id => MapIcons.For(_adapter!.Graph.Node(id).RoomKind))
-                    .OfType<Texture2D>()
-                    .ToList(),
-                CountColumns(route))).ToList();
-            // No header over the table: the rows explain themselves.
-            _panel.SetContent("", "", columnIcons, routes);
+        if (_shownRoutes.Count is > 0 and <= PathSolver.LegendThreshold)
             _legend.SetRoutes(_shownRoutes.Select((route, index) => (
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
                 $"{(char)('A' + index)}",
                 LegendCounts(route))).ToList());
-        }
         else
-        {
-            var count = $"{_shownRoutes.Count}{(truncated ? "+" : "")}";
-            _panel.SetContent($"{count} routes",
-                _pins.Count == 0 ? "Pin map nodes to narrow the routes" : "", [], []);
             _legend.SetRoutes([]);
-        }
     }
 
     /// <summary>Counts in the legend's row order (the native legend's type order).</summary>
@@ -490,8 +489,6 @@ internal sealed class PathingView : IDisposable
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();
-        _panel.SetContent("", "", [], []);
-        _panel.HideTooltip();
     }
 
     /// <summary>

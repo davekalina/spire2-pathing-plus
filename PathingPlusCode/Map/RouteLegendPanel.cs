@@ -31,12 +31,12 @@ internal sealed class RouteLegendPanel : IDisposable
         (MapPointType.Elite, nameof(MapPointType.Elite), [nameof(MapPointType.Elite)]),
     ];
 
-    private const float IconColumnX = 44f;
+    private const float IconColumnX = 36f;
     private const float IconSize = 46f;
     private const float FirstRowY = 96f;
     private const float RowHeight = 52f;
-    private const float ColumnsStartX = 118f;
-    private const float ColumnWidth = 54f;
+    private const float ColumnsStartX = 104f;
+    private const float ColumnWidth = 44f;
     private const float HeaderY = 40f;
 
     public event Action<MapPointType>? TypeHot;
@@ -50,22 +50,25 @@ internal sealed class RouteLegendPanel : IDisposable
     private readonly List<Control> _iconCells = [];
     private readonly List<Control> _columns = [];
     private readonly List<ColorRect> _columnMarks = [];
+    private int _hot = -1;
+    private int _locked = -1;
 
     public RouteLegendPanel(Control screen)
     {
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
-        // The native legend's rect (558..898 × -251..203 around centre), widened 75%
-        // by extending left, wearing the native legend parchment.
+        // Bottom right, in the space the mod's old routes table held — out of the
+        // rotated view's way — wearing the native legend parchment. Six route
+        // columns fit this width.
         _panel = new Control { Name = "PathingPlusLegend", MouseFilter = Control.MouseFilterEnum.Stop };
-        _panel.AnchorLeft = _panel.AnchorRight = 0.5f;
-        _panel.AnchorTop = _panel.AnchorBottom = 0.5f;
-        _panel.OffsetLeft = 303f;
-        _panel.OffsetRight = 898f;
-        _panel.OffsetTop = -251f;
-        _panel.OffsetBottom = 203f;
-        _panel.GrowHorizontal = Control.GrowDirection.Both;
-        _panel.GrowVertical = Control.GrowDirection.Both;
+        _panel.AnchorLeft = _panel.AnchorRight = 1f;
+        _panel.AnchorTop = _panel.AnchorBottom = 1f;
+        _panel.OffsetLeft = -421f;
+        _panel.OffsetRight = -24f;
+        _panel.OffsetTop = -582f;
+        _panel.OffsetBottom = -128f;
+        _panel.GrowHorizontal = Control.GrowDirection.Begin;
+        _panel.GrowVertical = Control.GrowDirection.Begin;
 
         var background = new TextureRect
         {
@@ -122,6 +125,7 @@ internal sealed class RouteLegendPanel : IDisposable
         }
         _columns.Clear();
         _columnMarks.Clear();
+        _hot = -1;
 
         for (var i = 0; i < routes.Count; i++)
         {
@@ -145,7 +149,7 @@ internal sealed class RouteLegendPanel : IDisposable
             column.AddChild(mark);
             _columnMarks.Add(mark);
 
-            var letter = MakeLabel(30, routes[i].Letter, routes[i].Color);
+            var letter = MakeLabel(28, routes[i].Letter, routes[i].Color);
             letter.Position = new Vector2(0, 0);
             letter.Size = new Vector2(ColumnWidth, FirstRowY - HeaderY);
             column.AddChild(letter);
@@ -181,8 +185,26 @@ internal sealed class RouteLegendPanel : IDisposable
 
     public void SetLocked(int index)
     {
+        _locked = index;
+        RefreshMarks();
+    }
+
+    /// <summary>The column under the mouse or holding focus, tinted so it reads as hot.</summary>
+    public void SetHot(int index)
+    {
+        _hot = index;
+        RefreshMarks();
+    }
+
+    private void RefreshMarks()
+    {
         for (var i = 0; i < _columnMarks.Count; i++)
-            _columnMarks[i].Visible = i == index;
+        {
+            var locked = i == _locked;
+            var hot = i == _hot;
+            _columnMarks[i].Visible = locked || hot;
+            _columnMarks[i].Color = new Color(0f, 0f, 0f, locked ? 0.16f : 0.08f);
+        }
     }
 
     /// <summary>Where the legend hotkey lands; null when the panel is hidden.</summary>

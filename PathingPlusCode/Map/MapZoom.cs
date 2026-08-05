@@ -39,7 +39,8 @@ internal sealed class MapZoom : IDisposable
 
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
 
-    private const double TweenDuration = 0.35;
+    /// <summary>Shared by every view-change animation, node icon counter-spin included.</summary>
+    public const double TweenDuration = 0.55;
 
     private readonly NMapScreen _screen;
     private readonly Control _theMap;
@@ -206,8 +207,8 @@ internal sealed class MapZoom : IDisposable
         _tween?.Kill();
         _tween = _theMap.CreateTween().SetParallel();
         _tween.TweenProperty(_theMap, "scale", Vector2.One * scale, TweenDuration)
-            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
         _tween.TweenProperty(_theMap, "rotation_degrees", rotationDegrees, TweenDuration)
-            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
     }
 }
