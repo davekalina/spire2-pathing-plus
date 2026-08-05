@@ -26,9 +26,11 @@ internal sealed class PathingView : IDisposable
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
     private readonly PathLegendPanel _panel;
+    private readonly RouteLegendPanel _legend;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
+    private Control? _nativeLegend;
 
     private MapGraphAdapter? _adapter;
     private Dictionary<MapCoord, NMapPoint>? _nodesByCoord;
@@ -49,13 +51,33 @@ internal sealed class PathingView : IDisposable
         _navigator = new NodeNavigator(screen);
         _zoom = new MapZoom(screen, theMap, NodeCenters);
         // Zoomed out is the controller mode: the whole map is visible, scrolling is
-        // frozen, and the d-pad walks the node grid with a gold cursor ring.
+        // frozen, and the d-pad walks the node grid with a gold cursor ring. The
+        // rotated view re-wires the grid so right means bossward.
         _zoom.Toggled += () => Guard.Run("Syncing map navigation", () =>
         {
+            _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
             _navigator.SetActive(_zoom.Zoomed);
             if (!_zoom.Zoomed)
                 _overlay.HideCursor();
         });
+
+        // The replacement legend covers the native one; the native stays hidden and
+        // its hotkey is rerouted here for as long as this view lives.
+        _legend = new RouteLegendPanel(screen);
+        _nativeLegend = screen.GetNodeOrNull<Control>("%MapLegend");
+        if (_nativeLegend is { })
+            _nativeLegend.Visible = false;
+        _legend.TypeHot += type => Guard.Run("Highlighting a node type", () =>
+            _screen.HighlightPointType(type));
+        _legend.TypeCold += () => Guard.Run("Clearing the node type highlight", () =>
+            _screen.HighlightPointType(MapPointType.Unassigned));
+        _legend.ColumnHot += index => Guard.Run("Highlighting a legend route", () =>
+        {
+            _hotRoute = index;
+            _overlay.SetHighlight(index);
+        });
+        _legend.ColumnCold += index => Guard.Run("Unhighlighting a legend route", () => OnRouteCold(index));
+        _legend.ColumnLockToggled += index => Guard.Run("Locking a legend route", () => OnRouteLockToggled(index));
         _navigator.NodeFocused += node => Guard.Run("Showing the map cursor", () =>
         {
             // The gold ring is a controller aid; with a mouse the pointer is the cursor.
@@ -82,7 +104,23 @@ internal sealed class PathingView : IDisposable
         _zoom.Reset();
         _zoom.SetButtonVisible(true);
         _panel.SetShellVisible(true);
+        _legend.SetShellVisible(true);
         Refresh();
+    }
+
+    /// <summary>
+    /// The native legend hotkey, rerouted: first press lands on the icon column,
+    /// pressing it again returns focus to the map — same toggle the native handler had.
+    /// </summary>
+    public void ToggleLegendFocus()
+    {
+        var focused = _screen.GetViewport()?.GuiGetFocusOwner();
+        if (_legend.OwnsFocus(focused))
+        {
+            _screen.DefaultFocusedControl?.CallDeferred(Control.MethodName.GrabFocus);
+            return;
+        }
+        _legend.FirstFocus?.CallDeferred(Control.MethodName.GrabFocus);
     }
 
     /// <summary>The native Clear button wipes the quill drawings; it wipes this too.</summary>
@@ -229,7 +267,8 @@ internal sealed class PathingView : IDisposable
         _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(_lockedRoute);
         _panel.SetLocked(_lockedRoute);
-        _navigator.SetNodes(BuildNavNodes());
+        _legend.SetLocked(_lockedRoute);
+        _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
         PersistState();
     }
 
@@ -291,6 +330,9 @@ internal sealed class PathingView : IDisposable
         _zoom.Dispose();
         _overlay.Dispose();
         _panel.Dispose();
+        _legend.Dispose();
+        if (_nativeLegend is { } nativeLegend && GodotObject.IsInstanceValid(nativeLegend))
+            nativeLegend.Visible = true;
     }
 
     /// <summary>Every drawn node's centre, for the zoomed-out framing.</summary>
@@ -310,6 +352,7 @@ internal sealed class PathingView : IDisposable
         // its own contents — so panels parented to it must hide themselves, or they
         // linger over combat and the settings menu.
         _panel.SetShellVisible(false);
+        _legend.SetShellVisible(false);
         _zoom.SetButtonVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });
@@ -334,6 +377,7 @@ internal sealed class PathingView : IDisposable
         _lockedRoute = _lockedRoute == index ? -1 : index;
         _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
         _panel.SetLocked(_lockedRoute);
+        _legend.SetLocked(_lockedRoute);
         _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
         PersistState();
     }
@@ -399,13 +443,32 @@ internal sealed class PathingView : IDisposable
                 CountColumns(route))).ToList();
             // No header over the table: the rows explain themselves.
             _panel.SetContent("", "", columnIcons, routes);
+            _legend.SetRoutes(_shownRoutes.Select((route, index) => (
+                PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
+                $"{(char)('A' + index)}",
+                LegendCounts(route))).ToList());
         }
         else
         {
             var count = $"{_shownRoutes.Count}{(truncated ? "+" : "")}";
             _panel.SetContent($"{count} routes",
                 _pins.Count == 0 ? "Pin map nodes to narrow the routes" : "", [], []);
+            _legend.SetRoutes([]);
         }
+    }
+
+    /// <summary>Counts in the legend's row order (the native legend's type order).</summary>
+    private IReadOnlyList<int> LegendCounts(IReadOnlyList<string> route)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var id in route.Skip(1))
+        {
+            var kind = _adapter!.Graph.Node(id).RoomKind;
+            counts[kind] = counts.GetValueOrDefault(kind) + 1;
+        }
+        return RouteLegendPanel.Rows
+            .Select(row => row.Kinds.Sum(counts.GetValueOrDefault))
+            .ToList();
     }
 
     private IReadOnlyList<int> CountColumns(IReadOnlyList<string> route)
@@ -422,7 +485,8 @@ internal sealed class PathingView : IDisposable
     private void Clear()
     {
         _zoom.Reset();
-        _navigator.SetNodes([]);
+        _navigator.SetNodes([], false);
+        _legend.SetRoutes([]);
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();

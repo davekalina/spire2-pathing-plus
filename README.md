@@ -21,9 +21,16 @@ in a lighter shade than a visited node's. The map's Clear-drawings button also
 clears your pins.
 
 Pins and the locked route belong to the map they were made on: they survive closing
-the map screen and even restarting the game. A **Zoom** button in the upper right
-toggles between the standard view and a zoomed-out view of the whole act; while
-zoomed out, scrolling is switched off entirely — nothing needs it.
+the map screen and even restarting the game. The **Zoom** button in the upper right
+cycles three views with animated transitions: the game's normal scrolling view, the
+whole act on one screen, and the whole act rotated on its side — start on the left,
+boss on the right. In both zoomed views scrolling is switched off entirely.
+
+The mod also replaces the map Legend with a wider one on the same parchment: node
+types as rows, one column per computed route (up to eight) headed by its colored
+letter. Hover a type icon to light up every node of that type on the map (the
+game's own highlight), hover a column to preview that route, select it to lock.
+The legend hotkey works as before — it just lands here now.
 
 On a controller, pull the **Right Trigger** (or click Zoom): the zoomed-out view is
 also controller mode. The d-pad walks the map node by node — every node, not just
@@ -48,7 +55,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.8.2 initialized`.
+logs `Pathing Plus v0.9.0 initialized`.
 
 ## Publish to the Steam Workshop
 

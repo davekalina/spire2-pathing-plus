@@ -75,6 +75,21 @@ internal static class MapScreenPatches
         Views.TryGetValue(screen, out var view) && view.ZoomActive;
 
     /// <summary>
+    /// The native legend is hidden under the replacement one, so its hotkey lands on
+    /// the replacement instead — same press-to-enter, press-again-to-leave toggle.
+    /// </summary>
+    [HarmonyPrefix]
+    [HarmonyPatch("OnLegendHotkeyPressed")]
+    private static bool BeforeLegendHotkeyPressed(NMapScreen __instance) =>
+        Guard.Run("Rerouting the legend hotkey", () =>
+        {
+            if (!Views.TryGetValue(__instance, out var view))
+                return true;
+            view.ToggleLegendFocus();
+            return false;
+        }, true);
+
+    /// <summary>
     /// Zoomed out is planning, not moving: selecting any node — travelable included —
     /// toggles its pin, and travel never fires. Zoom back in to actually move.
     /// Falling back to true keeps travel native if anything here breaks.

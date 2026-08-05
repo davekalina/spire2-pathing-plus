@@ -73,18 +73,32 @@ whole tier at a time while they fit the legend. Legend rows carry the score
 ("Route 1 — 6/7"). Same-floor pins are meaningful and allowed. The native Clear
 drawings button clears the pins too.
 
-**The zoomed-out view is the controller mode** (Right Trigger or the Zoom button;
-every map open starts un-zoomed). While zoomed: all native scrolling and screen
-mouse handling is frozen, every drawn node — the whole map, not just route members —
-becomes focusable in a four-way grid wired from the drawn layout (`NodeNavigator`),
-a gold ink ring marks the focused node, and the cursor survives pin presses and the
-game's own focus grabs via a deferred re-grab of the remembered node. Select pins a
-non-travelable node, select on a travelable node travels. All focus state is
-snapshotted before wiring and restored on exit, map change, screen close, and
-dispose — the mode must stay inert unless deliberately toggled. Zoomed out is
-planning, not moving: `OnMapPointSelectedLocally` is suppressed while zoomed and the
-select becomes a pin toggle, travelable nodes included; travel requires zooming back
-in.
+**The Zoom button cycles three views** (Right Trigger or the button; every map open
+starts Normal): Normal → Zoomed (whole act on screen) → Rotated (whole act on its
+side, start left / boss right, a quarter-turn of `TheMap`). Transitions animate:
+scale and rotation by tween, position by writing `_targetDragPos` and letting the
+screen's own lerp chase it; every transform pivots on the map content's centre so
+the combined tween cannot lurch. Both zoomed states are the controller mode: all
+native scrolling and screen mouse handling is frozen, every drawn node — the whole
+map, not just route members — becomes focusable in a four-way grid wired from the
+drawn layout (`NodeNavigator`; in the Rotated view the wiring swaps axes so right is
+bossward and up/down walk a floor), a gold ink ring marks the focused node, and the
+cursor survives pin presses and the game's own focus grabs via a deferred re-grab.
+All focus state is snapshotted before wiring and restored on exit, map change,
+screen close, and dispose. Zoomed is planning, not moving:
+`OnMapPointSelectedLocally` is suppressed while zoomed and select becomes a pin
+toggle, travelable nodes included; travel requires cycling back to Normal.
+
+**The replacement Legend** (`RouteLegendPanel`) covers the native legend's rect,
+widened 75% leftward, on the native `map_legend` parchment. Transposed: type rows in
+the native legend's order (unknown / shop / treasure / rest / monster / elite), one
+column per route (up to eight) headed by its colored letter. Type icon hover/focus
+fires the game's own `HighlightPointType` broadcast; column hover previews the
+route, select locks it. The native legend is `Visible = false` for the view's
+lifetime (restored on dispose) and its hotkey handler `OnLegendHotkeyPressed` is
+prefix-rerouted into this panel with the same toggle semantics. The mod's own routes
+table (bottom right) remains alongside until the legend design is settled — with
+more than five routes the two can overlap on the right edge.
 
 The route enumeration, any-pin filtering, and boss-tail dedupe live in
 `PathingPlusCode/Pathing/` — pure logic, linked into `PathingPlus.Tests`, and the
@@ -94,8 +108,9 @@ Game coupling that a game update can move (verify after every update):
 
 - Harmony targets: `NMapScreen.Open` / `SetMap` / `_Input` /
   `OnMapPointSelectedLocally` / `RecalculateTravelability` /
-  `ProcessControllerEvent` (the last two private, patched by string name),
-  `NClickableControl._GuiInput`, and `NMapDrawings.ClearDrawnLinesLocal`.
+  `ProcessControllerEvent` / `OnLegendHotkeyPressed` (the last three private,
+  patched by string name), `NClickableControl._GuiInput`, and
+  `NMapDrawings.ClearDrawnLinesLocal`.
 - Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
@@ -103,6 +118,7 @@ Game coupling that a game update can move (verify after every update):
 - Input action: `Controller.rightTrigger` (`controller_right_trigger`).
 - Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
+  `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),
   `images/atlases/compressed.sprites/map/map_dot.tres`,
   `images/atlases/compressed.sprites/map/map_circle_4.tres`,
   `images/packed/common_ui/submenu_compendium_button.png` (the Zoom button tile),

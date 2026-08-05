@@ -24,6 +24,9 @@ internal sealed class PathOverlay : IDisposable
         StsColors.green,
         StsColors.orange,
         StsColors.purple,
+        StsColors.pink,
+        StsColors.aqua,
+        StsColors.cream,
     ];
 
     // Solid enough to read at a glance: this is the whole display before the first

@@ -19,6 +19,7 @@ internal sealed class NodeNavigator : IDisposable
 {
     private readonly NMapScreen _screen;
     private IReadOnlyList<(NMapPoint Node, int Row, Vector2 Center)> _nodes = [];
+    private bool _rotated;
     private readonly Dictionary<NMapPoint, SavedFocus> _saved = [];
 
     public bool Active { get; private set; }
@@ -53,10 +54,16 @@ internal sealed class NodeNavigator : IDisposable
         }
     }
 
-    /// <summary>Every node the d-pad can walk; re-wires in place while active.</summary>
-    public void SetNodes(IReadOnlyList<(NMapPoint Node, int Row, Vector2 Center)> nodes)
+    /// <summary>
+    /// Every node the d-pad can walk; re-wires in place while active. In the rotated
+    /// view the map lies on its side — start left, boss right — so the wiring swaps
+    /// axes to match what the player sees: right is bossward, up and down move
+    /// within a floor.
+    /// </summary>
+    public void SetNodes(IReadOnlyList<(NMapPoint Node, int Row, Vector2 Center)> nodes, bool rotated)
     {
         _nodes = nodes;
+        _rotated = rotated;
         if (Active)
             ApplyWiring();
     }
@@ -89,13 +96,30 @@ internal sealed class NodeNavigator : IDisposable
                     onFocus);
 
                 node.FocusMode = Control.FocusModeEnum.All;
-                node.FocusNeighborLeft = c > 0 ? node.GetPathTo(rows[r][c - 1].Node) : self;
-                node.FocusNeighborRight = c < rows[r].Count - 1 ? node.GetPathTo(rows[r][c + 1].Node) : self;
-                // Rows ascend toward the boss, so "up" is the next row group.
-                node.FocusNeighborTop = r < rows.Count - 1
+                var previousInRow = c > 0 ? node.GetPathTo(rows[r][c - 1].Node) : self;
+                var nextInRow = c < rows[r].Count - 1 ? node.GetPathTo(rows[r][c + 1].Node) : self;
+                var bossward = r < rows.Count - 1
                     ? node.GetPathTo(NearestByX(rows[r + 1], center.X)) : self;
-                node.FocusNeighborBottom = r > 0
+                var startward = r > 0
                     ? node.GetPathTo(NearestByX(rows[r - 1], center.X)) : self;
+
+                if (_rotated)
+                {
+                    // On its side, a floor runs vertically (map X becomes screen Y)
+                    // and bossward is to the right.
+                    node.FocusNeighborTop = previousInRow;
+                    node.FocusNeighborBottom = nextInRow;
+                    node.FocusNeighborRight = bossward;
+                    node.FocusNeighborLeft = startward;
+                }
+                else
+                {
+                    // Rows ascend toward the boss, so "up" is the next row group.
+                    node.FocusNeighborLeft = previousInRow;
+                    node.FocusNeighborRight = nextInRow;
+                    node.FocusNeighborTop = bossward;
+                    node.FocusNeighborBottom = startward;
+                }
                 node.FocusEntered += onFocus;
             }
         }

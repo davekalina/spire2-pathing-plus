@@ -8,12 +8,27 @@ using System.Reflection;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
+/// <summary>The three map views the Zoom button cycles through.</summary>
+internal enum MapViewMode
+{
+    /// <summary>The game's own scrolling view.</summary>
+    Normal,
+
+    /// <summary>The whole act on screen at once.</summary>
+    Zoomed,
+
+    /// <summary>The whole act rotated a quarter turn: start on the left, boss on the right.</summary>
+    Rotated,
+}
+
 /// <summary>
-/// The Zoom toggle, upper right: scales <c>TheMap</c> so the whole act fits on screen
-/// at once, and back. Scaling happens around a pivot on the screen's horizontal
-/// centre line, so the native scroll code — which only ever writes X = 0 into the
-/// drag target — cannot yank the view sideways while zoomed. Zooming back in snaps to
-/// the current row the same way the screen's own controller code does.
+/// The Zoom toggle, upper right: Normal → Zoomed → Rotated → Normal. Transitions are
+/// animated — scale and rotation by tween, position by writing the drag target and
+/// letting the screen's own smoothing chase it. All transforms pivot on the map
+/// content's centre, which is what keeps a scale+rotation tween from lurching, and
+/// scaling happens with the native scroll handlers frozen so nothing fights the view.
+/// Zooming back to Normal snaps to the current row the way the screen's own
+/// controller code does.
 /// </summary>
 internal sealed class MapZoom : IDisposable
 {
@@ -24,15 +39,23 @@ internal sealed class MapZoom : IDisposable
 
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
 
+    private const double TweenDuration = 0.35;
+
     private readonly NMapScreen _screen;
     private readonly Control _theMap;
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
     private readonly Control _tray;
     private readonly MegaLabel _label;
+    private Tween? _tween;
 
-    public bool Zoomed { get; private set; }
+    public MapViewMode Mode { get; private set; } = MapViewMode.Normal;
 
-    /// <summary>Raised after the state flips, either direction, any cause.</summary>
+    /// <summary>Any state where the whole act is on screen and scrolling is frozen.</summary>
+    public bool Zoomed => Mode != MapViewMode.Normal;
+
+    public bool Rotated => Mode == MapViewMode.Rotated;
+
+    /// <summary>Raised after the state changes, either direction, any cause.</summary>
     public event Action? Toggled;
 
     /// <summary>The button, hidden while the map screen itself is closed.</summary>
@@ -107,17 +130,22 @@ internal sealed class MapZoom : IDisposable
 
     public void Toggle()
     {
-        Zoomed = !Zoomed;
+        Mode = Mode switch
+        {
+            MapViewMode.Normal => MapViewMode.Zoomed,
+            MapViewMode.Zoomed => MapViewMode.Rotated,
+            _ => MapViewMode.Normal,
+        };
         Apply();
         Toggled?.Invoke();
     }
 
-    /// <summary>Back to the standard view — on map change, map close, and map open.</summary>
+    /// <summary>Back to the normal view — on map change, map close, and map open.</summary>
     public void Reset()
     {
-        if (!Zoomed)
+        if (Mode == MapViewMode.Normal)
             return;
-        Zoomed = false;
+        Mode = MapViewMode.Normal;
         Apply();
         Toggled?.Invoke();
     }
@@ -133,19 +161,18 @@ internal sealed class MapZoom : IDisposable
     {
         _label.AddThemeColorOverride("font_color", Zoomed ? StsColors.gold : Parchment);
 
-        if (!Zoomed)
+        var centers = _nodeCenters();
+        if (Mode != MapViewMode.Normal && centers.Count == 0)
         {
-            _theMap.Scale = Vector2.One;
-            _theMap.PivotOffset = Vector2.Zero;
-            SnapToCurrentRow();
-            return;
+            Mode = MapViewMode.Normal;
+            _label.AddThemeColorOverride("font_color", Parchment);
         }
 
-        var centers = _nodeCenters();
-        if (centers.Count == 0)
+        if (Mode == MapViewMode.Normal)
         {
-            Zoomed = false;
-            _label.AddThemeColorOverride("font_color", Parchment);
+            var row = RunManager.Instance?.DebugOnlyGetState()?.CurrentMapCoord?.row ?? 0;
+            var distY = DistYField?.GetValue(_screen) as float? ?? 155f;
+            AnimateTo(1f, 0f, new Vector2(0f, Mathf.Clamp(-600f + row * distY, -600f, 1800f)));
             return;
         }
 
@@ -155,26 +182,32 @@ internal sealed class MapZoom : IDisposable
         min -= new Vector2(160f, 330f);
         max += new Vector2(160f, 150f);
         var extent = max - min;
-        var scale = Mathf.Min(1f,
-            Mathf.Min((_screen.Size.X - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
+        var center = (min + max) * 0.5f;
 
-        var centerY = (min.Y + max.Y) * 0.5f;
-        _theMap.PivotOffset = new Vector2(_screen.Size.X * 0.5f, centerY);
-        _theMap.Scale = Vector2.One * scale;
-        SetDragTarget(new Vector2(0f, _screen.Size.Y * 0.5f - centerY));
+        // Rotated, the map's height lies along the screen's width — the fit swaps.
+        var scale = Mode == MapViewMode.Rotated
+            ? Mathf.Min(1f, Mathf.Min((_screen.Size.X - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X))
+            : Mathf.Min(1f, Mathf.Min((_screen.Size.X - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
+        var rotation = Mode == MapViewMode.Rotated ? 90f : 0f;
+
+        // Pivot on the content centre: with the pivot there, the centre lands at
+        // Position + pivot regardless of scale or rotation, so one position formula
+        // serves both zoomed states and the tween cannot lurch.
+        _theMap.PivotOffset = center;
+        AnimateTo(scale, rotation, _screen.Size * 0.5f - center);
     }
 
-    private void SnapToCurrentRow()
+    private void AnimateTo(float scale, float rotationDegrees, Vector2 dragTarget)
     {
-        var row = RunManager.Instance?.DebugOnlyGetState()?.CurrentMapCoord?.row ?? 0;
-        var distY = DistYField?.GetValue(_screen) as float? ?? 155f;
-        SetDragTarget(new Vector2(0f, Mathf.Clamp(-600f + row * distY, -600f, 1800f)));
-    }
+        // Position: write the drag target and let UpdateScrollPosition's own lerp
+        // chase it — tweening Position ourselves would fight that per-frame lerp.
+        TargetDragPosField?.SetValue(_screen, dragTarget);
 
-    /// <summary>Move instantly: the target for the lerp and the position itself.</summary>
-    private void SetDragTarget(Vector2 target)
-    {
-        TargetDragPosField?.SetValue(_screen, target);
-        _theMap.Position = target;
+        _tween?.Kill();
+        _tween = _theMap.CreateTween().SetParallel();
+        _tween.TweenProperty(_theMap, "scale", Vector2.One * scale, TweenDuration)
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+        _tween.TweenProperty(_theMap, "rotation_degrees", rotationDegrees, TweenDuration)
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
     }
 }
