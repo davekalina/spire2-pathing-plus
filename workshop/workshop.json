@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
   "visibility": "unlisted",
-  "changeNote": "v0.8.1 - Route trails now draw as continuous hand-drawn strokes: overlapping dashes, thicker and longer, instead of a dotted line.",
+  "changeNote": "v0.10.0 - The Zoom button now cycles three views with smooth transitions: normal, whole-act, and whole-act rotated on its side (start left, boss right) with node icons staying upright. A new Legend replaces the game's: node types as rows, up to six routes as colored columns - hover an icon to light up that node type on the map, hover a column to preview a route, select to lock it. The gamepad legend hotkey lands there, d-pad navigation works in every view, and the old routes table is retired.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []
