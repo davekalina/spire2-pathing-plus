@@ -17,8 +17,10 @@ headers), so what each route offers is a one-look decision — say, farming thre
 elites. Hover or select a row to preview it: a tooltip shows the route's rooms
 vertically like the map (boss at the top), and that route darkens to ink on the map
 while the others fade. Pinned nodes are circled with the game's own hand-inked ring
-in a lighter shade than a visited node's. The map's Clear-drawings button also
-clears your pins.
+in a lighter shade than a visited node's — except on nodes you could travel to right
+now, where the ring steps aside so the game's own travel markers stay unambiguous
+(the pin keeps filtering; only its ring hides until you take the step). The map's
+Clear-drawings button also clears your pins.
 
 Pins and the locked route belong to the map they were made on: they survive closing
 the map screen and even restarting the game. The **Zoom** button in the upper right
@@ -56,7 +58,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.10.0 initialized`.
+logs `Pathing Plus v0.10.1 initialized`.
 
 ## Publish to the Steam Workshop
 

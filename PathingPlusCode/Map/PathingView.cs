@@ -305,7 +305,12 @@ internal sealed class PathingView : IDisposable
 
         UpdateOverlay();
         UpdateLegend();
-        _overlay.ShowPins(_pins.Ids.Select(EndpointOf).OfType<Vector2>());
+        // With travel live, the game is already marking the reachable next nodes —
+        // a pin ring on one of them reads as "you are here". The pin keeps filtering;
+        // only its ring yields until travel resolves the step.
+        _overlay.ShowPins(_pins.Ids
+            .Where(id => !(_screen.IsTravelEnabled && IsTravelableNode(id)))
+            .Select(EndpointOf).OfType<Vector2>());
         _overlay.SetHighlight(_lockedRoute);
         _legend.SetLocked(_lockedRoute);
         _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
@@ -489,6 +494,17 @@ internal sealed class PathingView : IDisposable
         _shownRoutes = [];
         _pinnable = [];
         _overlay.Clear();
+    }
+
+    /// <summary>Whether this pinned node is one the player could click to travel to right now.</summary>
+    private bool IsTravelableNode(string id)
+    {
+        if (_adapter is null || _nodesByCoord is null)
+            return false;
+        if (!_adapter.TryGetPoint(id, out var point))
+            return false;
+        return _nodesByCoord.TryGetValue(point.coord, out var node) &&
+            GodotObject.IsInstanceValid(node) && node.IsEnabled;
     }
 
     /// <summary>

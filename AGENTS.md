@@ -134,8 +134,10 @@ Game coupling that a game update can move (verify after every update):
 
 ### Surfaces to audit
 
-- The map screen overlay: route dot runs (individual colors, union view when more
-  than five routes, ink highlight / fade states) and gold pin rings.
+- The map screen overlay: route dot runs (individual colors, union view above the
+  legend threshold, ink highlight / fade states) and rust pin rings — which yield on
+  directly-travelable nodes while `IsTravelEnabled`, so the game's own travel
+  markers stay unambiguous; the pin itself keeps filtering.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
 - The routes table: column header icons, per-row counts (zeros dimmed), fixed
