@@ -13,8 +13,14 @@ public static class PathSolver
     /// </summary>
     public const int MaxPaths = 4096;
 
-    /// <summary>A legend is offered when no more routes than this remain — as many columns as fit it.</summary>
-    public const int LegendThreshold = 6;
+    /// <summary>The most routes the legend ever shows at once.</summary>
+    public const int LegendThreshold = 5;
+
+    /// <summary>
+    /// With no more surviving routes than this, the best <see cref="LegendThreshold" />
+    /// of them are picked for display; above it the union view takes over.
+    /// </summary>
+    public const int BestPickPool = 10;
 
     public static PathSet EnumeratePaths(SpireMapGraph graph, IEnumerable<string> startIds)
     {

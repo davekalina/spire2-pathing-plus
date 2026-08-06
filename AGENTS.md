@@ -90,15 +90,20 @@ screen close, and dispose. Zoomed is planning, not moving:
 toggle, travelable nodes included; travel requires cycling back to Normal.
 
 **The replacement Legend** (`RouteLegendPanel`) sits bottom right — the space the
-mod's retired routes table held, clear of the rotated view — on the native
-`map_legend` parchment. Transposed: type rows in the native legend's order
-(unknown / shop / treasure / rest / monster / elite), one column per route (up to
-six, which is what the width fits; `LegendThreshold` matches) headed by its colored
-letter. Type icon hover/focus fires the game's own `HighlightPointType` broadcast;
-column hover tints the column and previews the route, select locks it (stronger
-tint). The native legend is `Visible = false` for the view's lifetime (restored on
-dispose) and its hotkey handler `OnLegendHotkeyPressed` is prefix-rerouted into this
-panel with the same toggle semantics.
+mod's retired routes table held — on the native `map_legend` parchment, its width
+fitted to its contents (right edge fixed, left edge hugs). Transposed: type rows in
+the native legend's order (unknown / shop / treasure / rest / monster / elite), one
+column per route headed by its colored letter; with zero routes it shows the type
+names instead, reading like the native legend. Route selection: up to
+`BestPickPool` (10) candidates survive `MatchByPins`, and the best
+`LegendThreshold` (5) are shown — ranked by pin hits first (a full match must never
+lose its slot to a near-miss), then elites + fires, then "?" count; that ranking is
+also the display order. Type icon hover/focus fires the game's own
+`HighlightPointType` broadcast; column hover darkens the column (black 0.15),
+locking fills it with the route's color at 0.35 alpha. The native legend is
+`Visible = false` for the view's lifetime (restored on dispose) and its hotkey
+handler `OnLegendHotkeyPressed` is prefix-rerouted into this panel with the same
+toggle semantics.
 
 In the Rotated view every node icon counter-spins a quarter turn in step with the
 map tween so the art stays upright; base rotations (each node carries a small random

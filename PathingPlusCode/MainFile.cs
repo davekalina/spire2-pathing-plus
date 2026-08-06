@@ -25,6 +25,6 @@ public partial class MainFile : Node
         new Harmony(ModId).PatchAll();
 
         // Keep this string in sync with the manifest version.
-        Logger.Info("Pathing Plus v0.10.1 initialized.");
+        Logger.Info("Pathing Plus v0.11.0 initialized.");
     }
 }

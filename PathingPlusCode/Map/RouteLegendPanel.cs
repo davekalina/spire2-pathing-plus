@@ -48,8 +48,10 @@ internal sealed class RouteLegendPanel : IDisposable
     private readonly Control _panel;
     private readonly Font? _font;
     private readonly List<Control> _iconCells = [];
+    private readonly List<MegaLabel> _typeNames = [];
     private readonly List<Control> _columns = [];
     private readonly List<ColorRect> _columnMarks = [];
+    private readonly List<Color> _columnColors = [];
     private int _hot = -1;
     private int _locked = -1;
 
@@ -109,10 +111,32 @@ internal sealed class RouteLegendPanel : IDisposable
             cell.FocusExited += () => Guard.Run("Type unfocus", () => TypeCold?.Invoke());
             _iconCells.Add(cell);
             _panel.AddChild(cell);
+
+            // With no routes to tabulate this is a plain legend, so read like one.
+            var name = MakeLabel(24, TypeNames[r], StsColors.legendText);
+            name.HorizontalAlignment = HorizontalAlignment.Left;
+            name.Position = new Vector2(ColumnsStartX, FirstRowY + r * RowHeight);
+            name.Size = new Vector2(200, RowHeight);
+            _typeNames.Add(name);
+            _panel.AddChild(name);
         }
 
         screen.AddChild(_panel);
+        FitWidth(0);
         WireIconFocus();
+    }
+
+    /// <summary>Row names for the no-routes state, matching the native legend's wording.</summary>
+    private static readonly string[] TypeNames =
+        ["Unknown", "Merchant", "Treasure", "Rest Site", "Enemy", "Elite"];
+
+    /// <summary>Right edge stays put; the left edge comes in to hug the content.</summary>
+    private void FitWidth(int columnCount)
+    {
+        var width = columnCount > 0
+            ? ColumnsStartX + columnCount * ColumnWidth + 22f
+            : ColumnsStartX + 210f;
+        _panel.OffsetLeft = _panel.OffsetRight - width;
     }
 
     /// <summary>One column per route: its colour, its letter, its counts in row order.</summary>
@@ -125,7 +149,12 @@ internal sealed class RouteLegendPanel : IDisposable
         }
         _columns.Clear();
         _columnMarks.Clear();
+        _columnColors.Clear();
         _hot = -1;
+
+        FitWidth(routes.Count);
+        foreach (var name in _typeNames)
+            name.Visible = routes.Count == 0;
 
         for (var i = 0; i < routes.Count; i++)
         {
@@ -141,13 +170,13 @@ internal sealed class RouteLegendPanel : IDisposable
 
             var mark = new ColorRect
             {
-                Color = new Color(0f, 0f, 0f, 0.10f),
                 Visible = false,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             };
             mark.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
             column.AddChild(mark);
             _columnMarks.Add(mark);
+            _columnColors.Add(routes[i].Color);
 
             var letter = MakeLabel(28, routes[i].Letter, routes[i].Color);
             letter.Position = new Vector2(0, 0);
@@ -203,7 +232,11 @@ internal sealed class RouteLegendPanel : IDisposable
             var locked = i == _locked;
             var hot = i == _hot;
             _columnMarks[i].Visible = locked || hot;
-            _columnMarks[i].Color = new Color(0f, 0f, 0f, locked ? 0.16f : 0.08f);
+            // A locked column wears its route's own color; a merely-hot one darkens.
+            // Both strong enough to survive light parchment.
+            _columnMarks[i].Color = locked
+                ? _columnColors[i] with { A = 0.35f }
+                : new Color(0f, 0f, 0f, 0.15f);
         }
     }
 

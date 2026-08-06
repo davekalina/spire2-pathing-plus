@@ -284,14 +284,19 @@ internal sealed class PathingView : IDisposable
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
 
-        var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.LegendThreshold);
-        // Table order: richest in elites first, fires breaking ties — the two scarce
-        // resources a route is usually chosen for. Only worth computing when the
-        // routes actually get rows.
-        _shownRoutes = match.Shown.Count <= PathSolver.LegendThreshold
-            ? match.Shown.Select(s => s.Path)
-                .OrderByDescending(route => CountColumns(route)[0])
-                .ThenByDescending(route => CountColumns(route)[1])
+        var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
+        // Up to ten candidates: keep the best five. Pin coverage stays paramount —
+        // a route through every pin must never lose its slot to a near-miss — then
+        // elites + fires (the resources a route is chosen for), then "?" nodes.
+        // The same ordering is the display order.
+        _shownRoutes = match.Shown.Count <= PathSolver.BestPickPool
+            ? match.Shown
+                .Select(s => (s.Path, s.Hits, Counts: LegendCounts(s.Path)))
+                .OrderByDescending(x => x.Hits)
+                .ThenByDescending(x => x.Counts[5] + x.Counts[3])
+                .ThenByDescending(x => x.Counts[0])
+                .Take(PathSolver.LegendThreshold)
+                .Select(x => x.Path)
                 .ToList()
             : match.Shown.Select(s => s.Path).ToList();
         _hotRoute = -1;
@@ -443,13 +448,6 @@ internal sealed class PathingView : IDisposable
         }
     }
 
-    /// <summary>Sort keys for the legend: elites first, fires breaking ties.</summary>
-    private static readonly string[][] ColumnKinds =
-    [
-        [nameof(MapPointType.Elite)],
-        [nameof(MapPointType.RestSite)],
-    ];
-
     private void UpdateLegend()
     {
         if (_shownRoutes.Count is > 0 and <= PathSolver.LegendThreshold)
@@ -473,17 +471,6 @@ internal sealed class PathingView : IDisposable
         return RouteLegendPanel.Rows
             .Select(row => row.Kinds.Sum(counts.GetValueOrDefault))
             .ToList();
-    }
-
-    private IReadOnlyList<int> CountColumns(IReadOnlyList<string> route)
-    {
-        var counts = new Dictionary<string, int>();
-        foreach (var id in route.Skip(1))
-        {
-            var kind = _adapter!.Graph.Node(id).RoomKind;
-            counts[kind] = counts.GetValueOrDefault(kind) + 1;
-        }
-        return ColumnKinds.Select(kinds => kinds.Sum(counts.GetValueOrDefault)).ToList();
     }
 
     private void Clear()

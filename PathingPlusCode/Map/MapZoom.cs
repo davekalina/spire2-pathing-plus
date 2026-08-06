@@ -185,17 +185,20 @@ internal sealed class MapZoom : IDisposable
         var extent = max - min;
         var center = (min + max) * 0.5f;
 
-        // Rotated, the map's height lies along the screen's width — the fit swaps.
+        // Rotated, the map's height lies along the screen's width — the fit swaps —
+        // and the map takes only the left 85% of the screen, leaving the right edge
+        // (the boss end) clear of the legend.
+        var frameWidth = Mode == MapViewMode.Rotated ? _screen.Size.X * 0.85f : _screen.Size.X;
         var scale = Mode == MapViewMode.Rotated
-            ? Mathf.Min(1f, Mathf.Min((_screen.Size.X - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X))
-            : Mathf.Min(1f, Mathf.Min((_screen.Size.X - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
+            ? Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X))
+            : Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
         var rotation = Mode == MapViewMode.Rotated ? 90f : 0f;
 
         // Pivot on the content centre: with the pivot there, the centre lands at
         // Position + pivot regardless of scale or rotation, so one position formula
         // serves both zoomed states and the tween cannot lurch.
         _theMap.PivotOffset = center;
-        AnimateTo(scale, rotation, _screen.Size * 0.5f - center);
+        AnimateTo(scale, rotation, new Vector2(frameWidth * 0.5f, _screen.Size.Y * 0.5f) - center);
     }
 
     private void AnimateTo(float scale, float rotationDegrees, Vector2 dragTarget)

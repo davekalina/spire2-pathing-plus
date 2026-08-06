@@ -29,11 +29,15 @@ whole act on one screen, and the whole act rotated on its side — start on the 
 boss on the right. In both zoomed views scrolling is switched off entirely.
 
 The mod also replaces the map Legend with its own, bottom right on the same
-parchment: node types as rows, one column per computed route (up to six) headed by
-its colored letter. Hover a type icon to light up every node of that type on the map
-(the game's own highlight), hover a column to preview that route, select it to lock.
-The legend hotkey works as before — it just lands here now. In the rotated view the
-node icons stay upright while the map turns beneath them.
+parchment, sized to its contents: node types as rows, one column per route headed by
+its colored letter. With up to ten routes surviving, the best five are shown —
+ranked by pin coverage, then elites + fires, then "?" nodes. Hover a type icon to
+light up every node of that type on the map (the game's own highlight), hover a
+column to preview that route (darkened), select it to lock (filled with the route's
+color). With no routes to tabulate it reads as a plain legend, names and all. The
+legend hotkey works as before — it just lands here now. In the rotated view the node
+icons stay upright while the map turns beneath them, and the map keeps to the left
+85% of the screen so the boss end stays clear of the legend.
 
 On a controller, pull the **Right Trigger** (or click Zoom): the zoomed-out view is
 also controller mode. The d-pad walks the map node by node — every node, not just
@@ -58,7 +62,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.10.1 initialized`.
+logs `Pathing Plus v0.11.0 initialized`.
 
 ## Publish to the Steam Workshop
 
