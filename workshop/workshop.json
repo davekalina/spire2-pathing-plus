@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
   "visibility": "unlisted",
-  "changeNote": "v0.10.1 - Pin rings no longer draw on nodes you could travel to right now: when travel is available, the game's own markers stay unambiguous and the pin's ring steps aside (the pin itself keeps filtering your routes). The ring returns if travel goes unavailable again.",
+  "changeNote": "v0.11.0 - The Legend shows selection clearly now: a locked route column fills with its route's color, a hovered one darkens. The panel sizes itself to its contents and shows plain type names when there are no routes to tabulate. Route picking is smarter: with up to ten routes surviving, the best five are shown (pin coverage first, then elites + fires, then ? nodes). The rotated view keeps the map to the left 85% of the screen so the boss end stays visible.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []
