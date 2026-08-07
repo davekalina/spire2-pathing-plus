@@ -62,7 +62,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.11.0 initialized`.
+logs `Pathing Plus v0.11.1 initialized`.
 
 ## Publish to the Steam Workshop
 

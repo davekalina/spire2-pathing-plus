@@ -46,6 +46,7 @@ internal sealed class RouteLegendPanel : IDisposable
     public event Action<int>? ColumnLockToggled;
 
     private readonly Control _panel;
+    private readonly ColorRect _rowMark;
     private readonly Font? _font;
     private readonly List<Control> _iconCells = [];
     private readonly List<MegaLabel> _typeNames = [];
@@ -85,6 +86,20 @@ internal sealed class RouteLegendPanel : IDisposable
         background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _panel.AddChild(background);
 
+        // The band behind whichever type row is hovered or focused — without it,
+        // controller focus on an icon is invisible inside the panel itself.
+        _rowMark = new ColorRect
+        {
+            Color = new Color(0f, 0f, 0f, 0.15f),
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _rowMark.AnchorLeft = 0f;
+        _rowMark.AnchorRight = 1f;
+        _rowMark.OffsetLeft = 22f;
+        _rowMark.OffsetRight = -20f;
+        _panel.AddChild(_rowMark);
+
         for (var r = 0; r < Rows.Length; r++)
         {
             var row = r;
@@ -105,10 +120,10 @@ internal sealed class RouteLegendPanel : IDisposable
                 Size = new Vector2(IconSize, IconSize),
                 MouseFilter = Control.MouseFilterEnum.Ignore,
             });
-            cell.MouseEntered += () => Guard.Run("Type hover", () => TypeHot?.Invoke(Rows[row].Type));
-            cell.MouseExited += () => Guard.Run("Type unhover", () => TypeCold?.Invoke());
-            cell.FocusEntered += () => Guard.Run("Type focus", () => TypeHot?.Invoke(Rows[row].Type));
-            cell.FocusExited += () => Guard.Run("Type unfocus", () => TypeCold?.Invoke());
+            cell.MouseEntered += () => Guard.Run("Type hover", () => OnTypeHot(row));
+            cell.MouseExited += () => Guard.Run("Type unhover", OnTypeCold);
+            cell.FocusEntered += () => Guard.Run("Type focus", () => OnTypeHot(row));
+            cell.FocusExited += () => Guard.Run("Type unfocus", OnTypeCold);
             _iconCells.Add(cell);
             _panel.AddChild(cell);
 
@@ -129,6 +144,21 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>Row names for the no-routes state, matching the native legend's wording.</summary>
     private static readonly string[] TypeNames =
         ["Unknown", "Merchant", "Treasure", "Rest Site", "Enemy", "Elite"];
+
+    private void OnTypeHot(int row)
+    {
+        _rowMark.AnchorTop = _rowMark.AnchorBottom = 0f;
+        _rowMark.OffsetTop = FirstRowY + row * RowHeight;
+        _rowMark.OffsetBottom = FirstRowY + (row + 1) * RowHeight;
+        _rowMark.Visible = true;
+        TypeHot?.Invoke(Rows[row].Type);
+    }
+
+    private void OnTypeCold()
+    {
+        _rowMark.Visible = false;
+        TypeCold?.Invoke();
+    }
 
     /// <summary>Right edge stays put; the left edge comes in to hug the content.</summary>
     private void FitWidth(int columnCount)

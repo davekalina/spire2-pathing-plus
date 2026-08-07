@@ -103,7 +103,9 @@ also the display order. Type icon hover/focus fires the game's own
 locking fills it with the route's color at 0.35 alpha. The native legend is
 `Visible = false` for the view's lifetime (restored on dispose) and its hotkey
 handler `OnLegendHotkeyPressed` is prefix-rerouted into this panel with the same
-toggle semantics.
+toggle semantics. Hovering or focusing a type icon also bands that whole row inside
+the panel — the map-side pulse alone left controller focus invisible in the legend
+itself.
 
 In the Rotated view every node icon counter-spins a quarter turn in step with the
 map tween so the art stays upright; base rotations (each node carries a small random
