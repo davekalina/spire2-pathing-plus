@@ -210,6 +210,16 @@ internal static class MapPointPinPatch
     /// </summary>
     private static NMapPoint? _doubleClickArmed;
 
+    /// <summary>
+    /// The controller has no DoubleClick flag: two select presses on the same node
+    /// within this window make the second one the type-select, mirroring the mouse
+    /// (whose first click also lands as a single toggle before the gesture resolves).
+    /// </summary>
+    private const ulong DoublePressWindowMs = 400;
+
+    private static NMapPoint? _lastSelectPoint;
+    private static ulong _lastSelectMs;
+
     [HarmonyPrefix]
     private static void BeforeGuiInput(NClickableControl __instance, InputEvent __0)
     {
@@ -225,11 +235,28 @@ internal static class MapPointPinPatch
         }
 
         var mouseRelease = __0 is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
-        if (!mouseRelease && !__0.IsActionPressed(MegaInput.select))
+        var selectPress = !mouseRelease && __0.IsActionPressed(MegaInput.select);
+        if (!mouseRelease && !selectPress)
             return;
 
         var isTypeSelect = mouseRelease && ReferenceEquals(_doubleClickArmed, point);
         _doubleClickArmed = null;
+
+        if (selectPress)
+        {
+            var now = Time.GetTicksMsec();
+            if (ReferenceEquals(_lastSelectPoint, point) && now - _lastSelectMs <= DoublePressWindowMs)
+            {
+                isTypeSelect = true;
+                _lastSelectPoint = null;
+            }
+            else
+            {
+                _lastSelectPoint = point;
+                _lastSelectMs = now;
+            }
+        }
+
         if (isTypeSelect)
             Guard.Run("Selecting every node of a type", () => MapScreenPatches.RouteMapPointDoubleClick(point));
         else

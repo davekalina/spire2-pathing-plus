@@ -192,6 +192,10 @@ internal sealed class MapZoom : IDisposable
         var scale = Mode == MapViewMode.Rotated
             ? Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X))
             : Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
+        // A strict 85% fit proved too timid: 10% back in, letting the map's right
+        // end overlap the legend a little.
+        if (Mode == MapViewMode.Rotated)
+            scale = Mathf.Min(1f, scale * 1.1f);
         var rotation = Mode == MapViewMode.Rotated ? 90f : 0f;
 
         // Pivot on the content centre: with the pivot there, the centre lands at
