@@ -53,6 +53,16 @@ advancing a floor along it shortens every recomputed route by its head, so the t
 IS the same plan; deviation clears it naturally because the new position is no
 longer on the stored route.
 
+**Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
+persist to `PathingPlus.settings.json` in the game's user data dir and raise
+`Changed`, which redraws the open map. **Auto Path Mode** (default on) is the
+behaviour described above; with it off, `PathSolver.TruncateAtPins` cuts every route
+at its deepest pin and drops the rest, so the mod draws only what the player planned
+— pinnability is still computed from the full routes, so every node ahead stays
+reachable. **Small Path Markers** scales pin rings to 75%. Five sliders expose the
+dash geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
+`RouteSeparation`) for live tuning.
+
 Pins and the locked route persist across map opens and game restarts via
 `PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)
 keyed by a SHA-256 of the map graph, so state only ever restores onto the exact map
@@ -152,8 +162,12 @@ Game coupling that a game update can move (verify after every update):
   (boss at top) with its position and clamping.
 - Persistence: pins and locked route restored only onto their own map, pruned when
   stale, saved on every change; the Clear button empties the file's pin list too.
-- The Zoom button: label states, full-map framing at any act size, drag/wheel while
-  zoomed, and the snap back to the current row.
+- The Zoom button: label states, its Right Trigger glyph (controller only), full-map
+  framing at any act size, drag/wheel while zoomed, and the snap back to the
+  current row.
+- The settings gear and its panel: every toggle and slider, live redraw, persistence
+  across restarts, and manual (Auto Path off) planning with zero, one, and several
+  pins.
 - Controller mode: the Right Trigger hotkey, all-node focus wiring and its
   restoration, the gold cursor ring, cursor retention across pin presses,
   select-to-pin versus select-to-travel, and the frozen native scroll/mouse

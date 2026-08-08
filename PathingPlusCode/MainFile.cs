@@ -23,8 +23,9 @@ public partial class MainFile : Node
     public static void Initialize()
     {
         new Harmony(ModId).PatchAll();
+        PathingPlusCode.Map.PathingOptions.Load();
 
         // Keep this string in sync with the manifest version.
-        Logger.Info("Pathing Plus v0.11.2 initialized.");
+        Logger.Info("Pathing Plus v0.12.0 initialized.");
     }
 }

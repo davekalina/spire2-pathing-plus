@@ -101,6 +101,30 @@ public static class PathSolver
     }
 
     /// <summary>
+    /// Manual pathing: cut every route short at its deepest pinned node, so the mod
+    /// draws only as far as the player has actually planned. Routes reaching no pin
+    /// are dropped, and routes sharing a prefix collapse into one.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string>> TruncateAtPins(
+        IReadOnlyList<IReadOnlyList<string>> paths, Func<string, bool> isPinned)
+    {
+        var result = new List<IReadOnlyList<string>>();
+        var seen = new HashSet<string>();
+        foreach (var path in paths)
+        {
+            var length = path.Count;
+            while (length > 0 && !isPinned(path[length - 1]))
+                length--;
+            if (length == 0)
+                continue;
+            var trimmed = path.Take(length).ToArray();
+            if (seen.Add(string.Join("|", trimmed)))
+                result.Add(trimmed);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Drop trailing nodes matching <paramref name="trimTail" /> (the boss, where every
     /// route converges anyway), then dedupe: on a double-boss map two routes that differ
     /// only in which boss they end at are the same walk across the grid.

@@ -1,7 +1,9 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.addons.mega_text;
+using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Runs;
 using System.Reflection;
@@ -47,6 +49,7 @@ internal sealed class MapZoom : IDisposable
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
     private readonly Control _tray;
     private readonly MegaLabel _label;
+    private NHotkeyIcon? _hotkeyIcon;
     private Tween? _tween;
 
     public MapViewMode Mode { get; private set; } = MapViewMode.Normal;
@@ -60,7 +63,13 @@ internal sealed class MapZoom : IDisposable
     public event Action? Toggled;
 
     /// <summary>The button, hidden while the map screen itself is closed.</summary>
-    public void SetButtonVisible(bool visible) => _tray.Visible = visible;
+    public void SetButtonVisible(bool visible)
+    {
+        _tray.Visible = visible;
+        // The control scheme can change between opens; re-ask on the way in.
+        if (visible)
+            RefreshHotkeyIcon();
+    }
 
     public MapZoom(NMapScreen screen, Control theMap, Func<IReadOnlyList<Vector2>> nodeCenters)
     {
@@ -127,6 +136,31 @@ internal sealed class MapZoom : IDisposable
         });
 
         screen.AddChild(_tray);
+
+        // The native glyph for the hotkey that does the same thing, shown on the
+        // button's left edge only while a controller is driving.
+        Guard.Run("Zoom hotkey glyph", () =>
+        {
+            _hotkeyIcon = SceneHelper.Instantiate<NHotkeyIcon>("ui/hotkey_icon");
+            _hotkeyIcon.CustomMinimumSize = new Vector2(44, 44);
+            _hotkeyIcon.AnchorTop = _hotkeyIcon.AnchorBottom = 0.5f;
+            _hotkeyIcon.OffsetLeft = -50f;
+            _hotkeyIcon.OffsetRight = -6f;
+            _hotkeyIcon.OffsetTop = -22f;
+            _hotkeyIcon.OffsetBottom = 22f;
+            _hotkeyIcon.MouseFilter = Control.MouseFilterEnum.Ignore;
+            _tray.AddChild(_hotkeyIcon);
+            RefreshHotkeyIcon();
+        });
+    }
+
+    /// <summary>Glyph and visibility follow the current control scheme.</summary>
+    public void RefreshHotkeyIcon()
+    {
+        if (_hotkeyIcon is null || !GodotObject.IsInstanceValid(_hotkeyIcon))
+            return;
+        _hotkeyIcon.Visible = NControllerManager.Instance?.IsUsingDirectionalNavigation == true;
+        _hotkeyIcon.UpdateInput(Controller.rightTrigger);
     }
 
     public void Toggle()

@@ -27,6 +27,7 @@ internal sealed class PathingView : IDisposable
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
     private readonly RouteLegendPanel _legend;
+    private readonly OptionsPanel _options;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
@@ -96,8 +97,16 @@ internal sealed class PathingView : IDisposable
             else
                 _overlay.HideCursor();
         });
+        _options = new OptionsPanel(screen);
+        PathingOptions.Changed += OnOptionsChanged;
         _screen.Closed += OnScreenClosed;
     }
+
+    private void OnOptionsChanged() => Guard.Run("Applying a settings change", () =>
+    {
+        if (_screen.IsOpen)
+            Refresh();
+    });
 
     /// <summary>
     /// In the rotated view every node icon counter-spins a quarter turn, in step with
@@ -145,6 +154,7 @@ internal sealed class PathingView : IDisposable
         _zoom.Reset();
         _zoom.SetButtonVisible(true);
         _legend.SetShellVisible(true);
+        _options.SetShellVisible(true);
         Refresh();
     }
 
@@ -281,8 +291,13 @@ internal sealed class PathingView : IDisposable
 
         // Only nodes that lie ahead on some possible route can be pinned; the current
         // node (index 0) and everything already behind the marker never qualify.
+        // Pinnability comes from the full routes, so manual mode can still reach
+        // every node ahead even when it draws only as far as the plan goes.
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
+
+        if (!PathingOptions.AutoPath)
+            routes = PathSolver.TruncateAtPins(routes, _pins.IsSelected);
 
         var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
         // Up to ten candidates: keep the best five. Pin coverage stays paramount —
@@ -374,8 +389,10 @@ internal sealed class PathingView : IDisposable
 
     public void Dispose()
     {
+        PathingOptions.Changed -= OnOptionsChanged;
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
+        _options.Dispose();
         _navigator.Dispose();
         _zoom.Dispose();
         _overlay.Dispose();
@@ -401,6 +418,7 @@ internal sealed class PathingView : IDisposable
         // its own contents — so panels parented to it must hide themselves, or they
         // linger over combat and the settings menu.
         _legend.SetShellVisible(false);
+        _options.SetShellVisible(false);
         _zoom.SetButtonVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });

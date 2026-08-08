@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Plan your route before you commit. Pin map nodes to compare the routes through them, see a table of what each route offers (elites, fires, chests...), and zoom out to view the whole map at once. Works with mouse or controller. Informational only.",
   "visibility": "unlisted",
-  "changeNote": "v0.11.0 - The Legend shows selection clearly now: a locked route column fills with its route's color, a hovered one darkens. The panel sizes itself to its contents and shows plain type names when there are no routes to tabulate. Route picking is smarter: with up to ten routes surviving, the best five are shown (pin coverage first, then elites + fires, then ? nodes). The rotated view keeps the map to the left 85% of the screen so the boss end stays visible.",
+  "changeNote": "v0.12.0 - New settings menu behind a gear beside the Zoom button, with everything persisted: Auto Path Mode (turn it off to plan by hand - the mod then draws only from where you stand to your deepest pin), Small Path Markers, and live sliders for the trail's thickness, dash length, jitter, spacing, and route gap. The Zoom button shows its controller glyph, and double-tapping select on a node now pins that whole node type from a gamepad. Also since v0.11.0: hovering or focusing a legend type row highlights it, and the rotated map view sits a little closer.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []

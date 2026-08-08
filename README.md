@@ -45,6 +45,17 @@ reachable ones — with a gold ink ring marking the cursor, which stays put afte
 press. While zoomed out you are planning, not moving: select toggles a pin on any
 node, travelable ones included, and travel never fires. Zoom back in to travel.
 
+A **gear** beside the Zoom button opens the mod's settings, which persist between
+sessions:
+
+- **Auto Path Mode** (on) — routes run to the boss and pins filter them. Turn it off
+  to plan by hand: the mod then draws only from where you stand to your deepest pin,
+  and no further.
+- **Small Path Markers** (off) — draws pin rings at 75%, to tell them from the game's
+  own stamps.
+- **Thickness, Dash Length, Length Jitter, Spacing, Route Gap** — the trail's look,
+  adjustable live while the map is open.
+
 Informational only: nothing about the run changes, and `?` nodes stay `?`.
 
 ## Build
@@ -62,7 +73,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.11.2 initialized`.
+logs `Pathing Plus v0.12.0 initialized`.
 
 ## Publish to the Steam Workshop
 

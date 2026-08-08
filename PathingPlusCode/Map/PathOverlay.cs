@@ -45,23 +45,11 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
 
-    /// <summary>
-    /// Tighter than the native 22 px: with the dash lengths below, neighbours overlap
-    /// and the run reads as one continuous hand-drawn stroke, not a dotted line.
-    /// </summary>
-    private const float DotSpacing = 14f;
-
-    /// <summary>
-    /// Across the path — the dash's girth. Stretching only the length made the runs
-    /// read thinner than the native dashes; the mod's trails must read heavier.
-    /// </summary>
-    private const float DashWidth = 1.9f;
-
     private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
 
-    /// <summary>Parallel routes share edges; a per-route shift keeps each run visible.</summary>
-    private const float RouteSeparation = 10f;
+    /// <summary>Ring size for a pinned node, and the smaller alternative.</summary>
+    private const float PinRingScale = 0.87f;
 
     private readonly Control _layer;
     private readonly Control _dotLayer;
@@ -104,7 +92,8 @@ internal sealed class PathOverlay : IDisposable
         {
             if (routes[i].Length < 2)
                 continue;
-            var shift = new Vector2((i - (routes.Count - 1) * 0.5f) * RouteSeparation, 0f);
+            var shift = new Vector2(
+                (i - (routes.Count - 1) * 0.5f) * PathingOptions.RouteSeparation, 0f);
             var color = RouteColors[i % RouteColors.Length];
             var dots = new List<(TextureRect, Vector2)>();
             ScatterDots(routes[i].Select(p => p + shift).ToArray(), color, dots);
@@ -153,7 +142,8 @@ internal sealed class PathOverlay : IDisposable
 
         foreach (var center in centers)
         {
-            var ring = MakeInkRing(center, PinInk, 0.87f);
+            var ring = MakeInkRing(center, PinInk,
+                PathingOptions.SmallMarkers ? PinRingScale * 0.75f : PinRingScale);
             _pinRings.Add(ring);
             _pinLayer.AddChild(ring);
         }
@@ -228,23 +218,25 @@ internal sealed class PathOverlay : IDisposable
             null, ResourceLoader.CacheMode.Reuse);
         var random = new Random(SeedFor(polyline));
 
+        var spacing = Mathf.Max(1f, PathingOptions.DashSpacing);
         for (var s = 1; s < polyline.Length; s++)
         {
             var start = polyline[s - 1];
             var direction = (polyline[s] - start).Normalized();
             var angle = direction.Angle() + MathF.PI / 2f;
-            var count = (int)(start.DistanceTo(polyline[s]) / DotSpacing) + 1;
+            var count = (int)(start.DistanceTo(polyline[s]) / spacing) + 1;
             for (var i = 1; i < count; i++)
             {
-                var center = start + direction * (i * DotSpacing) + new Vector2(
+                var center = start + direction * (i * spacing) + new Vector2(
                     (float)(random.NextDouble() * 6.0 - 3.0),
                     (float)(random.NextDouble() * 6.0 - 3.0));
                 // The rotation puts the texture's Y axis along the path: X is girth,
-                // Y is length — 1.6 to 2.2 dash lengths against the 14 px spacing,
-                // so every dash overlaps its neighbours and the stroke connects.
+                // Y is length. Lengths beyond the spacing make neighbouring dashes
+                // overlap, which is what reads as one continuous stroke.
                 var baseScale = new Vector2(
-                    DashWidth,
-                    1.6f + (float)random.NextDouble() * 0.6f);
+                    PathingOptions.DashWidth,
+                    PathingOptions.DashLength +
+                        (float)random.NextDouble() * PathingOptions.DashLengthVariance);
                 var dot = new TextureRect
                 {
                     Texture = texture,
