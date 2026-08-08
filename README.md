@@ -1,94 +1,44 @@
 # Pathing Plus
 
-See every route before you commit to one.
+An informational Slay the Spire 2 mod for the map screen: see every route before you
+commit to one.
 
-On the map screen, click any node ahead of you to pin it — or **double-click**
-(double-tap select on a controller) to pin every node of that kind at once (all the
-elites, all the fires; repeat to clear them). The mod scores every route
-from your position by how many pins it visits and draws the best matches as
-hand-drawn dashed trails in the game's own colors. A route through **all** your pins
-always wins; when the pins conflict, the best achievable coverage shows instead of
-nothing; and near-miss routes (up to two pins short) fill the spare table rows when
-they fit. Unpin as you commit and the picture sharpens.
+Click a node ahead of you to pin it, and the mod draws every route that reaches your
+pins as hand-drawn trails in the game's own colours. Double-click to pin a whole node
+type at once — all the elites, all the fires. A replacement legend counts what each
+route holds, so "which way gets me three elites and two fires" is a glance rather
+than a squint.
 
-Up to five routes show in the routes table: one colored row per route, with count
-columns for elites, fires, combats, shops, chests, and events (map icons as column
-headers), so what each route offers is a one-look decision — say, farming three
-elites. Hover or select a row to preview it: a tooltip shows the route's rooms
-vertically like the map (boss at the top), and that route darkens to ink on the map
-while the others fade. Pinned nodes are circled with the game's own hand-inked ring
-in a lighter shade than a visited node's — except on nodes you could travel to right
-now, where the ring steps aside so the game's own travel markers stay unambiguous
-(the pin keeps filtering; only its ring hides until you take the step). The map's
-Clear-drawings button also clears your pins.
+It changes nothing about the game. No node moves, no reward changes, and a `?` stays
+a `?`; the mod only reads the map and draws over it, and its manifest declares
+`affects_gameplay: false`.
 
-Pins and the locked route belong to the map they were made on: they survive closing
-the map screen and even restarting the game. The **Zoom** button in the upper right
-cycles three views with animated transitions: the game's normal scrolling view, the
-whole act on one screen, and the whole act rotated on its side — start on the left,
-boss on the right. In both zoomed views scrolling is switched off entirely.
+## What it does
 
-The mod also replaces the map Legend with its own, bottom right on the same
-parchment, sized to its contents: node types as rows, one column per route headed by
-its colored letter. With up to ten routes surviving, the best five are shown —
-ranked by pin coverage, then elites + fires, then "?" nodes. Hover a type icon to
-light up every node of that type on the map (the game's own highlight), hover a
-column to preview that route (darkened), select it to lock (filled with the route's
-color). With no routes to tabulate it reads as a plain legend, names and all. The
-legend hotkey works as before — it just lands here now. In the rotated view the node
-icons stay upright while the map turns beneath them, and the map keeps to the left
-85% of the screen so the boss end stays clear of the legend.
+- **Pin nodes to compare routes.** Pins are candidates, not constraints: routes are
+  ranked by how many pins they reach, so a route through all of them wins, and when
+  your pins disagree you still see the best options instead of nothing.
+- **A legend that counts.** Node types down the side, one column per route, in the
+  map's own parchment. Hover a type to light up every node of that type; hover a
+  route to preview it; select it to lock it in. Locked routes survive travelling
+  along them, and pins survive restarting the game.
+- **Three map views.** A Zoom button cycles the game's normal view, the whole act on
+  one screen, and the whole act rotated on its side — start at the left, boss at the
+  right.
+- **Controller support throughout.** Right Trigger zooms; in the zoomed views the
+  d-pad walks the map node by node with a cursor ring, and select pins whatever it
+  is on.
+- **Settings** behind a gear: manual path planning, marker size, and live sliders for
+  the trail's look and the wide view's framing.
 
-On a controller, pull the **Right Trigger** (or click Zoom): the zoomed-out view is
-also controller mode. The d-pad walks the map node by node — every node, not just
-reachable ones — with a gold ink ring marking the cursor, which stays put after each
-press. While zoomed out you are planning, not moving: select toggles a pin on any
-node, travelable ones included, and travel never fires. Zoom back in to travel.
+## Install
 
-A **gear** beside the Zoom button opens the mod's settings, which persist between
-sessions:
+Subscribe on the Steam Workshop, then enable **Pathing Plus** in
+Settings → Mod Settings.
 
-- **Auto Path Mode** (on) — routes run to the boss and pins filter them. Turn it off
-  to plan by hand: the mod then draws only from where you stand to your deepest pin,
-  and no further.
-- **Small Path Markers** (off) — draws pin rings at 75%, to tell them from the game's
-  own stamps.
-- **Thickness, Dash Length, Length Jitter, Spacing, Route Gap** — the trail's look,
-  adjustable live while the map is open.
-- **Wide Fit, Wide Zoom, Wide Shift X/Y** — how the rotated view frames the map.
-- **Reset to defaults** — also the way to pick up new defaults after an update.
+## Feedback
 
-Informational only: nothing about the run changes, and `?` nodes stay `?`.
+Issues and feature requests are welcome in
+[the issue tracker](https://github.com/davekalina/spire2-pathing-plus/issues).
 
-## Build
-
-```powershell
-dotnet build .\PathingPlus.csproj
-dotnet test .\PathingPlus.Tests\PathingPlus.Tests.csproj
-```
-
-`Sts2PathDiscovery.props` finds the game through the Steam registry keys. If it cannot,
-copy `Directory.Build.props.example` to `Directory.Build.props` and set `Sts2Path`.
-
-Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` into
-`<game>/mods/PathingPlus/`. Pass `-p:SkipModInstall=true` to build without installing.
-Close the game first, or the DLL will be locked.
-
-Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.12.1 initialized`.
-
-## Publish to the Steam Workshop
-
-```powershell
-.\scripts\package-workshop.ps1
-```
-
-That stages `workshop/content/` and prints the `ModUploader.exe upload -w …` command to
-run next. Get the uploader from
-<https://github.com/megacrit/sts2-mod-uploader/releases>.
-
-`workshop/mod_id.txt` appears after the first upload. **Commit it** — it is the only link
-between this repository and the published Workshop item.
-
-See `docs/sts2-modding.md` for the full pipeline and `workshop/README.md` for the
-`workshop.json` field reference.
+Building the mod from source is covered in [DEVELOPING.md](DEVELOPING.md).
