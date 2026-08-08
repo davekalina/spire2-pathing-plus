@@ -29,6 +29,28 @@ internal sealed class OptionsPanel : IDisposable
         _root = new Control { Name = "PathingPlusOptions", MouseFilter = Control.MouseFilterEnum.Ignore };
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
+        // The panel exists before the gear that toggles it, so the gear's handlers
+        // close over a field that is already assigned.
+        _dropdown = new NinePatchRect
+        {
+            Name = "OptionsDropdown",
+            Visible = false,
+            SelfModulate = new Color(0f, 0f, 0f, 0.85f),
+            Texture = ResourceLoader.Load<Texture2D>(
+                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
+            PatchMarginLeft = 12,
+            PatchMarginTop = 12,
+            PatchMarginRight = 12,
+            PatchMarginBottom = 12,
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            AnchorLeft = 1f,
+            AnchorRight = 1f,
+            OffsetLeft = -352f,
+            OffsetRight = -24f,
+            OffsetTop = 272f,
+            OffsetBottom = 640f,
+        };
+
         // Beside the Zoom tray (which occupies right-edge offsets -220..-48 at y 196).
         _gear = new TextureRect
         {
@@ -61,26 +83,6 @@ internal sealed class OptionsPanel : IDisposable
                 _root.MoveToFront();
         });
         _root.AddChild(_gear);
-
-        _dropdown = new NinePatchRect
-        {
-            Name = "OptionsDropdown",
-            Visible = false,
-            SelfModulate = new Color(0f, 0f, 0f, 0.85f),
-            Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
-            PatchMarginLeft = 12,
-            PatchMarginTop = 12,
-            PatchMarginRight = 12,
-            PatchMarginBottom = 12,
-            MouseFilter = Control.MouseFilterEnum.Stop,
-            AnchorLeft = 1f,
-            AnchorRight = 1f,
-            OffsetLeft = -352f,
-            OffsetRight = -24f,
-            OffsetTop = 272f,
-            OffsetBottom = 640f,
-        };
 
         var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         margin.AddThemeConstantOverride("margin_left", 16);
