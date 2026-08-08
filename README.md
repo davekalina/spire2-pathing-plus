@@ -55,6 +55,8 @@ sessions:
   own stamps.
 - **Thickness, Dash Length, Length Jitter, Spacing, Route Gap** — the trail's look,
   adjustable live while the map is open.
+- **Wide Fit, Wide Zoom, Wide Shift X/Y** — how the rotated view frames the map.
+- **Reset to defaults** — also the way to pick up new defaults after an update.
 
 Informational only: nothing about the run changes, and `?` nodes stay `?`.
 
@@ -73,7 +75,7 @@ Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` int
 Close the game first, or the DLL will be locked.
 
 Runtime diagnostics are in `%APPDATA%\SlayTheSpire2\logs\godot.log`. A successful start
-logs `Pathing Plus v0.12.0 initialized`.
+logs `Pathing Plus v0.12.1 initialized`.
 
 ## Publish to the Steam Workshop
 

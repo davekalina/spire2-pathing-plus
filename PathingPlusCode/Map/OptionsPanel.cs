@@ -22,6 +22,9 @@ internal sealed class OptionsPanel : IDisposable
     private readonly TextureRect _gear;
     private readonly Font? _font;
 
+    /// <summary>Each row's way of re-reading its option, for the reset button.</summary>
+    private readonly List<Action> _refreshers = [];
+
     public OptionsPanel(Control screen)
     {
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
@@ -45,10 +48,12 @@ internal sealed class OptionsPanel : IDisposable
             MouseFilter = Control.MouseFilterEnum.Stop,
             AnchorLeft = 1f,
             AnchorRight = 1f,
-            OffsetLeft = -352f,
-            OffsetRight = -24f,
-            OffsetTop = 272f,
-            OffsetBottom = 640f,
+            // Left of the gear, and left of the widest the legend gets, so the two
+            // never share screen space.
+            OffsetLeft = -784f,
+            OffsetRight = -444f,
+            OffsetTop = 206f,
+            OffsetBottom = 662f,
         };
 
         // Beside the Zoom tray (which occupies right-edge offsets -220..-48 at y 196).
@@ -113,6 +118,32 @@ internal sealed class OptionsPanel : IDisposable
         AddSlider(rows, "Route Gap", 0f, 24f, 1f,
             () => PathingOptions.RouteSeparation, v => PathingOptions.RouteSeparation = v);
 
+        AddSpacer(rows);
+        AddSlider(rows, "Wide Fit", 0.5f, 1f, 0.01f,
+            () => PathingOptions.LandscapeFit, v => PathingOptions.LandscapeFit = v);
+        AddSlider(rows, "Wide Zoom", 0.6f, 1.6f, 0.05f,
+            () => PathingOptions.LandscapeZoom, v => PathingOptions.LandscapeZoom = v);
+        AddSlider(rows, "Wide Shift X", -400f, 400f, 10f,
+            () => PathingOptions.LandscapeShiftX, v => PathingOptions.LandscapeShiftX = v);
+        AddSlider(rows, "Wide Shift Y", -300f, 300f, 10f,
+            () => PathingOptions.LandscapeShiftY, v => PathingOptions.LandscapeShiftY = v);
+
+        AddSpacer(rows);
+        var reset = MakeLabel(18, "Reset to defaults");
+        reset.MouseFilter = Control.MouseFilterEnum.Stop;
+        reset.Modulate = new Color(1f, 1f, 1f, 0.75f);
+        reset.GuiInput += inputEvent => Guard.Run("Resetting settings", () =>
+        {
+            if (inputEvent is not InputEventMouseButton
+                { ButtonIndex: MouseButton.Left, Pressed: false })
+                return;
+            PathingOptions.ResetDefaults();
+            foreach (var refresh in _refreshers)
+                refresh();
+            PathingOptions.Notify();
+        });
+        rows.AddChild(reset);
+
         _root.AddChild(_dropdown);
         screen.AddChild(_root);
     }
@@ -144,6 +175,7 @@ internal sealed class OptionsPanel : IDisposable
     {
         var row = MakeLabel(20, Render(name, get()));
         row.MouseFilter = Control.MouseFilterEnum.Stop;
+        _refreshers.Add(() => row.Text = Render(name, get()));
         row.GuiInput += inputEvent => Guard.Run("Toggling a setting", () =>
         {
             if (inputEvent is not InputEventMouseButton
@@ -184,13 +216,21 @@ internal sealed class OptionsPanel : IDisposable
             label.Text = Render(name, get());
             PathingOptions.Notify();
         });
+        // Writing Value fires ValueChanged, which would set the option right back —
+        // harmless, since by then the option already holds the value being shown.
+        _refreshers.Add(() =>
+        {
+            slider.Value = get();
+            label.Text = Render(name, get());
+        });
         row.AddChild(slider);
         into.AddChild(row);
     }
 
     private static string Render(string name, bool on) => $"[{(on ? "X" : "  ")}] {name}";
 
-    private static string Render(string name, float value) => $"{name}: {value:0.0}";
+    private static string Render(string name, float value) =>
+        $"{name}: {(Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

@@ -104,8 +104,10 @@ internal sealed class PathingView : IDisposable
 
     private void OnOptionsChanged() => Guard.Run("Applying a settings change", () =>
     {
-        if (_screen.IsOpen)
-            Refresh();
+        if (!_screen.IsOpen)
+            return;
+        _zoom.Reapply();
+        Refresh();
     });
 
     /// <summary>

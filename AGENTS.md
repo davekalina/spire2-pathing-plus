@@ -59,9 +59,13 @@ persist to `PathingPlus.settings.json` in the game's user data dir and raise
 behaviour described above; with it off, `PathSolver.TruncateAtPins` cuts every route
 at its deepest pin and drops the rest, so the mod draws only what the player planned
 — pinnability is still computed from the full routes, so every node ahead stays
-reachable. **Small Path Markers** scales pin rings to 75%. Five sliders expose the
-dash geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
-`RouteSeparation`) for live tuning.
+reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
+geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
+`RouteSeparation`) and the landscape framing (`LandscapeFit`, `LandscapeZoom`,
+`LandscapeShiftX/Y`, re-fitted live through `MapZoom.Reapply`) for live tuning. The
+saved file's fields are all nullable and applied only when present, so an older file
+never zeroes a newly added option; **Reset to defaults** exists because a saved file
+otherwise masks any default that moves in a later version.
 
 Pins and the locked route persist across map opens and game restarts via
 `PinStore` — one JSON file (`PathingPlus.pins.json` in the game's user data dir)

@@ -152,6 +152,18 @@ internal sealed class MapZoom : IDisposable
             _tray.AddChild(_hotkeyIcon);
             RefreshHotkeyIcon();
         });
+
+        // The glyph follows the control scheme live: the player may have opened the
+        // map with a mouse and picked up the pad afterwards.
+        Guard.Run("Watching the control scheme", () =>
+        {
+            if (NControllerManager.Instance is not { } controllers)
+                return;
+            controllers.Connect(NControllerManager.SignalName.ControllerDetected,
+                Callable.From(() => Guard.Run("Controller detected", RefreshHotkeyIcon)));
+            controllers.Connect(NControllerManager.SignalName.MouseDetected,
+                Callable.From(() => Guard.Run("Mouse detected", RefreshHotkeyIcon)));
+        });
     }
 
     /// <summary>Glyph and visibility follow the current control scheme.</summary>
@@ -173,6 +185,13 @@ internal sealed class MapZoom : IDisposable
         };
         Apply();
         Toggled?.Invoke();
+    }
+
+    /// <summary>Re-fit the current view after a framing setting changed.</summary>
+    public void Reapply()
+    {
+        if (Mode != MapViewMode.Normal)
+            Apply();
     }
 
     /// <summary>Back to the normal view — on map change, map close, and map open.</summary>
@@ -220,23 +239,26 @@ internal sealed class MapZoom : IDisposable
         var center = (min + max) * 0.5f;
 
         // Rotated, the map's height lies along the screen's width — the fit swaps —
-        // and the map takes only the left 85% of the screen, leaving the right edge
-        // (the boss end) clear of the legend.
-        var frameWidth = Mode == MapViewMode.Rotated ? _screen.Size.X * 0.85f : _screen.Size.X;
-        var scale = Mode == MapViewMode.Rotated
-            ? Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X))
+        // and the map is fitted into a fraction of the screen, leaving the right edge
+        // (the boss end) clear of the legend. Fit, extra zoom, and the two nudges are
+        // all live-tunable from the settings panel.
+        var rotated = Mode == MapViewMode.Rotated;
+        var frameWidth = rotated ? _screen.Size.X * PathingOptions.LandscapeFit : _screen.Size.X;
+        var scale = rotated
+            ? Mathf.Min((frameWidth - 40f) / extent.Y, (_screen.Size.Y - 40f) / extent.X) *
+                PathingOptions.LandscapeZoom
             : Mathf.Min(1f, Mathf.Min((frameWidth - 40f) / extent.X, (_screen.Size.Y - 40f) / extent.Y));
-        // A strict 85% fit proved too timid: 10% back in, letting the map's right
-        // end overlap the legend a little.
-        if (Mode == MapViewMode.Rotated)
-            scale = Mathf.Min(1f, scale * 1.1f);
-        var rotation = Mode == MapViewMode.Rotated ? 90f : 0f;
+        scale = Mathf.Min(1f, scale);
+        var nudge = rotated
+            ? new Vector2(PathingOptions.LandscapeShiftX, PathingOptions.LandscapeShiftY)
+            : Vector2.Zero;
 
         // Pivot on the content centre: with the pivot there, the centre lands at
         // Position + pivot regardless of scale or rotation, so one position formula
         // serves both zoomed states and the tween cannot lurch.
         _theMap.PivotOffset = center;
-        AnimateTo(scale, rotation, new Vector2(frameWidth * 0.5f, _screen.Size.Y * 0.5f) - center);
+        AnimateTo(scale, rotated ? 90f : 0f,
+            new Vector2(frameWidth * 0.5f, _screen.Size.Y * 0.5f) + nudge - center);
     }
 
     private void AnimateTo(float scale, float rotationDegrees, Vector2 dragTarget)
