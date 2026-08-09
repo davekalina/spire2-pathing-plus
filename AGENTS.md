@@ -185,7 +185,11 @@ Game coupling that a game update can move (verify after every update):
   drives the drawing every frame; two of them fight over the same cursor and line, and
   the visible symptom is that holding the draw button while steering does nothing.
   `SingleDrawingToolPatch` stops older siblings as a new tool enters the tree, and the
-  mod's own switch tears down every live tool before building the next.
+  mod's own switch tears down every live tool before building the next. **Re-assert
+  the mode after retiring one**: `StopDrawing` sets the drawings' mode to `None`, so
+  stopping a straggler moments after the new tool set its own mode wipes it — leaving
+  a quill or eraser on screen that draws and erases nothing, which reads exactly like
+  a dead switch.
 - **Invoke those tool handlers deferred.** They free one input node and add another,
   and doing that inside input processing leaves the new node created but never
   entered — the tool then reads as selected while nothing listens, so the switch

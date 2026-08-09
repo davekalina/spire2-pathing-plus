@@ -205,6 +205,8 @@ internal static class MapScreenPatches
         DrawingInputField?.SetValue(screen, null);
 
         (wantEraser ? ErasingButtonPressed : DrawingButtonPressed)?.Invoke(screen, [null]);
+        Diag.Log($"tool switch -> {(wantEraser ? "eraser" : "quill")}, " +
+            $"mode now {screen.Drawings.GetLocalDrawingMode()}, retired {live.Count}");
 
         if (carryOver is not { } position)
             return;
@@ -317,12 +319,24 @@ internal static class SingleDrawingToolPatch
         {
             if (__instance.GetParent() is not { } parent)
                 return;
+            var retired = false;
             foreach (var other in parent.GetChildren().OfType<NMapDrawingInput>())
             {
                 if (other == __instance || !GodotObject.IsInstanceValid(other) ||
                     other.IsQueuedForDeletion())
                     continue;
                 other.StopDrawing();
+                retired = true;
+            }
+
+            // StopDrawing sets the drawings' mode to None, and the tool that just
+            // arrived had already set it to its own. Retiring a straggler therefore
+            // wipes the new tool's mode a moment after it was chosen, leaving a quill
+            // or eraser on screen that draws and erases nothing. Say it again.
+            if (retired && NMapScreen.Instance is { } screen)
+            {
+                screen.Drawings.SetDrawingModeLocal(__instance.DrawingMode);
+                Diag.Log($"retired a leftover tool; mode reasserted as {__instance.DrawingMode}");
             }
         });
 }
@@ -345,7 +359,13 @@ internal static class MapDrawingSnapPatch
                 return true;
             var drawing = __instance.GetLocalDrawingMode();
             if (drawing is not (DrawingMode.Drawing or DrawingMode.Erasing))
+            {
+                // A stroke arriving with no tool selected means something cleared the
+                // mode out from under it — worth seeing in the log, since the tool
+                // still looks chosen on screen while nothing it does registers.
+                Diag.Log($"stroke ignored: drawing mode is {drawing}");
                 return true;
+            }
             // The game hands us the point in the drawings node's own space, and it is
             // the cursor for a controller as much as the mouse for a pointer — so it,
             // not the mouse, is what the stroke follows.
