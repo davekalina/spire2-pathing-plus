@@ -36,6 +36,9 @@ internal static class PathingOptions
     /// <summary>Draw pin rings at 75%, to tell them apart from the game's own stamps.</summary>
     public static bool SmallMarkers { get; set; } = true;
 
+    /// <summary>Write drawing-mode diagnostics to the game log. Off; for chasing bugs.</summary>
+    public static bool DebugLogging { get; set; }
+
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
 
@@ -71,6 +74,7 @@ internal static class PathingOptions
     {
         Mode = PathMode.Auto;
         SmallMarkers = true;
+        DebugLogging = false;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -103,6 +107,7 @@ internal static class PathingOptions
 
         public string? Mode { get; set; }
         public bool? SmallMarkers { get; set; }
+        public bool? DebugLogging { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -127,6 +132,7 @@ internal static class PathingOptions
             : saved.AutoPath is { } autoPath ? autoPath ? PathMode.Auto : PathMode.Manual
             : Mode;
         SmallMarkers = saved.SmallMarkers ?? SmallMarkers;
+        DebugLogging = saved.DebugLogging ?? DebugLogging;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -143,6 +149,7 @@ internal static class PathingOptions
         {
             Mode = Mode.ToString(),
             SmallMarkers = SmallMarkers,
+            DebugLogging = DebugLogging,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,

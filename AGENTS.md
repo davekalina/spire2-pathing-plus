@@ -63,10 +63,14 @@ passes through for both mouse and controller, suppresses the native line, and pi
 the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
 itself). Erasing there is the inverse: it lifts a pin under the cursor, or the pin a
 crossed link leads to, and only falls through to the game's own eraser when neither
-is near. Use the **point the patch is handed** — it is the controller's cursor as
-much as the mouse — and convert it drawings-local → global → map-local through the
-node transforms. `Control.GetLocalMousePosition()` is only a translation: it ignores
-rotation and scale, so it silently misreports in the rotated view.
+is near. Use the **point the patch is handed** — it is the controller's cursor as much as the
+mouse — but converting it back is a trap worth knowing. The game produces it with
+`Transform2D.Inverse()`, which Godot only defines for an **orthonormal** basis:
+rotation is fine, scale is not. Vanilla never scales the map so their conversion
+holds, but the zoom does, and their point then means nothing literal. Undo *their*
+matrix with `AffineInverse()` to recover the true global point, then map-local via
+`TheMap.GetGlobalTransform().AffineInverse()`. `Control.GetLocalMousePosition()` is
+no use either: it is a plain translation that ignores rotation and scale.
 
 In both, `PathSolver.ConnectWaypoints` replaces route enumeration entirely: the pins plus the player's current position are waypoints,
 grouped by floor, and only **consecutive occupied floors** are linked, by the

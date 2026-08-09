@@ -275,11 +275,17 @@ internal sealed class PathingView : IDisposable
             .Select(candidate => candidate.Id)
             .FirstOrDefault();
 
+        if (Diag.Enabled)
+            Diag.Log($"stroke {(erasing ? "erase" : "draw")} raw={pointInDrawings} " +
+                $"map={cursor} nearest={nearest ?? "none"} pinnable={_pinnable.Count} " +
+                $"pins={_pins.Count} zoom={_zoom.Mode}");
+
         if (!erasing)
         {
             if (nearest is null || _pins.IsSelected(nearest))
                 return true;
             _pins.Toggle(nearest);
+            Diag.Log($"pinned {nearest}");
             Refresh();
             return true;
         }
@@ -296,15 +302,21 @@ internal sealed class PathingView : IDisposable
         Refresh();
         return true;
 
-        // The drawings node and the map may be scaled and turned relative to one
-        // another; going through global space is what survives the rotated view.
-        // Control.GetLocalMousePosition is only a translation and silently lies there.
+        // Getting back to map space is subtler than it looks. The game hands us
+        // `Drawings.GetGlobalTransform().Inverse() * globalPoint`, and Godot's
+        // Transform2D.Inverse() is only correct for an orthonormal basis — rotation
+        // is fine, scale is not. Vanilla never scales the map so their conversion
+        // holds; the zoom does, and their point stops meaning what it says. Undoing
+        // their exact matrix with a true inverse recovers the original global point
+        // whatever the basis, and that works for the controller's drawing cursor as
+        // much as the mouse.
         Vector2? MapPoint()
         {
             var theMap = _screen.GetNodeOrNull<Control>("TheMap");
             if (theMap is null || !GodotObject.IsInstanceValid(drawings))
                 return null;
-            var global = drawings.GetGlobalTransform() * pointInDrawings;
+            var asTheGameConverted = drawings.GetGlobalTransform().Inverse();
+            var global = asTheGameConverted.AffineInverse() * pointInDrawings;
             return theMap.GetGlobalTransform().AffineInverse() * global;
         }
     }
