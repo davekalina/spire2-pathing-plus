@@ -128,13 +128,21 @@ internal static class MapScreenPatches
     /// held latch turns that into one toggle per pull.
     /// </summary>
     private static bool _rightTriggerHeld;
-    private static bool _leftTriggerHeld;
+    private static bool _stickPressHeld;
 
     /// <summary>Switching quill and eraser is the screen's own doing; we just press it.</summary>
     private static readonly MethodInfo? DrawingButtonPressed =
         AccessTools.Method(typeof(NMapScreen), "OnMapDrawingButtonPressed");
     private static readonly MethodInfo? ErasingButtonPressed =
         AccessTools.Method(typeof(NMapScreen), "OnMapErasingButtonPressed");
+
+    /// <summary>
+    /// The screen's live tool, which is the honest state. The drawings' own mode is
+    /// not: <c>Create</c> sets it before the input node is in the tree, so a tool that
+    /// never started still reports itself as selected.
+    /// </summary>
+    private static readonly FieldInfo? DrawingInputField =
+        AccessTools.Field(typeof(NMapScreen), "_drawingInput");
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NMapScreen._Input))]
@@ -148,14 +156,20 @@ internal static class MapScreenPatches
                 __instance.GetViewport().SetInputAsHandled();
             }
 
-            // Left trigger cycles the drawing tools: nothing → quill → eraser → quill.
-            // Leaving drawing altogether stays with the game's own cancel.
-            if (!Pulled(__0, Controller.leftTrigger, ref _leftTriggerHeld) || !Ready(__instance))
+            // Clicking the left stick cycles the drawing tools: nothing → quill →
+            // eraser → quill. Leaving drawing altogether stays with the game's cancel.
+            if (!Pulled(__0, Controller.lStickPress, ref _stickPressHeld) || !Ready(__instance))
                 return;
-            var next = __instance.Drawings.GetLocalDrawingMode() == DrawingMode.Drawing
+            var current = DrawingInputField?.GetValue(__instance) as NMapDrawingInput;
+            var next = current?.DrawingMode == DrawingMode.Drawing
                 ? ErasingButtonPressed
                 : DrawingButtonPressed;
-            next?.Invoke(__instance, [null]);
+            // Deferred on purpose. Both handlers free one input node and add another,
+            // and doing that inside input processing leaves the new one created but
+            // never entered: the tool reads as selected while nothing is listening,
+            // which is why switching worked once and then went dead.
+            Callable.From(() => Guard.Run("Switching the drawing tool",
+                () => next?.Invoke(__instance, [null]))).CallDeferred();
             __instance.GetViewport().SetInputAsHandled();
         });
 
@@ -163,8 +177,9 @@ internal static class MapScreenPatches
         screen.IsOpen && ActiveScreenContext.Instance.IsCurrent(screen);
 
     /// <summary>
-    /// One toggle per pull. A trigger is an axis, so crossing the threshold produces a
-    /// stream of events; the latch turns that into a single press.
+    /// One toggle per press. A trigger is an axis, so crossing the threshold produces
+    /// a stream of events; the latch turns that into a single press, and costs
+    /// nothing for a plain button.
     /// </summary>
     private static bool Pulled(InputEvent inputEvent, StringName action, ref bool held)
     {

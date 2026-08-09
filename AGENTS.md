@@ -173,12 +173,19 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
   "-600 + row * _distY" current-row formula.
-- Input actions: `Controller.rightTrigger` for Zoom, `Controller.leftTrigger` to cycle
+- Input actions: `Controller.rightTrigger` for Zoom, `Controller.lStickPress` to cycle
   the drawing tools (nothing → quill → eraser → quill, by invoking the screen's own
   private `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed`, which already
   handle stopping and swapping), `MegaInput.confirm` for the legend, and the
-  `raw_l_stick_*` axes for the quill. Both triggers are axes, so each needs a held
-  latch or one pull fires repeatedly.
+  `raw_l_stick_*` axes for the quill. A trigger is an axis, so it needs a held latch
+  or one pull fires repeatedly.
+- **Invoke those tool handlers deferred.** They free one input node and add another,
+  and doing that inside input processing leaves the new node created but never
+  entered — the tool then reads as selected while nothing listens, so the switch
+  appears to work once and then goes dead, and the eraser cannot erase. For the same
+  reason, decide the next tool from the screen's `_drawingInput` field rather than
+  `Drawings.GetLocalDrawingMode()`: `NMapDrawingInput.Create` sets the drawings' mode
+  before the node is in the tree, so that mode lies about a tool that never started.
 - The quill's cursor moves in **screen** space at a fixed 700 px/s, which crosses
   proportionally more map as the zoom shrinks it. `QuillSpeedPatch` measures the step
   the game just took and rescales it by `TheMap.Scale`, covering every input source
