@@ -60,9 +60,13 @@ persist to `PathingPlus.settings.json` in the game's user data dir and raise
 same drawing rule and differ only in how pins are placed — *Drawing* prefixes
 `NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
 passes through for both mouse and controller, suppresses the native line, and pins
-the nearest node within `SnapRadius` of the cursor (add-only, so a stroke doubling
-back cannot undo itself). Cursor position comes from `TheMap.GetLocalMousePosition()`,
-which keeps the zoom and rotation transforms out of the arithmetic.
+the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
+itself). Erasing there is the inverse: it lifts a pin under the cursor, or the pin a
+crossed link leads to, and only falls through to the game's own eraser when neither
+is near. Use the **point the patch is handed** — it is the controller's cursor as
+much as the mouse — and convert it drawings-local → global → map-local through the
+node transforms. `Control.GetLocalMousePosition()` is only a translation: it ignores
+rotation and scale, so it silently misreports in the rotated view.
 
 In both, `PathSolver.ConnectWaypoints` replaces route enumeration entirely: the pins plus the player's current position are waypoints,
 grouped by floor, and only **consecutive occupied floors** are linked, by the

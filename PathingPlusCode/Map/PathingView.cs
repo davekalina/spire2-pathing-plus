@@ -37,6 +37,9 @@ internal sealed class PathingView : IDisposable
     private MapGraphAdapter? _adapter;
     private Dictionary<MapCoord, NMapPoint>? _nodesByCoord;
     private IReadOnlyList<IReadOnlyList<string>> _shownRoutes = [];
+
+    /// <summary>Manual-mode links between pinned floors; what the eraser rubs out.</summary>
+    private IReadOnlyList<IReadOnlyList<string>> _links = [];
     private HashSet<string> _pinnable = [];
     private string _mapKey = "";
     private IReadOnlyList<string>? _lockedRouteIds;
@@ -249,25 +252,21 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>
-    /// A point of a drawn stroke, in Drawing path mode. The stroke pins whatever node
-    /// it passes near, so the gesture is the drawing but the line is the mod's. Pins
-    /// are only added here, never removed: a stroke that wanders back over its own
-    /// path should not undo itself.
+    /// A point of a drawn stroke, in Drawing path mode. Drawing pins whatever node the
+    /// stroke passes near — the gesture is the player's, the line is the mod's — and
+    /// pins are only added, so a stroke wandering back over itself cannot undo itself.
+    /// Erasing is the reverse: it lifts a pin the stroke touches, or the pin at the far
+    /// end of a drawn link it crosses, so rubbing out a line takes the plan with it.
     /// </summary>
     /// <returns>True if the mod handled the point and the game should not draw it.</returns>
-    public bool OnDrawingPoint()
+    public bool OnDrawingPoint(Control drawings, Vector2 pointInDrawings, bool erasing)
     {
         if (!_screen.IsOpen || _adapter is null || _nodesByCoord is null)
             return false;
-
-        var theMap = _screen.GetNodeOrNull<Control>("TheMap");
-        if (theMap is null)
+        if (MapPoint() is not { } cursor)
             return false;
 
-        // The map's own local space is where node centres live, and asking it for the
-        // cursor keeps the zoom and rotation transforms out of the arithmetic.
-        var cursor = theMap.GetLocalMousePosition();
-        var snapped = _pinnable
+        var nearest = _pinnable
             .Select(id => (Id: id, Center: EndpointOf(id)))
             .Where(candidate => candidate.Center is not null)
             .Select(candidate => (candidate.Id, Distance: candidate.Center!.Value.DistanceTo(cursor)))
@@ -276,12 +275,64 @@ internal sealed class PathingView : IDisposable
             .Select(candidate => candidate.Id)
             .FirstOrDefault();
 
-        if (snapped is null || _pins.IsSelected(snapped))
+        if (!erasing)
+        {
+            if (nearest is null || _pins.IsSelected(nearest))
+                return true;
+            _pins.Toggle(nearest);
+            Refresh();
             return true;
+        }
 
-        _pins.Toggle(snapped);
+        // A pin under the eraser goes first; failing that, the link being rubbed out
+        // loses the pin it leads to. If neither, the game erases its own ink.
+        var target = nearest is not null && _pins.IsSelected(nearest)
+            ? nearest
+            : PinnedEndOfLinkNear(cursor);
+        if (target is null)
+            return false;
+
+        _pins.Toggle(target);
         Refresh();
         return true;
+
+        // The drawings node and the map may be scaled and turned relative to one
+        // another; going through global space is what survives the rotated view.
+        // Control.GetLocalMousePosition is only a translation and silently lies there.
+        Vector2? MapPoint()
+        {
+            var theMap = _screen.GetNodeOrNull<Control>("TheMap");
+            if (theMap is null || !GodotObject.IsInstanceValid(drawings))
+                return null;
+            var global = drawings.GetGlobalTransform() * pointInDrawings;
+            return theMap.GetGlobalTransform().AffineInverse() * global;
+        }
+    }
+
+    /// <summary>The pinned node a drawn link leads to, if the point lies on that link.</summary>
+    private string? PinnedEndOfLinkNear(Vector2 point)
+    {
+        foreach (var link in _links)
+        {
+            var centers = link.Select(EndpointOf).OfType<Vector2>().ToList();
+            if (centers.Count < 2)
+                continue;
+            var onLink = Enumerable.Range(1, centers.Count - 1).Any(i =>
+                DistanceToSegment(point, centers[i - 1], centers[i]) <= SnapRadius);
+            if (onLink && _pins.IsSelected(link[^1]))
+                return link[^1];
+        }
+        return null;
+    }
+
+    private static float DistanceToSegment(Vector2 point, Vector2 from, Vector2 to)
+    {
+        var span = to - from;
+        var lengthSquared = span.LengthSquared();
+        if (lengthSquared <= 0.001f)
+            return point.DistanceTo(from);
+        var t = Mathf.Clamp((point - from).Dot(span) / lengthSquared, 0f, 1f);
+        return point.DistanceTo(from + span * t);
     }
 
     /// <summary>How near a stroke must pass a node to catch it, in map units.</summary>
@@ -342,13 +393,14 @@ internal sealed class PathingView : IDisposable
             // Manual planning draws the player's own line: links between consecutive
             // pinned floors, stitched back into whole routes so the legend counts
             // paths rather than the links they are made of.
-            var links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
-            _shownRoutes = PathSolver.AssembleRoutes(links)
+            _links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
+            _shownRoutes = PathSolver.AssembleRoutes(_links)
                 .Take(PathSolver.LegendThreshold)
                 .ToList();
         }
         else
         {
+            _links = [];
             var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
             // Up to ten candidates: keep the best five. Pin coverage stays paramount —
             // a route through every pin must never lose its slot to a near-miss — then

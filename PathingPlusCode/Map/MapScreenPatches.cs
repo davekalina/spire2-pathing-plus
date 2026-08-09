@@ -166,11 +166,11 @@ internal static class MapScreenPatches
     }
 
     /// <returns>True when the mod consumed the stroke point.</returns>
-    internal static bool RouteDrawingPoint(NMapDrawings drawings)
+    internal static bool RouteDrawingPoint(NMapDrawings drawings, Vector2 point, bool erasing)
     {
         foreach (var (screen, view) in Views)
             if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
-                return view.OnDrawingPoint();
+                return view.OnDrawingPoint(drawings, point, erasing);
         return false;
     }
 
@@ -198,16 +198,19 @@ internal static class MapScreenPatches
 internal static class MapDrawingSnapPatch
 {
     [HarmonyPrefix]
-    private static bool BeforeUpdateLine(NMapDrawings __instance) =>
+    private static bool BeforeUpdateLine(NMapDrawings __instance, Vector2 __0) =>
         Guard.Run("Snapping a drawn stroke to the map", () =>
         {
             if (PathingOptions.Mode != PathMode.Drawing)
                 return true;
-            // Erasing still belongs to the game: it clears whatever was drawn before
-            // the mode was switched on.
-            if (__instance.GetLocalDrawingMode() != DrawingMode.Drawing)
+            var drawing = __instance.GetLocalDrawingMode();
+            if (drawing is not (DrawingMode.Drawing or DrawingMode.Erasing))
                 return true;
-            return !MapScreenPatches.RouteDrawingPoint(__instance);
+            // The game hands us the point in the drawings node's own space, and it is
+            // the cursor for a controller as much as the mouse for a pointer — so it,
+            // not the mouse, is what the stroke follows.
+            return !MapScreenPatches.RouteDrawingPoint(
+                __instance, __0, drawing == DrawingMode.Erasing);
         }, true);
 }
 
