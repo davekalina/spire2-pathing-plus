@@ -165,6 +165,15 @@ internal static class MapScreenPatches
         }
     }
 
+    /// <returns>True when the mod consumed the stroke point.</returns>
+    internal static bool RouteDrawingPoint(NMapDrawings drawings)
+    {
+        foreach (var (screen, view) in Views)
+            if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
+                return view.OnDrawingPoint();
+        return false;
+    }
+
     internal static void RouteClearDrawings(NMapDrawings drawings)
     {
         foreach (var (screen, view) in Views)
@@ -176,6 +185,30 @@ internal static class MapScreenPatches
             }
         }
     }
+}
+
+/// <summary>
+/// Drawing mode, replaced. Every freehand point — mouse or controller — funnels
+/// through <c>UpdateCurrentLinePositionLocal</c>, so in Drawing path mode the mod
+/// takes the stroke and drops the line: each point snaps to the nearest node it
+/// passes, and the mod's own trails join them up. Returning true leaves the game's
+/// drawing exactly as it was, which is what every other mode wants.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.UpdateCurrentLinePositionLocal))]
+internal static class MapDrawingSnapPatch
+{
+    [HarmonyPrefix]
+    private static bool BeforeUpdateLine(NMapDrawings __instance) =>
+        Guard.Run("Snapping a drawn stroke to the map", () =>
+        {
+            if (PathingOptions.Mode != PathMode.Drawing)
+                return true;
+            // Erasing still belongs to the game: it clears whatever was drawn before
+            // the mode was switched on.
+            if (__instance.GetLocalDrawingMode() != DrawingMode.Drawing)
+                return true;
+            return !MapScreenPatches.RouteDrawingPoint(__instance);
+        }, true);
 }
 
 /// <summary>

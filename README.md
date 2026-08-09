@@ -29,9 +29,10 @@ a `?`; the mod only reads the map and draws over it, and its manifest declares
   d-pad walks the map node by node with a cursor ring, and select pins whatever it
   is on.
 - **Settings** behind a gear: marker size, live sliders for the trail's look and the
-  wide view's framing, and **Auto Path Mode** — turn it off to plan by hand, where
-  the mod connects the dots between the nodes you pin and draws nothing past your
-  last one.
+  wide view's framing, and a **Path Mode** with three settings — *Auto* scores routes
+  to the boss, *Manual* connects only the nodes you pin, and *Drawing* takes over the
+  map's quill so a stroke over the map snaps to the nodes it passes instead of
+  leaving a freehand line.
 
 ## Install
 

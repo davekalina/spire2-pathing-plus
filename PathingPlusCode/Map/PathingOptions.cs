@@ -4,6 +4,22 @@ using System.Text.Json;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
+/// <summary>How the mod turns pins into drawn routes.</summary>
+internal enum PathMode
+{
+    /// <summary>Routes run to the boss; pins rank and filter them.</summary>
+    Auto,
+
+    /// <summary>Only what the player pinned: links between consecutive pinned floors.</summary>
+    Manual,
+
+    /// <summary>
+    /// Manual planning, driven by the game's own quill: drawing over the map snaps to
+    /// the nodes the stroke passes near instead of leaving a freehand line.
+    /// </summary>
+    Drawing,
+}
+
 /// <summary>
 /// The mod's settings, live-editable from the map's gear menu and persisted in the
 /// game's user data directory. Everything here is display or planning behaviour —
@@ -11,12 +27,11 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal static class PathingOptions
 {
-    /// <summary>
-    /// On (the default): routes run all the way to the boss, and pins filter them.
-    /// Off: the mod only draws what the player has explicitly asked for — routes
-    /// from the current position to the deepest pinned node and no further.
-    /// </summary>
-    public static bool AutoPath { get; set; } = true;
+    /// <summary>How pins become drawn routes.</summary>
+    public static PathMode Mode { get; set; } = PathMode.Auto;
+
+    /// <summary>True while routes should run all the way to the boss.</summary>
+    public static bool AutoPath => Mode == PathMode.Auto;
 
     /// <summary>Draw pin rings at 75%, to tell them apart from the game's own stamps.</summary>
     public static bool SmallMarkers { get; set; } = true;
@@ -54,7 +69,7 @@ internal static class PathingOptions
     /// </summary>
     public static void ResetDefaults()
     {
-        AutoPath = true;
+        Mode = PathMode.Auto;
         SmallMarkers = true;
         DashWidth = 1.7f;
         DashLength = 2.7f;
@@ -83,7 +98,10 @@ internal static class PathingOptions
     /// </summary>
     private sealed class Saved
     {
+        /// <summary>Written before Mode existed; read as Auto/Manual when Mode is absent.</summary>
         public bool? AutoPath { get; set; }
+
+        public string? Mode { get; set; }
         public bool? SmallMarkers { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
@@ -105,7 +123,9 @@ internal static class PathingOptions
             return;
         if (JsonSerializer.Deserialize<Saved>(File.ReadAllText(FilePath)) is not { } saved)
             return;
-        AutoPath = saved.AutoPath ?? AutoPath;
+        Mode = Enum.TryParse<PathMode>(saved.Mode, out var mode) ? mode
+            : saved.AutoPath is { } autoPath ? autoPath ? PathMode.Auto : PathMode.Manual
+            : Mode;
         SmallMarkers = saved.SmallMarkers ?? SmallMarkers;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
@@ -121,7 +141,7 @@ internal static class PathingOptions
     private static void Save() => Guard.Run("Saving settings", () =>
         File.WriteAllText(FilePath, JsonSerializer.Serialize(new Saved
         {
-            AutoPath = AutoPath,
+            Mode = Mode.ToString(),
             SmallMarkers = SmallMarkers,
             DashWidth = DashWidth,
             DashLength = DashLength,

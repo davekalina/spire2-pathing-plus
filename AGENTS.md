@@ -55,14 +55,23 @@ longer on the stored route.
 
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
-`Changed`, which redraws the open map. **Auto Path Mode** (default on) is the
-behaviour described above. With it off, `PathSolver.ConnectWaypoints` replaces route
-enumeration entirely: the pins plus the player's current position are waypoints,
+`Changed`, which redraws the open map. **Path Mode** has three settings.
+*Auto* (default) is the behaviour described above. *Manual* and *Drawing* share the
+same drawing rule and differ only in how pins are placed — *Drawing* prefixes
+`NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
+passes through for both mouse and controller, suppresses the native line, and pins
+the nearest node within `SnapRadius` of the cursor (add-only, so a stroke doubling
+back cannot undo itself). Cursor position comes from `TheMap.GetLocalMousePosition()`,
+which keeps the zoom and rotation transforms out of the arithmetic.
+
+In both, `PathSolver.ConnectWaypoints` replaces route enumeration entirely: the pins plus the player's current position are waypoints,
 grouped by floor, and only **consecutive occupied floors** are linked, by the
 *shortest* paths between them (ties kept — two equally short ways are a real
 choice). A pin no earlier floor can reach falls back to the nearest floor that can,
 rather than dangling. Several waypoints may share a floor, which is what lets pins
-sit on rival branches.
+sit on rival branches. `AssembleRoutes` then stitches those links back into whole
+routes, because the legend counts what a **path** holds, not what each link holds —
+a plan that forks yields one route per branch.
 
 Two earlier rules were wrong here and must not come back. Judging by "first waypoint
 reached" admits any detour that dodges every intermediate pin — up an edge column

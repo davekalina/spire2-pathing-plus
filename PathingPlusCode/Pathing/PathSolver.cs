@@ -120,6 +120,59 @@ public static class PathSolver
     }
 
     /// <summary>
+    /// Stitch segments into the complete routes they describe. The segments are the
+    /// links; a player looking at them sees whole paths, and the legend should count
+    /// what those paths hold, not what each link holds. A plan that forks draws one
+    /// route per branch; where two equally short links join the same pair, each
+    /// combination is its own route.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string>> AssembleRoutes(
+        IReadOnlyList<IReadOnlyList<string>> segments)
+    {
+        if (segments.Count == 0)
+            return [];
+
+        var bySource = segments
+            .GroupBy(segment => segment[0])
+            .ToDictionary(group => group.Key, group => group.ToList());
+        var reachable = segments.Select(segment => segment[^1]).ToHashSet();
+        var roots = segments
+            .Select(segment => segment[0])
+            .Where(id => !reachable.Contains(id))
+            .Distinct()
+            .ToList();
+
+        var routes = new List<IReadOnlyList<string>>();
+        var walked = new List<string>();
+        foreach (var root in roots)
+        {
+            walked.Clear();
+            walked.Add(root);
+            Walk(root);
+        }
+        return routes;
+
+        void Walk(string id)
+        {
+            if (routes.Count >= MaxPaths)
+                return;
+            if (!bySource.TryGetValue(id, out var onward))
+            {
+                routes.Add(walked.ToArray());
+                return;
+            }
+            foreach (var segment in onward)
+            {
+                var before = walked.Count;
+                // Skip(1): the segment starts on the node the walk already stands on.
+                walked.AddRange(segment.Skip(1));
+                Walk(segment[^1]);
+                walked.RemoveRange(before, walked.Count - before);
+            }
+        }
+    }
+
+    /// <summary>
     /// Every shortest path from one node to another, or none if it cannot be reached.
     /// Ties are all returned: two equally short ways are a real choice, not clutter.
     /// </summary>

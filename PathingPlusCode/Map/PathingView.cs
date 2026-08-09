@@ -248,6 +248,45 @@ internal sealed class PathingView : IDisposable
         Refresh();
     }
 
+    /// <summary>
+    /// A point of a drawn stroke, in Drawing path mode. The stroke pins whatever node
+    /// it passes near, so the gesture is the drawing but the line is the mod's. Pins
+    /// are only added here, never removed: a stroke that wanders back over its own
+    /// path should not undo itself.
+    /// </summary>
+    /// <returns>True if the mod handled the point and the game should not draw it.</returns>
+    public bool OnDrawingPoint()
+    {
+        if (!_screen.IsOpen || _adapter is null || _nodesByCoord is null)
+            return false;
+
+        var theMap = _screen.GetNodeOrNull<Control>("TheMap");
+        if (theMap is null)
+            return false;
+
+        // The map's own local space is where node centres live, and asking it for the
+        // cursor keeps the zoom and rotation transforms out of the arithmetic.
+        var cursor = theMap.GetLocalMousePosition();
+        var snapped = _pinnable
+            .Select(id => (Id: id, Center: EndpointOf(id)))
+            .Where(candidate => candidate.Center is not null)
+            .Select(candidate => (candidate.Id, Distance: candidate.Center!.Value.DistanceTo(cursor)))
+            .Where(candidate => candidate.Distance <= SnapRadius)
+            .OrderBy(candidate => candidate.Distance)
+            .Select(candidate => candidate.Id)
+            .FirstOrDefault();
+
+        if (snapped is null || _pins.IsSelected(snapped))
+            return true;
+
+        _pins.Toggle(snapped);
+        Refresh();
+        return true;
+    }
+
+    /// <summary>How near a stroke must pass a node to catch it, in map units.</summary>
+    private const float SnapRadius = 55f;
+
     /// <summary>"?" nodes come in two kinds that mean the same thing to a player.</summary>
     private static string NormalizedKind(string kind) =>
         kind == nameof(MapPointType.Unassigned) ? nameof(MapPointType.Unknown) : kind;
@@ -300,11 +339,13 @@ internal sealed class PathingView : IDisposable
 
         if (!PathingOptions.AutoPath)
         {
-            // Manual planning draws the player's own line: a segment between each
-            // waypoint and the next one that connects to it. Pins on rival branches
-            // are not a contradiction here — each pair that connects draws, and the
-            // pairs that cannot simply do not.
-            _shownRoutes = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
+            // Manual planning draws the player's own line: links between consecutive
+            // pinned floors, stitched back into whole routes so the legend counts
+            // paths rather than the links they are made of.
+            var links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
+            _shownRoutes = PathSolver.AssembleRoutes(links)
+                .Take(PathSolver.LegendThreshold)
+                .ToList();
         }
         else
         {

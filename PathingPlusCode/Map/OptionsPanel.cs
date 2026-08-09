@@ -128,8 +128,8 @@ internal sealed class OptionsPanel : IDisposable
         rows.AddThemeConstantOverride("separation", 4);
         margin.AddChild(rows);
 
-        AddToggle(rows, "Auto Path Mode",
-            () => PathingOptions.AutoPath, v => PathingOptions.AutoPath = v);
+        AddChoice(rows, "Path Mode",
+            () => PathingOptions.Mode, v => PathingOptions.Mode = v);
         AddToggle(rows, "Small Path Markers",
             () => PathingOptions.SmallMarkers, v => PathingOptions.SmallMarkers = v);
 
@@ -197,6 +197,27 @@ internal sealed class OptionsPanel : IDisposable
         CustomMinimumSize = new Vector2(0, 8),
         MouseFilter = Control.MouseFilterEnum.Ignore,
     });
+
+    /// <summary>A row that cycles through the values of an enum on each click.</summary>
+    private void AddChoice(Container into, string name, Func<PathMode> get, Action<PathMode> set)
+    {
+        var choices = Enum.GetValues<PathMode>();
+        var row = MakeLabel(20, Render(name, get()));
+        row.MouseFilter = Control.MouseFilterEnum.Stop;
+        _refreshers.Add(() => row.Text = Render(name, get()));
+        row.GuiInput += inputEvent => Guard.Run("Changing the path mode", () =>
+        {
+            if (inputEvent is not InputEventMouseButton
+                { ButtonIndex: MouseButton.Left, Pressed: false })
+                return;
+            set(choices[(Array.IndexOf(choices, get()) + 1) % choices.Length]);
+            row.Text = Render(name, get());
+            PathingOptions.Notify();
+        });
+        into.AddChild(row);
+    }
+
+    private static string Render(string name, PathMode mode) => $"{name}: {mode}";
 
     private void AddToggle(Container into, string name, Func<bool> get, Action<bool> set)
     {
