@@ -117,6 +117,35 @@ public class ConnectWaypointsTests
     }
 
     [Fact]
+    public void A_detour_that_dodges_every_pin_is_not_a_connection()
+    {
+        // The real regression: the right-hand column reaches "top" without touching
+        // "mid", so it used to be the only path of its pair and survived any
+        // shortest-per-pair rule. Only consecutive pinned floors may link.
+        var graph = new SpireMapGraph(
+            new GraphNode[]
+            {
+                new("here", 0, "monster"),
+                new("m1", 1, "monster"), new("r1", 1, "monster"),
+                new("mid", 2, "elite"), new("r2", 2, "monster"),
+                new("m3", 3, "monster"), new("r3", 3, "monster"),
+                new("top", 4, "rest"),
+            },
+            new[]
+            {
+                ("here", "m1"), ("m1", "mid"), ("mid", "m3"), ("m3", "top"),
+                ("here", "r1"), ("r1", "r2"), ("r2", "r3"), ("r3", "top"),
+            });
+
+        var segments = PathSolver.ConnectWaypoints(graph, "here", new[] { "mid", "top" });
+
+        Assert.Equal(2, segments.Count);
+        Assert.Contains(segments, s => s.SequenceEqual(new[] { "here", "m1", "mid" }));
+        Assert.Contains(segments, s => s.SequenceEqual(new[] { "mid", "m3", "top" }));
+        Assert.DoesNotContain(segments, s => s.Contains("r1") || s.Contains("r2"));
+    }
+
+    [Fact]
     public void Equally_short_ways_between_one_pair_both_survive()
     {
         var segments = PathSolver.ConnectWaypoints(Graph(), "mid", new[] { "top" });

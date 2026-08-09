@@ -57,14 +57,19 @@ longer on the stored route.
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Auto Path Mode** (default on) is the
 behaviour described above. With it off, `PathSolver.ConnectWaypoints` replaces route
-enumeration entirely: the pins plus the player's current position are waypoints, and
-walking forward from each one and stopping at the first waypoint reached yields the
-segments between *adjacent* waypoints (so A→B→C draws two lines, not a third
-redundant A→C). Every way between one pair is returned — that is the auto-pathing
-between placed nodes — **but only the shortest**: per waypoint pair, longer
-connections are culled, or the map's long way round out to an edge column draws over
-the line the player meant (ties survive, being a real choice). A pair nothing
-connects contributes nothing, which is what lets pins sit on rival branches. Two earlier attempts were wrong and should not be
+enumeration entirely: the pins plus the player's current position are waypoints,
+grouped by floor, and only **consecutive occupied floors** are linked, by the
+*shortest* paths between them (ties kept — two equally short ways are a real
+choice). A pin no earlier floor can reach falls back to the nearest floor that can,
+rather than dangling. Several waypoints may share a floor, which is what lets pins
+sit on rival branches.
+
+Two earlier rules were wrong here and must not come back. Judging by "first waypoint
+reached" admits any detour that dodges every intermediate pin — up an edge column
+and back — because such a path is the *only* member of its pair and so survives even
+a shortest-per-pair filter; that is what made the map's outer columns light up.
+Requiring one route through every pin drew nothing at all as soon as two pins sat on
+rival branches. Two earlier attempts were wrong and should not be
 reinstated: best-match scoring made a second pin *widen* the picture by re-admitting
 routes that skipped the first, and requiring every pin on one route drew **nothing**
 the moment two pins sat on different branches. Pinnability is still computed from the

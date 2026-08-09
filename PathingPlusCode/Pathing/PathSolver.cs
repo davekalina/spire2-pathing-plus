@@ -79,55 +79,91 @@ public static class PathSolver
         if (waypoints.Count < 2)
             return [];
 
-        var byPair = new Dictionary<(string From, string To), List<IReadOnlyList<string>>>();
-        var stack = new List<string>();
-        var found = 0;
-
-        var ordered = waypoints
-            .OrderBy(id => graph.Node(id).Row)
-            .ThenBy(id => id, StringComparer.Ordinal)
+        // Waypoints grouped by floor, floors in order. Connecting only *consecutive*
+        // occupied floors is what keeps the drawing to the plan: a route that dodges
+        // every pin in between — up an edge column and back — links two floors that
+        // are not neighbours in the plan, so it is never a candidate. Judging by
+        // "first waypoint reached" instead let those detours in, because they are the
+        // only way to reach a far pin without crossing a nearer one, leaving nothing
+        // shorter to compare them against.
+        var floors = waypoints
+            .GroupBy(id => graph.Node(id).Row)
+            .OrderBy(floor => floor.Key)
+            .Select(floor => floor.OrderBy(id => id, StringComparer.Ordinal).ToList())
             .ToList();
-        foreach (var from in ordered)
-        {
-            stack.Clear();
-            stack.Add(from);
-            Walk(from, from);
-        }
 
-        // Only the shortest way between a given pair survives. Without this the map's
-        // long way round — out to an edge column and back — is just as valid a
-        // connection as the direct one and gets drawn too, which buries the line the
-        // player was actually drawing. Ties are kept: two equally short ways between
-        // the same pair are a real choice, not clutter.
-        return ordered
-            .SelectMany(from => ordered.Select(to => (From: from, To: to)))
-            .Where(byPair.ContainsKey)
-            .SelectMany(pair =>
+        var segments = new List<IReadOnlyList<string>>();
+        for (var i = 1; i < floors.Count && segments.Count < MaxPaths; i++)
+        {
+            foreach (var to in floors[i])
             {
-                var paths = byPair[pair];
-                var shortest = paths.Min(p => p.Count);
-                return paths.Where(p => p.Count == shortest);
-            })
-            .ToList();
+                // Normally the floor just below, but a pin on a branch that one
+                // cannot reach falls back to the nearest earlier floor that can —
+                // better a longer link than a pin left dangling.
+                for (var j = i - 1; j >= 0; j--)
+                {
+                    var linked = false;
+                    foreach (var from in floors[j])
+                    {
+                        var shortest = ShortestPaths(graph, from, to);
+                        if (shortest.Count == 0)
+                            continue;
+                        segments.AddRange(shortest);
+                        linked = true;
+                    }
+                    if (linked)
+                        break;
+                }
+            }
+        }
+        return segments;
+    }
 
-        void Walk(string from, string id)
+    /// <summary>
+    /// Every shortest path from one node to another, or none if it cannot be reached.
+    /// Ties are all returned: two equally short ways are a real choice, not clutter.
+    /// </summary>
+    private static List<IReadOnlyList<string>> ShortestPaths(
+        SpireMapGraph graph, string from, string to)
+    {
+        var distance = new Dictionary<string, int> { [from] = 0 };
+        var queue = new Queue<string>();
+        queue.Enqueue(from);
+        while (queue.Count > 0)
         {
-            if (found >= MaxPaths)
+            var id = queue.Dequeue();
+            foreach (var next in graph.Successors(id))
+            {
+                if (distance.ContainsKey(next))
+                    continue;
+                distance[next] = distance[id] + 1;
+                queue.Enqueue(next);
+            }
+        }
+        if (!distance.TryGetValue(to, out var hops))
+            return [];
+
+        var paths = new List<IReadOnlyList<string>>();
+        var stack = new List<string> { from };
+        Walk(from);
+        return paths;
+
+        // Only successors whose distance is one deeper stay on a shortest path.
+        void Walk(string id)
+        {
+            if (id == to)
+            {
+                paths.Add(stack.ToArray());
+                return;
+            }
+            if (stack.Count > hops)
                 return;
             foreach (var next in graph.Successors(id))
             {
+                if (!distance.TryGetValue(next, out var d) || d != stack.Count)
+                    continue;
                 stack.Add(next);
-                if (waypoints.Contains(next))
-                {
-                    if (!byPair.TryGetValue((from, next), out var paths))
-                        byPair[(from, next)] = paths = [];
-                    paths.Add(stack.ToArray());
-                    found++;
-                }
-                else
-                {
-                    Walk(from, next);
-                }
+                Walk(next);
                 stack.RemoveAt(stack.Count - 1);
             }
         }
