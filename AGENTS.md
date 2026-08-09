@@ -173,8 +173,16 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
   "-600 + row * _distY" current-row formula.
-- Input actions: `Controller.rightTrigger` (`controller_right_trigger`) for Zoom and
-  `MegaInput.confirm` for the legend.
+- Input actions: `Controller.rightTrigger` (`controller_right_trigger`) for Zoom,
+  `MegaInput.confirm` for the legend, and the `raw_l_stick_*` axes for the quill.
+- `NControllerManager.GetLeftAnalogStickDirection` is postfixed so the **left stick
+  drives the drawing quill**. The quill already asks for that reading and only falls
+  back to the d-pad when it is near zero; the gap is that under Steam Input the
+  strategy returns a Steam *analog action*, so a controller config that binds the
+  left stick elsewhere reports zero forever while the d-pad (digital actions) still
+  works. The postfix fills a zero reading from Godot's raw axes, and only while the
+  map is open with a quill or eraser in hand — every other screen's input is
+  untouched.
 - Controller glyphs go through `HotkeyGlyph`, never `NHotkeyIcon.UpdateInput`:
   `NInputManager.GetHotkeyIcon` only resolves **remappable actions**, so a raw button
   (the right trigger) returns null and the native icon keeps its placeholder art,
