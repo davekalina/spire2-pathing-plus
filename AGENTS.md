@@ -209,7 +209,11 @@ Game coupling that a game update can move (verify after every update):
 - Controller mode: the Right Trigger hotkey, all-node focus wiring and its
   restoration, the gold cursor ring, cursor retention across pin presses,
   select-to-pin versus select-to-travel, and the frozen native scroll/mouse
-  handlers while zoomed.
+  handlers while zoomed — which must keep letting a right/middle **press** through
+  in Drawing mode, since `_GuiInput` is where a stroke is created and freezing it
+  wholesale kills drawing in both zoomed views.
+- Drawing mode in all three views and with both tools: quill snapping, eraser
+  lifting pins, and neither disturbing pan/zoom.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   quill drawing / erase modes (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).

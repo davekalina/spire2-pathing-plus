@@ -61,15 +61,30 @@ internal static class MapScreenPatches
             () => !ZoomActive(__instance), true);
 
     /// <summary>
-    /// Zoomed out, the screen's own mouse handling — drag-to-pan, the wheel, and
-    /// quill drawing starts — is frozen too. Node clicks are unaffected: map points
-    /// receive their own gui input.
+    /// Zoomed out, the screen's own mouse handling — drag-to-pan and the wheel — is
+    /// frozen. Node clicks are unaffected: map points receive their own gui input.
+    ///
+    /// The one exception is how a stroke begins. A right or middle press is what
+    /// creates the drawing input node, and it does so in this very handler, so
+    /// freezing it wholesale left Drawing mode dead in both zoomed views. That press
+    /// is let through, and nothing else: the game returns early once a stroke exists,
+    /// so no pan can follow it, and the motion that continues the stroke arrives at
+    /// the drawing node's own input rather than here.
     /// </summary>
     [HarmonyPrefix]
     [HarmonyPatch(nameof(NMapScreen._GuiInput))]
-    private static bool BeforeScreenGuiInput(NMapScreen __instance) =>
-        Guard.Run("Freezing map input while zoomed out",
-            () => !ZoomActive(__instance), true);
+    private static bool BeforeScreenGuiInput(NMapScreen __instance, InputEvent __0) =>
+        Guard.Run("Freezing map input while zoomed out", () =>
+        {
+            if (!ZoomActive(__instance))
+                return true;
+            return PathingOptions.Mode == PathMode.Drawing &&
+                __0 is InputEventMouseButton
+                {
+                    Pressed: true,
+                    ButtonIndex: MouseButton.Right or MouseButton.Middle,
+                };
+        }, true);
 
     private static bool ZoomActive(NMapScreen screen) =>
         Views.TryGetValue(screen, out var view) && view.ZoomActive;
