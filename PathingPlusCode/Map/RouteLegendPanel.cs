@@ -46,6 +46,7 @@ internal sealed class RouteLegendPanel : IDisposable
     public event Action<int>? ColumnLockToggled;
 
     private readonly Control _panel;
+    private HotkeyGlyph? _hotkeyGlyph;
     private readonly ColorRect _rowMark;
     private readonly Font? _font;
     private readonly List<Control> _iconCells = [];
@@ -135,6 +136,16 @@ internal sealed class RouteLegendPanel : IDisposable
             _typeNames.Add(name);
             _panel.AddChild(name);
         }
+
+        // The hotkey that lands focus here, shown top-left on a pad — the native
+        // legend carried the same glyph and this panel replaces it.
+        Guard.Run("Legend hotkey glyph", () =>
+        {
+            _hotkeyGlyph = new HotkeyGlyph(_panel, MegaInput.confirm, new Vector2(44, 44));
+            var icon = _hotkeyGlyph.Node;
+            icon.Position = new Vector2(IconColumnX - 4f, 34f);
+            icon.Size = new Vector2(44, 44);
+        });
 
         screen.AddChild(_panel);
         FitWidth(0);
@@ -280,6 +291,7 @@ internal sealed class RouteLegendPanel : IDisposable
 
     public void Dispose()
     {
+        _hotkeyGlyph?.Dispose();
         if (GodotObject.IsInstanceValid(_panel))
             _panel.QueueFree();
     }

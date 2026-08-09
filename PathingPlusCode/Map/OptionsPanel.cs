@@ -89,6 +89,33 @@ internal sealed class OptionsPanel : IDisposable
         });
         _root.AddChild(_gear);
 
+        // Byline under the gear, on its own backing so it reads over the map:
+        // screenshots of the mod then say what they are and which build made them.
+        var bylineBacking = new NinePatchRect
+        {
+            Name = "BylineBacking",
+            SelfModulate = new Color(0f, 0f, 0f, 0.6f),
+            Texture = ResourceLoader.Load<Texture2D>(
+                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
+            PatchMarginLeft = 12,
+            PatchMarginTop = 12,
+            PatchMarginRight = 12,
+            PatchMarginBottom = 12,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            AnchorLeft = 1f,
+            AnchorRight = 1f,
+            OffsetLeft = -292f,
+            OffsetRight = -24f,
+            OffsetTop = 274f,
+            OffsetBottom = 318f,
+        };
+        var byline = MakeLabel(16, $"{MainFile.ModName} {MainFile.Version} by {MainFile.Author}");
+        byline.HorizontalAlignment = HorizontalAlignment.Center;
+        byline.VerticalAlignment = VerticalAlignment.Center;
+        byline.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        bylineBacking.AddChild(byline);
+        _root.AddChild(bylineBacking);
+
         var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         margin.AddThemeConstantOverride("margin_left", 16);
         margin.AddThemeConstantOverride("margin_right", 16);

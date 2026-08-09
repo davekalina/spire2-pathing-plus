@@ -49,7 +49,7 @@ internal sealed class MapZoom : IDisposable
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
     private readonly Control _tray;
     private readonly MegaLabel _label;
-    private NHotkeyIcon? _hotkeyIcon;
+    private HotkeyGlyph? _hotkeyGlyph;
     private Tween? _tween;
 
     public MapViewMode Mode { get; private set; } = MapViewMode.Normal;
@@ -137,43 +137,22 @@ internal sealed class MapZoom : IDisposable
 
         screen.AddChild(_tray);
 
-        // The native glyph for the hotkey that does the same thing, shown on the
-        // button's left edge only while a controller is driving.
+        // The glyph for the hotkey that does the same thing, on the button's left
+        // edge, only while a controller is driving.
         Guard.Run("Zoom hotkey glyph", () =>
         {
-            _hotkeyIcon = SceneHelper.Instantiate<NHotkeyIcon>("ui/hotkey_icon");
-            _hotkeyIcon.CustomMinimumSize = new Vector2(44, 44);
-            _hotkeyIcon.AnchorTop = _hotkeyIcon.AnchorBottom = 0.5f;
-            _hotkeyIcon.OffsetLeft = -50f;
-            _hotkeyIcon.OffsetRight = -6f;
-            _hotkeyIcon.OffsetTop = -22f;
-            _hotkeyIcon.OffsetBottom = 22f;
-            _hotkeyIcon.MouseFilter = Control.MouseFilterEnum.Ignore;
-            _tray.AddChild(_hotkeyIcon);
-            RefreshHotkeyIcon();
-        });
-
-        // The glyph follows the control scheme live: the player may have opened the
-        // map with a mouse and picked up the pad afterwards.
-        Guard.Run("Watching the control scheme", () =>
-        {
-            if (NControllerManager.Instance is not { } controllers)
-                return;
-            controllers.Connect(NControllerManager.SignalName.ControllerDetected,
-                Callable.From(() => Guard.Run("Controller detected", RefreshHotkeyIcon)));
-            controllers.Connect(NControllerManager.SignalName.MouseDetected,
-                Callable.From(() => Guard.Run("Mouse detected", RefreshHotkeyIcon)));
+            _hotkeyGlyph = new HotkeyGlyph(_tray, Controller.rightTrigger, new Vector2(44, 44));
+            var icon = _hotkeyGlyph.Node;
+            icon.AnchorTop = icon.AnchorBottom = 0.5f;
+            icon.OffsetLeft = -52f;
+            icon.OffsetRight = -8f;
+            icon.OffsetTop = -22f;
+            icon.OffsetBottom = 22f;
         });
     }
 
     /// <summary>Glyph and visibility follow the current control scheme.</summary>
-    public void RefreshHotkeyIcon()
-    {
-        if (_hotkeyIcon is null || !GodotObject.IsInstanceValid(_hotkeyIcon))
-            return;
-        _hotkeyIcon.Visible = NControllerManager.Instance?.IsUsingDirectionalNavigation == true;
-        _hotkeyIcon.UpdateInput(Controller.rightTrigger);
-    }
+    public void RefreshHotkeyIcon() => _hotkeyGlyph?.Refresh();
 
     public void Toggle()
     {

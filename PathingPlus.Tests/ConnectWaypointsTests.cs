@@ -90,4 +90,38 @@ public class ConnectWaypointsTests
     {
         Assert.Empty(PathSolver.ConnectWaypoints(Graph(), "here", Array.Empty<string>()));
     }
+
+    [Fact]
+    public void The_long_way_round_is_culled_in_favour_of_the_direct_one()
+    {
+        // "here" reaches "goal" directly, or by a four-hop detour out to the side —
+        // the map's edge columns, which used to draw over the intended line.
+        var graph = new SpireMapGraph(
+            new GraphNode[]
+            {
+                new("here", 0, "monster"),
+                new("direct", 1, "event"), new("far1", 1, "monster"),
+                new("far2", 2, "monster"), new("far3", 3, "monster"),
+                new("goal", 4, "elite"),
+            },
+            new[]
+            {
+                ("here", "direct"), ("direct", "goal"),
+                ("here", "far1"), ("far1", "far2"), ("far2", "far3"), ("far3", "goal"),
+            });
+
+        var segments = PathSolver.ConnectWaypoints(graph, "here", new[] { "goal" });
+
+        Assert.Single(segments);
+        Assert.Equal(new[] { "here", "direct", "goal" }, segments[0]);
+    }
+
+    [Fact]
+    public void Equally_short_ways_between_one_pair_both_survive()
+    {
+        var segments = PathSolver.ConnectWaypoints(Graph(), "mid", new[] { "top" });
+
+        Assert.Equal(2, segments.Count);
+        Assert.All(segments, s => Assert.Equal(3, s.Count));
+    }
 }

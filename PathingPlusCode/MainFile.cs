@@ -14,8 +14,14 @@ public partial class MainFile : Node
     /// </summary>
     public const string ModId = "PathingPlus";
 
-    /// <summary>Shown in log lines; the manifest name.</summary>
+    /// <summary>Shown in log lines and the in-game byline; the manifest name.</summary>
     public const string ModName = "Pathing Plus";
+
+    /// <summary>Keep in sync with the manifest version. Printed in-game and logged.</summary>
+    public const string Version = "v0.14.0";
+
+    /// <summary>The Steam handle, shown beside the version so screenshots identify themselves.</summary>
+    public const string Author = "realtruegravy";
 
     public static MegaCrit.Sts2.Core.Logging.Logger Logger { get; } =
         new(ModId, MegaCrit.Sts2.Core.Logging.LogType.Generic);
@@ -25,7 +31,6 @@ public partial class MainFile : Node
         new Harmony(ModId).PatchAll();
         PathingPlusCode.Map.PathingOptions.Load();
 
-        // Keep this string in sync with the manifest version.
-        Logger.Info("Pathing Plus v0.13.1 initialized.");
+        Logger.Info($"{ModName} {Version} initialized.");
     }
 }

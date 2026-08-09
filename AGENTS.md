@@ -14,7 +14,7 @@ pipeline work. Those are platform facts. This file is how I want the work done.
 | Display name | Pathing Plus |
 | Installs to | `<game>/mods/PathingPlus/` |
 | Manifest | `PathingPlus.json` |
-| Version is also printed in | `PathingPlusCode/MainFile.cs` |
+| Version is also printed in | `PathingPlusCode/MainFile.cs` (`Version`, shown in the in-game byline under the settings gear) |
 | Gameplay | Informational only; `affects_gameplay` is `false` |
 | Dependencies | None yet |
 
@@ -61,8 +61,10 @@ enumeration entirely: the pins plus the player's current position are waypoints,
 walking forward from each one and stopping at the first waypoint reached yields the
 segments between *adjacent* waypoints (so A→B→C draws two lines, not a third
 redundant A→C). Every way between one pair is returned — that is the auto-pathing
-between placed nodes — and a pair nothing connects contributes nothing, which is what
-lets pins sit on rival branches. Two earlier attempts were wrong and should not be
+between placed nodes — **but only the shortest**: per waypoint pair, longer
+connections are culled, or the map's long way round out to an edge column draws over
+the line the player meant (ties survive, being a real choice). A pair nothing
+connects contributes nothing, which is what lets pins sit on rival branches. Two earlier attempts were wrong and should not be
 reinstated: best-match scoring made a second pin *widen* the picture by re-admitting
 routes that skipped the first, and requiring every pin on one route drew **nothing**
 the moment two pins sat on different branches. Pinnability is still computed from the
@@ -149,7 +151,14 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
   "-600 + row * _distY" current-row formula.
-- Input action: `Controller.rightTrigger` (`controller_right_trigger`).
+- Input actions: `Controller.rightTrigger` (`controller_right_trigger`) for Zoom and
+  `MegaInput.confirm` for the legend.
+- Controller glyphs go through `HotkeyGlyph`, never `NHotkeyIcon.UpdateInput`:
+  `NInputManager.GetHotkeyIcon` only resolves **remappable actions**, so a raw button
+  (the right trigger) returns null and the native icon keeps its placeholder art,
+  silently showing the south face button. `NControllerManager.GetHotkeyIcon` reads
+  the controller config's glyph map and is the fallback that makes raw buttons
+  render as themselves.
 - Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),

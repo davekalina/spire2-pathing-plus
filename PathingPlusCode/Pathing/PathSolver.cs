@@ -79,35 +79,54 @@ public static class PathSolver
         if (waypoints.Count < 2)
             return [];
 
-        var segments = new List<IReadOnlyList<string>>();
-        var seen = new HashSet<string>();
+        var byPair = new Dictionary<(string From, string To), List<IReadOnlyList<string>>>();
         var stack = new List<string>();
+        var found = 0;
 
-        foreach (var from in waypoints
+        var ordered = waypoints
             .OrderBy(id => graph.Node(id).Row)
-            .ThenBy(id => id, StringComparer.Ordinal))
+            .ThenBy(id => id, StringComparer.Ordinal)
+            .ToList();
+        foreach (var from in ordered)
         {
             stack.Clear();
             stack.Add(from);
-            Walk(from);
+            Walk(from, from);
         }
-        return segments;
 
-        void Walk(string id)
+        // Only the shortest way between a given pair survives. Without this the map's
+        // long way round — out to an edge column and back — is just as valid a
+        // connection as the direct one and gets drawn too, which buries the line the
+        // player was actually drawing. Ties are kept: two equally short ways between
+        // the same pair are a real choice, not clutter.
+        return ordered
+            .SelectMany(from => ordered.Select(to => (From: from, To: to)))
+            .Where(byPair.ContainsKey)
+            .SelectMany(pair =>
+            {
+                var paths = byPair[pair];
+                var shortest = paths.Min(p => p.Count);
+                return paths.Where(p => p.Count == shortest);
+            })
+            .ToList();
+
+        void Walk(string from, string id)
         {
-            if (segments.Count >= MaxPaths)
+            if (found >= MaxPaths)
                 return;
             foreach (var next in graph.Successors(id))
             {
                 stack.Add(next);
                 if (waypoints.Contains(next))
                 {
-                    if (seen.Add(string.Join("|", stack)))
-                        segments.Add(stack.ToArray());
+                    if (!byPair.TryGetValue((from, next), out var paths))
+                        byPair[(from, next)] = paths = [];
+                    paths.Add(stack.ToArray());
+                    found++;
                 }
                 else
                 {
-                    Walk(next);
+                    Walk(from, next);
                 }
                 stack.RemoveAt(stack.Count - 1);
             }
