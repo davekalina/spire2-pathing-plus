@@ -173,12 +173,19 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
   "-600 + row * _distY" current-row formula.
-- Input actions: `Controller.rightTrigger` for Zoom, `Controller.lStickPress` to cycle
+- Input actions: `Controller.rightTrigger` for Zoom, `Controller.lStickPress` **and**
+  `MegaInput.peek` (Steam Input commonly binds L3 to peek, so the game's own stick
+  click never fires — the same class of gap as the analog stick) to cycle
   the drawing tools (nothing → quill → eraser → quill, by invoking the screen's own
   private `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed`, which already
   handle stopping and swapping), `MegaInput.confirm` for the legend, and the
   `raw_l_stick_*` axes for the quill. A trigger is an axis, so it needs a held latch
   or one pull fires repeatedly.
+- **Only ever one `NMapDrawingInput` alive.** Each is a node that reads the stick and
+  drives the drawing every frame; two of them fight over the same cursor and line, and
+  the visible symptom is that holding the draw button while steering does nothing.
+  `SingleDrawingToolPatch` stops older siblings as a new tool enters the tree, and the
+  mod's own switch tears down every live tool before building the next.
 - **Invoke those tool handlers deferred.** They free one input node and add another,
   and doing that inside input processing leaves the new node created but never
   entered — the tool then reads as selected while nothing listens, so the switch

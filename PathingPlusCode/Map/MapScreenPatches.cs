@@ -129,6 +129,7 @@ internal static class MapScreenPatches
     /// </summary>
     private static bool _rightTriggerHeld;
     private static bool _stickPressHeld;
+    private static bool _peekHeld;
 
     /// <summary>Switching quill and eraser is the screen's own doing; we just press it.</summary>
     private static readonly MethodInfo? DrawingButtonPressed =
@@ -158,20 +159,70 @@ internal static class MapScreenPatches
 
             // Clicking the left stick cycles the drawing tools: nothing → quill →
             // eraser → quill. Leaving drawing altogether stays with the game's cancel.
-            if (!Pulled(__0, Controller.lStickPress, ref _stickPressHeld) || !Ready(__instance))
+            // Both the game's own stick-click action and `peek` are accepted, because
+            // Steam Input commonly binds L3 to peek and then the game never sees the
+            // stick click at all.
+            var clicked = Pulled(__0, Controller.lStickPress, ref _stickPressHeld);
+            var peeked = Pulled(__0, MegaInput.peek, ref _peekHeld);
+            if ((!clicked && !peeked) || !Ready(__instance))
                 return;
-            var current = DrawingInputField?.GetValue(__instance) as NMapDrawingInput;
-            var next = current?.DrawingMode == DrawingMode.Drawing
-                ? ErasingButtonPressed
-                : DrawingButtonPressed;
-            // Deferred on purpose. Both handlers free one input node and add another,
-            // and doing that inside input processing leaves the new one created but
-            // never entered: the tool reads as selected while nothing is listening,
-            // which is why switching worked once and then went dead.
-            Callable.From(() => Guard.Run("Switching the drawing tool",
-                () => next?.Invoke(__instance, [null]))).CallDeferred();
+
+            var screen = __instance;
+            // Deferred on purpose: the switch frees one input node and adds another,
+            // and the tree cannot be rearranged during input processing — a node added
+            // there is created but never entered, so the tool reads as selected while
+            // nothing listens to it.
+            Callable.From(() => Guard.Run("Switching the drawing tool", () => SwitchTool(screen)))
+                .CallDeferred();
             __instance.GetViewport().SetInputAsHandled();
         });
+
+    /// <summary>
+    /// Swap the quill for the eraser, or start the quill when neither is out.
+    ///
+    /// The game's own handlers are told to build the tool, but the teardown is done
+    /// here first: any input node still parented to the screen is stopped and the
+    /// screen's own reference cleared, so a node that was left behind by an earlier
+    /// switch cannot survive alongside the new one. Two of them alive at once both
+    /// read the stick and both drive the drawing, which is what made a held draw
+    /// button and a moving stick cancel each other out.
+    ///
+    /// The cursor's position carries across, since switching tool is not moving hand.
+    /// </summary>
+    private static void SwitchTool(NMapScreen screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsOpen)
+            return;
+
+        var live = screen.GetChildren().OfType<NMapDrawingInput>()
+            .Where(input => GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion())
+            .ToList();
+        var wantEraser = live.Any(input => input.DrawingMode == DrawingMode.Drawing);
+        var carryOver = live.Select(CursorOf).OfType<Control>().FirstOrDefault()?.GlobalPosition;
+
+        foreach (var input in live)
+            input.StopDrawing();
+        DrawingInputField?.SetValue(screen, null);
+
+        (wantEraser ? ErasingButtonPressed : DrawingButtonPressed)?.Invoke(screen, [null]);
+
+        if (carryOver is not { } position)
+            return;
+        // The new node is added deferred as well, so its cursor is placed a step later.
+        Callable.From(() => Guard.Run("Keeping the quill where it was", () =>
+        {
+            if (!GodotObject.IsInstanceValid(screen))
+                return;
+            var current = screen.GetChildren().OfType<NMapDrawingInput>()
+                .FirstOrDefault(input =>
+                    GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion());
+            if (CursorOf(current) is { } cursor)
+                cursor.GlobalPosition = position;
+        })).CallDeferred();
+    }
+
+    private static Control? CursorOf(Node? input) =>
+        input is null ? null : input.GetNodeOrNull<Control>("%Cursor");
 
     private static bool Ready(NMapScreen screen) =>
         screen.IsOpen && ActiveScreenContext.Instance.IsCurrent(screen);
@@ -244,6 +295,36 @@ internal static class MapScreenPatches
             }
         }
     }
+}
+
+/// <summary>
+/// One drawing tool at a time, whoever started it.
+///
+/// Each tool is a node that reads the stick and drives the drawing every frame, and
+/// the game assumes only one exists — its own buttons stop the previous one before
+/// building the next. A leftover node breaks that assumption in a way that is hard to
+/// read from the screen: two of them fight over the same cursor and the same line, so
+/// holding the draw button while steering does nothing at all. Stopping older
+/// siblings as a new tool enters the tree keeps the invariant no matter which route
+/// created it.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawingInput), nameof(NMapDrawingInput._EnterTree))]
+internal static class SingleDrawingToolPatch
+{
+    [HarmonyPostfix]
+    private static void AfterEnterTree(NMapDrawingInput __instance) =>
+        Guard.Run("Retiring a leftover drawing tool", () =>
+        {
+            if (__instance.GetParent() is not { } parent)
+                return;
+            foreach (var other in parent.GetChildren().OfType<NMapDrawingInput>())
+            {
+                if (other == __instance || !GodotObject.IsInstanceValid(other) ||
+                    other.IsQueuedForDeletion())
+                    continue;
+                other.StopDrawing();
+            }
+        });
 }
 
 /// <summary>
