@@ -137,17 +137,21 @@ internal sealed class MapZoom : IDisposable
 
         screen.AddChild(_tray);
 
-        // The glyph for the hotkey that does the same thing, on the button's left
-        // edge, only while a controller is driving.
+        // The glyph for the hotkey that does the same thing, inside the button on its
+        // left — outside it, the gear sits on top of it — and the label shifts across
+        // to make room, but only while the glyph is actually showing.
         Guard.Run("Zoom hotkey glyph", () =>
         {
-            _hotkeyGlyph = new HotkeyGlyph(_tray, Controller.rightTrigger, new Vector2(44, 44));
+            _hotkeyGlyph = new HotkeyGlyph(_tray, Controller.rightTrigger, new Vector2(40, 40));
             var icon = _hotkeyGlyph.Node;
             icon.AnchorTop = icon.AnchorBottom = 0.5f;
-            icon.OffsetLeft = -52f;
-            icon.OffsetRight = -8f;
-            icon.OffsetTop = -22f;
-            icon.OffsetBottom = 22f;
+            icon.OffsetLeft = 12f;
+            icon.OffsetRight = 52f;
+            icon.OffsetTop = -20f;
+            icon.OffsetBottom = 20f;
+            _hotkeyGlyph.VisibilityChanged += showing => Guard.Run("Zoom label spacing", () =>
+                _label.OffsetLeft = showing ? 52f : 0f);
+            _hotkeyGlyph.Refresh();
         });
     }
 

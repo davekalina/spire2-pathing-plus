@@ -52,17 +52,24 @@ internal sealed class HotkeyGlyph : IDisposable
     /// <summary>Place it like any control; the caller owns the layout.</summary>
     public TextureRect Node => _icon;
 
+    /// <summary>
+    /// Raised after every refresh with whether the glyph is showing, so a caller can
+    /// make room for it — it appears and disappears with the control scheme, and a
+    /// layout that assumes it is always there is wrong half the time.
+    /// </summary>
+    public event Action<bool>? VisibilityChanged;
+
     public void Refresh()
     {
         if (!GodotObject.IsInstanceValid(_icon))
             return;
         var controllers = NControllerManager.Instance;
         _icon.Visible = controllers?.IsUsingDirectionalNavigation == true;
-        if (!_icon.Visible)
-            return;
-        // Action first (it honours rebinding), then the raw button.
-        _icon.Texture = NInputManager.Instance?.GetHotkeyIcon(_hotkey)
-            ?? controllers?.GetHotkeyIcon(_hotkey);
+        if (_icon.Visible)
+            // Action first (it honours rebinding), then the raw button.
+            _icon.Texture = NInputManager.Instance?.GetHotkeyIcon(_hotkey)
+                ?? controllers?.GetHotkeyIcon(_hotkey);
+        VisibilityChanged?.Invoke(_icon.Visible);
     }
 
     public void Dispose()
