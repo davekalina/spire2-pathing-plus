@@ -145,6 +145,10 @@ internal static class MapScreenPatches
     private static readonly FieldInfo? DrawingInputField =
         AccessTools.Field(typeof(NMapScreen), "_drawingInput");
 
+    /// <summary>Keeps the on-screen quill and eraser buttons showing the live tool.</summary>
+    private static readonly MethodInfo? UpdateButtonStates =
+        AccessTools.Method(typeof(NMapScreen), "UpdateDrawingButtonStates");
+
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NMapScreen._Input))]
     private static void AfterInput(NMapScreen __instance, InputEvent __0) =>
@@ -180,12 +184,13 @@ internal static class MapScreenPatches
     /// <summary>
     /// Swap the quill for the eraser, or start the quill when neither is out.
     ///
-    /// The game's own handlers are told to build the tool, but the teardown is done
-    /// here first: any input node still parented to the screen is stopped and the
-    /// screen's own reference cleared, so a node that was left behind by an earlier
-    /// switch cannot survive alongside the new one. Two of them alive at once both
-    /// read the stick and both drive the drawing, which is what made a held draw
-    /// button and a moving stick cancel each other out.
+    /// The tool is built here rather than by asking the screen's own buttons. Those
+    /// handlers stop the old tool and start the new one in a single call, and the
+    /// drawings' mode is set in the middle of it — so any teardown that lands late,
+    /// from a straggler being freed to the mod's own tidying, quietly resets the mode
+    /// to None and the new tool then throws "not currently in a drawing mode" on its
+    /// first stroke. Doing the steps in the open lets the mode be asserted **last**,
+    /// after the node is in the tree, where nothing else can undo it.
     ///
     /// The cursor's position carries across, since switching tool is not moving hand.
     /// </summary>
@@ -197,30 +202,34 @@ internal static class MapScreenPatches
         var live = screen.GetChildren().OfType<NMapDrawingInput>()
             .Where(input => GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion())
             .ToList();
-        var wantEraser = live.Any(input => input.DrawingMode == DrawingMode.Drawing);
+        var wanted = live.Any(input => input.DrawingMode == DrawingMode.Drawing)
+            ? DrawingMode.Erasing
+            : DrawingMode.Drawing;
         var carryOver = live.Select(CursorOf).OfType<Control>().FirstOrDefault()?.GlobalPosition;
 
         foreach (var input in live)
             input.StopDrawing();
         DrawingInputField?.SetValue(screen, null);
 
-        (wantEraser ? ErasingButtonPressed : DrawingButtonPressed)?.Invoke(screen, [null]);
-        Diag.Log($"tool switch -> {(wantEraser ? "eraser" : "quill")}, " +
-            $"mode now {screen.Drawings.GetLocalDrawingMode()}, retired {live.Count}");
+        var tool = NMapDrawingInput.Create(screen.Drawings, wanted);
+        tool.Connect(NMapDrawingInput.SignalName.Finished, Callable.From(() =>
+            Guard.Run("Clearing the finished drawing tool", () =>
+            {
+                DrawingInputField?.SetValue(screen, null);
+                UpdateButtonStates?.Invoke(screen, null);
+            })));
+        screen.AddChild(tool);
+        DrawingInputField?.SetValue(screen, tool);
 
-        if (carryOver is not { } position)
-            return;
-        // The new node is added deferred as well, so its cursor is placed a step later.
-        Callable.From(() => Guard.Run("Keeping the quill where it was", () =>
-        {
-            if (!GodotObject.IsInstanceValid(screen))
-                return;
-            var current = screen.GetChildren().OfType<NMapDrawingInput>()
-                .FirstOrDefault(input =>
-                    GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion());
-            if (CursorOf(current) is { } cursor)
-                cursor.GlobalPosition = position;
-        })).CallDeferred();
+        // Last word on the mode, once the node is live and every teardown has run.
+        screen.Drawings.SetDrawingModeLocal(wanted);
+        UpdateButtonStates?.Invoke(screen, null);
+
+        if (carryOver is { } position && CursorOf(tool) is { } cursor)
+            cursor.GlobalPosition = position;
+
+        Diag.Log($"tool switch -> {wanted}, mode now {screen.Drawings.GetLocalDrawingMode()}, " +
+            $"retired {live.Count}, cursor {(carryOver is null ? "fresh" : "carried")}");
     }
 
     private static Control? CursorOf(Node? input) =>
@@ -297,48 +306,6 @@ internal static class MapScreenPatches
             }
         }
     }
-}
-
-/// <summary>
-/// One drawing tool at a time, whoever started it.
-///
-/// Each tool is a node that reads the stick and drives the drawing every frame, and
-/// the game assumes only one exists — its own buttons stop the previous one before
-/// building the next. A leftover node breaks that assumption in a way that is hard to
-/// read from the screen: two of them fight over the same cursor and the same line, so
-/// holding the draw button while steering does nothing at all. Stopping older
-/// siblings as a new tool enters the tree keeps the invariant no matter which route
-/// created it.
-/// </summary>
-[HarmonyPatch(typeof(NMapDrawingInput), nameof(NMapDrawingInput._EnterTree))]
-internal static class SingleDrawingToolPatch
-{
-    [HarmonyPostfix]
-    private static void AfterEnterTree(NMapDrawingInput __instance) =>
-        Guard.Run("Retiring a leftover drawing tool", () =>
-        {
-            if (__instance.GetParent() is not { } parent)
-                return;
-            var retired = false;
-            foreach (var other in parent.GetChildren().OfType<NMapDrawingInput>())
-            {
-                if (other == __instance || !GodotObject.IsInstanceValid(other) ||
-                    other.IsQueuedForDeletion())
-                    continue;
-                other.StopDrawing();
-                retired = true;
-            }
-
-            // StopDrawing sets the drawings' mode to None, and the tool that just
-            // arrived had already set it to its own. Retiring a straggler therefore
-            // wipes the new tool's mode a moment after it was chosen, leaving a quill
-            // or eraser on screen that draws and erases nothing. Say it again.
-            if (retired && NMapScreen.Instance is { } screen)
-            {
-                screen.Drawings.SetDrawingModeLocal(__instance.DrawingMode);
-                Diag.Log($"retired a leftover tool; mode reasserted as {__instance.DrawingMode}");
-            }
-        });
 }
 
 /// <summary>

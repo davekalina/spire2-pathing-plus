@@ -3,7 +3,7 @@
   "name": "Pathing Plus",
   "author": "realtruegravy",
   "description": "Pin map nodes to see and compare the routes that reach them, with a legend counting what each route holds.",
-  "version": "v0.17.3",
+  "version": "v0.17.4",
   "min_game_version": "0.110.1",
   "has_pck": false,
   "has_dll": true,

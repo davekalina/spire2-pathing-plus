@@ -181,22 +181,18 @@ Game coupling that a game update can move (verify after every update):
   handle stopping and swapping), `MegaInput.confirm` for the legend, and the
   `raw_l_stick_*` axes for the quill. A trigger is an axis, so it needs a held latch
   or one pull fires repeatedly.
-- **Only ever one `NMapDrawingInput` alive.** Each is a node that reads the stick and
-  drives the drawing every frame; two of them fight over the same cursor and line, and
-  the visible symptom is that holding the draw button while steering does nothing.
-  `SingleDrawingToolPatch` stops older siblings as a new tool enters the tree, and the
-  mod's own switch tears down every live tool before building the next. **Re-assert
-  the mode after retiring one**: `StopDrawing` sets the drawings' mode to `None`, so
-  stopping a straggler moments after the new tool set its own mode wipes it — leaving
-  a quill or eraser on screen that draws and erases nothing, which reads exactly like
-  a dead switch.
-- **Invoke those tool handlers deferred.** They free one input node and add another,
-  and doing that inside input processing leaves the new node created but never
-  entered — the tool then reads as selected while nothing listens, so the switch
-  appears to work once and then goes dead, and the eraser cannot erase. For the same
-  reason, decide the next tool from the screen's `_drawingInput` field rather than
-  `Drawings.GetLocalDrawingMode()`: `NMapDrawingInput.Create` sets the drawings' mode
-  before the node is in the tree, so that mode lies about a tool that never started.
+- **Build the tool switch by hand, and set the mode last.** `SwitchTool` stops every
+  live `NMapDrawingInput`, clears the screen's `_drawingInput`, creates and adds the
+  new tool itself, then calls `SetDrawingModeLocal` **after** the node is in the tree.
+  The screen's own `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed` are not
+  used: they stop the old tool and start the new one in one call with the mode set in
+  the middle, so any teardown landing late resets the mode to `None` and the new tool
+  throws *"Player 1 is not currently in a drawing mode"* on its first stroke — a quill
+  that draws nothing and an eraser that erases nothing. Do not add a patch that stops
+  "leftover" tools on `_EnterTree`; that was tried and it clobbered the mode of the
+  tool that had just arrived, breaking the game's own buttons too.
+- **Do it deferred.** The switch frees and adds nodes, which cannot happen during
+  input processing: a node added there is created but never entered.
 - The quill's cursor moves in **screen** space at a fixed 700 px/s, which crosses
   proportionally more map as the zoom shrinks it. `QuillSpeedPatch` measures the step
   the game just took and rescales it by `TheMap.Scale`, covering every input source
