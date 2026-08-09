@@ -25,7 +25,7 @@ internal sealed class OptionsPanel : IDisposable
     /// <summary>Each row's way of re-reading its option, for the reset button.</summary>
     private readonly List<Action> _refreshers = [];
 
-    public OptionsPanel(Control screen)
+    public OptionsPanel(Control screen, Control toolbar)
     {
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
@@ -48,15 +48,15 @@ internal sealed class OptionsPanel : IDisposable
             MouseFilter = Control.MouseFilterEnum.Stop,
             AnchorLeft = 1f,
             AnchorRight = 1f,
-            // Left of the gear, and left of the widest the legend gets, so the two
-            // never share screen space.
+            // Left of the toolbar, and left of the widest the legend gets, so the
+            // panel never shares screen space with either.
             OffsetLeft = -784f,
             OffsetRight = -444f,
-            OffsetTop = 206f,
-            OffsetBottom = 662f,
+            OffsetTop = 190f,
+            OffsetBottom = 646f,
         };
 
-        // Beside the Zoom tray (which occupies right-edge offsets -220..-48 at y 196).
+        // First slot in the toolbar's button row, left of Zoom.
         _gear = new TextureRect
         {
             Name = "OptionsGear",
@@ -66,12 +66,10 @@ internal sealed class OptionsPanel : IDisposable
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             MouseFilter = Control.MouseFilterEnum.Stop,
             Modulate = GearIdle,
-            AnchorLeft = 1f,
-            AnchorRight = 1f,
-            OffsetLeft = -292f,
-            OffsetRight = -236f,
-            OffsetTop = 206f,
-            OffsetBottom = 262f,
+            Position = new Vector2(
+                MapToolbar.GearLeft,
+                MapToolbar.ButtonRowTop + (MapToolbar.ButtonHeight - MapToolbar.GearSize) / 2f),
+            Size = new Vector2(MapToolbar.GearSize, MapToolbar.GearSize),
         };
         _gear.MouseEntered += () => Guard.Run("Gear hover", () => _gear.Modulate = Colors.White);
         _gear.MouseExited += () => Guard.Run("Gear unhover", () =>
@@ -87,34 +85,7 @@ internal sealed class OptionsPanel : IDisposable
             if (_dropdown.Visible)
                 _root.MoveToFront();
         });
-        _root.AddChild(_gear);
-
-        // Byline under the gear, on its own backing so it reads over the map:
-        // screenshots of the mod then say what they are and which build made them.
-        var bylineBacking = new NinePatchRect
-        {
-            Name = "BylineBacking",
-            SelfModulate = new Color(0f, 0f, 0f, 0.6f),
-            Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
-            PatchMarginLeft = 12,
-            PatchMarginTop = 12,
-            PatchMarginRight = 12,
-            PatchMarginBottom = 12,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-            AnchorLeft = 1f,
-            AnchorRight = 1f,
-            OffsetLeft = -292f,
-            OffsetRight = -24f,
-            OffsetTop = 274f,
-            OffsetBottom = 318f,
-        };
-        var byline = MakeLabel(16, $"{MainFile.ModName} {MainFile.Version} by {MainFile.Author}");
-        byline.HorizontalAlignment = HorizontalAlignment.Center;
-        byline.VerticalAlignment = VerticalAlignment.Center;
-        byline.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        bylineBacking.AddChild(byline);
-        _root.AddChild(bylineBacking);
+        toolbar.AddChild(_gear);
 
         var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         margin.AddThemeConstantOverride("margin_left", 16);

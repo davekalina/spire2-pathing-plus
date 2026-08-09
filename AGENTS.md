@@ -53,7 +53,11 @@ advancing a floor along it shortens every recomputed route by its head, so the t
 IS the same plan; deviation clears it naturally because the new position is no
 longer on the stored route.
 
-**Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
+`MapToolbar` is the mod's corner of the screen: one dark nine-patch tray holding the
+settings gear, the Zoom button, and the byline, with the slot geometry as constants
+the other two read. They were three loose widgets before and read as unrelated.
+
+**Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Path Mode** has three settings.
 *Drawing* is the default; *Auto* is the behaviour described above. *Manual* and *Drawing* share the

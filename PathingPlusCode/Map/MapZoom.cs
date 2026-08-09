@@ -71,7 +71,9 @@ internal sealed class MapZoom : IDisposable
             RefreshHotkeyIcon();
     }
 
-    public MapZoom(NMapScreen screen, Control theMap, Func<IReadOnlyList<Vector2>> nodeCenters)
+    public MapZoom(
+        NMapScreen screen, Control theMap, Control toolbar,
+        Func<IReadOnlyList<Vector2>> nodeCenters)
     {
         _screen = screen;
         _theMap = theMap;
@@ -79,14 +81,13 @@ internal sealed class MapZoom : IDisposable
 
         // The Compendium tile art, so this reads as a real button and not floating
         // text — same background, expand, and stretch as compendium_bottom_button.
-        _tray = new Control { Name = "PathingPlusZoomTray" };
-        _tray.AnchorLeft = _tray.AnchorRight = 1f;
-        _tray.OffsetLeft = -220f;
-        _tray.OffsetRight = -48f;
-        // Below the top bar AND the debug version/modded readout in the corner.
-        _tray.OffsetTop = 196f;
-        _tray.OffsetBottom = 272f;
-        _tray.GrowHorizontal = Control.GrowDirection.Begin;
+        // It sits in the toolbar's button row beside the gear.
+        _tray = new Control
+        {
+            Name = "PathingPlusZoomButton",
+            Position = new Vector2(MapToolbar.ZoomLeft, MapToolbar.ButtonRowTop),
+            Size = new Vector2(MapToolbar.ZoomWidth, MapToolbar.ButtonHeight),
+        };
 
         var background = new TextureRect
         {
@@ -135,22 +136,22 @@ internal sealed class MapZoom : IDisposable
                 Toggle();
         });
 
-        screen.AddChild(_tray);
+        toolbar.AddChild(_tray);
 
         // The glyph for the hotkey that does the same thing, inside the button on its
-        // left — outside it, the gear sits on top of it — and the label shifts across
-        // to make room, but only while the glyph is actually showing.
+        // left, with the label shifting across to make room — but only while the
+        // glyph is actually showing, so a mouse player keeps a centred label.
         Guard.Run("Zoom hotkey glyph", () =>
         {
-            _hotkeyGlyph = new HotkeyGlyph(_tray, Controller.rightTrigger, new Vector2(40, 40));
+            _hotkeyGlyph = new HotkeyGlyph(_tray, Controller.rightTrigger, new Vector2(38, 38));
             var icon = _hotkeyGlyph.Node;
             icon.AnchorTop = icon.AnchorBottom = 0.5f;
-            icon.OffsetLeft = 12f;
-            icon.OffsetRight = 52f;
-            icon.OffsetTop = -20f;
-            icon.OffsetBottom = 20f;
+            icon.OffsetLeft = 10f;
+            icon.OffsetRight = 48f;
+            icon.OffsetTop = -19f;
+            icon.OffsetBottom = 19f;
             _hotkeyGlyph.VisibilityChanged += showing => Guard.Run("Zoom label spacing", () =>
-                _label.OffsetLeft = showing ? 52f : 0f);
+                _label.OffsetLeft = showing ? 48f : 0f);
             _hotkeyGlyph.Refresh();
         });
     }

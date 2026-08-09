@@ -27,6 +27,7 @@ internal sealed class PathingView : IDisposable
     private readonly NMapScreen _screen;
     private readonly PathOverlay _overlay;
     private readonly RouteLegendPanel _legend;
+    private readonly MapToolbar _toolbar;
     private readonly OptionsPanel _options;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
@@ -53,7 +54,8 @@ internal sealed class PathingView : IDisposable
         var points = screen.GetNode<Control>("TheMap/Points");
         _overlay = new PathOverlay(theMap, points);
         _navigator = new NodeNavigator(screen);
-        _zoom = new MapZoom(screen, theMap, NodeCenters);
+        _toolbar = new MapToolbar(screen);
+        _zoom = new MapZoom(screen, theMap, _toolbar.Root, NodeCenters);
         // Zoomed out is the controller mode: the whole map is visible, scrolling is
         // frozen, and the d-pad walks the node grid with a gold cursor ring. The
         // rotated view re-wires the grid so right means bossward, and the node icons
@@ -100,7 +102,7 @@ internal sealed class PathingView : IDisposable
             else
                 _overlay.HideCursor();
         });
-        _options = new OptionsPanel(screen);
+        _options = new OptionsPanel(screen, _toolbar.Root);
         PathingOptions.Changed += OnOptionsChanged;
         _screen.Closed += OnScreenClosed;
     }
@@ -157,6 +159,7 @@ internal sealed class PathingView : IDisposable
     public void OnOpened()
     {
         _zoom.Reset();
+        _toolbar.SetVisible(true);
         _zoom.SetButtonVisible(true);
         _legend.SetShellVisible(true);
         _options.SetShellVisible(true);
@@ -502,6 +505,7 @@ internal sealed class PathingView : IDisposable
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
         _options.Dispose();
+        _toolbar.Dispose();
         _navigator.Dispose();
         _zoom.Dispose();
         _overlay.Dispose();
@@ -528,7 +532,7 @@ internal sealed class PathingView : IDisposable
         // linger over combat and the settings menu.
         _legend.SetShellVisible(false);
         _options.SetShellVisible(false);
-        _zoom.SetButtonVisible(false);
+        _toolbar.SetVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });
 
