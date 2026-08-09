@@ -29,6 +29,7 @@ internal sealed class PathingView : IDisposable
     private readonly RouteLegendPanel _legend;
     private readonly MapToolbar _toolbar;
     private readonly OptionsPanel _options;
+    private readonly HelpTip _help;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
@@ -106,6 +107,7 @@ internal sealed class PathingView : IDisposable
                 _overlay.HideCursor();
         });
         _options = new OptionsPanel(screen, _toolbar.Root);
+        _help = new HelpTip(screen, _toolbar.Root);
         PathingOptions.Changed += OnOptionsChanged;
         _screen.Closed += OnScreenClosed;
     }
@@ -166,6 +168,7 @@ internal sealed class PathingView : IDisposable
         _zoom.SetButtonVisible(true);
         _legend.SetShellVisible(true);
         _options.SetShellVisible(true);
+        _help.SetShellVisible(true);
         Refresh();
     }
 
@@ -518,6 +521,7 @@ internal sealed class PathingView : IDisposable
         PathingOptions.Changed -= OnOptionsChanged;
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
+        _help.Dispose();
         _options.Dispose();
         _toolbar.Dispose();
         _navigator.Dispose();
@@ -546,6 +550,7 @@ internal sealed class PathingView : IDisposable
         // linger over combat and the settings menu.
         _legend.SetShellVisible(false);
         _options.SetShellVisible(false);
+        _help.SetShellVisible(false);
         _toolbar.SetVisible(false);
         _overlay.SetHighlight(_lockedRoute);
     });

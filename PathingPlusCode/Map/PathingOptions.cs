@@ -4,6 +4,16 @@ using System.Text.Json;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
+/// <summary>How big the ring around a pinned node is drawn, if at all.</summary>
+internal enum MarkerSize
+{
+    /// <summary>No ring. The drawn trail already says where the plan goes.</summary>
+    None,
+
+    Small,
+    Regular,
+}
+
 /// <summary>How the mod turns pins into drawn routes.</summary>
 internal enum PathMode
 {
@@ -33,8 +43,11 @@ internal static class PathingOptions
     /// <summary>True while routes should run all the way to the boss.</summary>
     public static bool AutoPath => Mode == PathMode.Auto;
 
-    /// <summary>Draw pin rings at 75%, to tell them apart from the game's own stamps.</summary>
-    public static bool SmallMarkers { get; set; } = true;
+    /// <summary>
+    /// The ring drawn around a pinned node. Off by default: in Drawing mode the
+    /// stroke itself shows the plan, and a ring on every node it touched is noise.
+    /// </summary>
+    public static MarkerSize Markers { get; set; } = MarkerSize.None;
 
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
@@ -70,7 +83,7 @@ internal static class PathingOptions
     public static void ResetDefaults()
     {
         Mode = PathMode.Drawing;
-        SmallMarkers = true;
+        Markers = MarkerSize.None;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -102,7 +115,11 @@ internal static class PathingOptions
         public bool? AutoPath { get; set; }
 
         public string? Mode { get; set; }
+
+        /// <summary>Written before markers could be turned off; a true reads as Small.</summary>
         public bool? SmallMarkers { get; set; }
+
+        public string? Markers { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -126,7 +143,9 @@ internal static class PathingOptions
         Mode = Enum.TryParse<PathMode>(saved.Mode, out var mode) ? mode
             : saved.AutoPath is { } autoPath ? autoPath ? PathMode.Auto : PathMode.Manual
             : Mode;
-        SmallMarkers = saved.SmallMarkers ?? SmallMarkers;
+        Markers = Enum.TryParse<MarkerSize>(saved.Markers, out var markers) ? markers
+            : saved.SmallMarkers is { } small ? small ? MarkerSize.Small : MarkerSize.Regular
+            : Markers;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -142,7 +161,7 @@ internal static class PathingOptions
         File.WriteAllText(FilePath, JsonSerializer.Serialize(new Saved
         {
             Mode = Mode.ToString(),
-            SmallMarkers = SmallMarkers,
+            Markers = Markers.ToString(),
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,

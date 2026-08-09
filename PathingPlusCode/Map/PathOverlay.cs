@@ -150,10 +150,15 @@ internal sealed class PathOverlay : IDisposable
             ring.QueueFree();
         _pinRings.Clear();
 
+        if (PathingOptions.Markers is MarkerSize.None)
+            return;
+
+        var scale = PathingOptions.Markers is MarkerSize.Small
+            ? PinRingScale * 0.75f
+            : PinRingScale;
         foreach (var center in centers)
         {
-            var ring = MakeInkRing(center, PinInk,
-                PathingOptions.SmallMarkers ? PinRingScale * 0.75f : PinRingScale);
+            var ring = MakeInkRing(center, PinInk, scale);
             _pinRings.Add(ring);
             _pinLayer.AddChild(ring);
         }

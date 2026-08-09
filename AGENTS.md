@@ -53,21 +53,34 @@ advancing a floor along it shortens every recomputed route by its head, so the t
 IS the same plan; deviation clears it naturally because the new position is no
 longer on the stored route.
 
-`MapToolbar` is the mod's corner of the screen: one tray holding the settings gear,
-the view button, and the byline, with the slot geometry as constants the other two
-read. Its face is the Compendium's own card panel
+`MapToolbar` is the mod's corner of the screen: one tray holding the help badge, the
+settings gear, the view button, and the byline, with the slot geometry as constants
+the other three read. Its face is the Compendium's own card panel
 (`common_ui/submenu_panel_short.png`, portrait art) built at swapped dimensions and
 turned 90° — rotation about the top-left corner sends local (x, y) to (−y, x), so the
 node starts at the tray's right edge for the turned rectangle to land on the tray.
 The view button wears the pause menu's face (`reward_screen/reward_item_button.png`
 plus the `hsv` shader at s 0.8 / v 0.9) and its lettering, and **names the next
-action rather than the current state**: Zoom Out → Rotate → Zoom In.
+action rather than the current state**: Zoom Out → Rotate → Zoom In. The byline is
+pale lettering over a dark outline and drop shadow rather than dark ink on the
+parchment — the panel's grain eats dark text at that size.
 
 The settings panel hangs directly beneath the toolbar on the same right edge, wearing
 the same card art upright, and any click outside it dismisses it (a full-rect catcher
-added before the panel, alive only while it is open). Path Mode is a pull-down built
-here rather than the native `settings_dropdown` scene, whose root is scriptless — its
+added before the panel, alive only while it is open). Its height follows
+`_rows.GetCombinedMinimumSize()`, so folding a section away takes the parchment with
+it. Path Mode and Path Markers are pull-downs built here (`AddDropdown<T>`, any enum)
+rather than the native `settings_dropdown` scene, whose root is scriptless — its
 behaviour lives in the settings screen, so it cannot be instantiated as a control.
+Everything but those two lives under a collapsible **Advanced** heading.
+
+`HelpTip` is the **?** badge left of the gear: the map's own hand-inked circle
+(`map_circle_4`) with a "?" over it, showing a parchment panel of instructions on
+hover, pinned open by a click. It exists because the mod repurposes controls the game
+already taught — the quill, the eraser, Clear Drawings — so nothing on screen would
+otherwise say they now mean something different. Its text is laid out **absolutely,
+not in a container**: an autowrapping `Label` reports a near-zero minimum width, so
+inside a `VBoxContainer` it collapses to one word per line.
 
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
@@ -109,7 +122,9 @@ rival branches. Two earlier attempts were wrong and should not be
 reinstated: best-match scoring made a second pin *widen* the picture by re-admitting
 routes that skipped the first, and requiring every pin on one route drew **nothing**
 the moment two pins sat on different branches. Pinnability is still computed from the
-full routes, so every node ahead stays reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
+full routes, so every node ahead stays reachable. **Path Markers** picks the pin ring:
+*None* (the default — in Drawing mode the stroke already says where the plan goes, and
+a ring on every node it touched is noise), *Small* (75%), or *Regular*. Sliders expose the dash
 geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
 `RouteSeparation`) and the landscape framing (`LandscapeFit`, `LandscapeZoom`,
 `LandscapeShiftX/Y`, re-fitted live through `MapZoom.Reapply`) for live tuning. The
@@ -235,7 +250,10 @@ Game coupling that a game update can move (verify after every update):
   `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),
   `images/atlases/compressed.sprites/map/map_dot.tres`,
   `images/atlases/compressed.sprites/map/map_circle_4.tres`,
-  `images/packed/common_ui/submenu_compendium_button.png` (the Zoom button tile),
+  `images/packed/common_ui/submenu_panel_short.png` (the toolbar tray, the settings
+  panel, and the help panel), `images/ui/reward_screen/reward_item_button.png` plus
+  `hsv.gdshader` (the view button's face),
+  `images/atlases/ui_atlas.sprites/top_bar/top_bar_settings.tres` (the gear),
   `images/ui/tiny_nine_patch.png`, and the `StsColors` palette.
 - Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
   [-600, 1800] clamp range from `UpdateScrollPosition`.
@@ -256,9 +274,11 @@ Game coupling that a game update can move (verify after every update):
 - The Zoom button: label states, its Right Trigger glyph (controller only), full-map
   framing at any act size, drag/wheel while zoomed, and the snap back to the
   current row.
-- The settings gear and its panel: every toggle and slider, live redraw, persistence
-  across restarts, and manual (Auto Path off) planning with zero, one, and several
-  pins.
+- The settings gear and its panel: both pull-downs and every slider, the Advanced
+  fold and the panel resizing with it, live redraw, persistence across restarts, and
+  manual (Auto Path off) planning with zero, one, and several pins.
+- The help badge: hover shows and unhover hides the panel, a click pins it open, and
+  the text neither overruns the parchment nor wraps a word per line.
 - Controller mode: the Right Trigger hotkey, all-node focus wiring and its
   restoration, the gold cursor ring, cursor retention across pin presses,
   select-to-pin versus select-to-travel, and the frozen native scroll/mouse

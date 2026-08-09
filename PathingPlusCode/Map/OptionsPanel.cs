@@ -18,11 +18,15 @@ internal sealed class OptionsPanel : IDisposable
     private static readonly Color GearIdle = new(1f, 1f, 1f, 0.6f);
 
     private const float PanelWidth = 372f;
-    private const float PanelHeight = 500f;
+
+    /// <summary>Where the panel hangs from, and the parchment border the rows sit inside.</summary>
+    private const float PanelTop = 336f;
+    private const float PanelPadding = 60f;
 
     private readonly Control _root;
     private readonly Control _catcher;
     private readonly Control _panel;
+    private readonly VBoxContainer _rows;
     private readonly TextureRect _gear;
     private readonly Font? _font;
 
@@ -63,8 +67,8 @@ internal sealed class OptionsPanel : IDisposable
             AnchorRight = 1f,
             OffsetLeft = -(PanelWidth + 24f),
             OffsetRight = -24f,
-            OffsetTop = 336f,
-            OffsetBottom = 336f + PanelHeight,
+            OffsetTop = PanelTop,
+            OffsetBottom = PanelTop + 240f,
             GrowHorizontal = Control.GrowDirection.Begin,
         };
         var parchment = new TextureRect
@@ -113,37 +117,41 @@ internal sealed class OptionsPanel : IDisposable
         margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _panel.AddChild(margin);
 
-        var rows = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        rows.AddThemeConstantOverride("separation", 4);
-        margin.AddChild(rows);
+        _rows = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _rows.AddThemeConstantOverride("separation", 4);
+        margin.AddChild(_rows);
 
-        AddModeDropdown(rows);
-        AddToggle(rows, "Small Path Markers",
-            () => PathingOptions.SmallMarkers, v => PathingOptions.SmallMarkers = v);
+        AddDropdown(_rows, "Path Mode",
+            () => PathingOptions.Mode, v => PathingOptions.Mode = v);
+        AddDropdown(_rows, "Path Markers",
+            () => PathingOptions.Markers, v => PathingOptions.Markers = v);
 
-        AddSpacer(rows);
-        AddSlider(rows, "Thickness", 0.5f, 4f, 0.1f,
+        // Line-drawing and framing numbers, folded away: they were tuned once and are
+        // no use during a run, but they crowded out the two settings that are.
+        AddSpacer(_rows);
+        var advanced = AddSection(_rows, "Advanced");
+        AddSlider(advanced, "Thickness", 0.5f, 4f, 0.1f,
             () => PathingOptions.DashWidth, v => PathingOptions.DashWidth = v);
-        AddSlider(rows, "Dash Length", 0.5f, 4f, 0.1f,
+        AddSlider(advanced, "Dash Length", 0.5f, 4f, 0.1f,
             () => PathingOptions.DashLength, v => PathingOptions.DashLength = v);
-        AddSlider(rows, "Length Jitter", 0f, 2f, 0.1f,
+        AddSlider(advanced, "Length Jitter", 0f, 2f, 0.1f,
             () => PathingOptions.DashLengthVariance, v => PathingOptions.DashLengthVariance = v);
-        AddSlider(rows, "Spacing", 6f, 30f, 1f,
+        AddSlider(advanced, "Spacing", 6f, 30f, 1f,
             () => PathingOptions.DashSpacing, v => PathingOptions.DashSpacing = v);
-        AddSlider(rows, "Route Gap", 0f, 24f, 1f,
+        AddSlider(advanced, "Route Gap", 0f, 24f, 1f,
             () => PathingOptions.RouteSeparation, v => PathingOptions.RouteSeparation = v);
 
-        AddSpacer(rows);
-        AddSlider(rows, "Wide Fit", 0.5f, 1f, 0.01f,
+        AddSpacer(advanced);
+        AddSlider(advanced, "Wide Fit", 0.5f, 1f, 0.01f,
             () => PathingOptions.LandscapeFit, v => PathingOptions.LandscapeFit = v);
-        AddSlider(rows, "Wide Zoom", 0.6f, 1.6f, 0.05f,
+        AddSlider(advanced, "Wide Zoom", 0.6f, 1.6f, 0.05f,
             () => PathingOptions.LandscapeZoom, v => PathingOptions.LandscapeZoom = v);
-        AddSlider(rows, "Wide Shift X", -400f, 400f, 10f,
+        AddSlider(advanced, "Wide Shift X", -400f, 400f, 10f,
             () => PathingOptions.LandscapeShiftX, v => PathingOptions.LandscapeShiftX = v);
-        AddSlider(rows, "Wide Shift Y", -300f, 300f, 10f,
+        AddSlider(advanced, "Wide Shift Y", -300f, 300f, 10f,
             () => PathingOptions.LandscapeShiftY, v => PathingOptions.LandscapeShiftY = v);
 
-        AddSpacer(rows);
+        AddSpacer(_rows);
         var reset = MakeLabel(17, "Reset to defaults");
         reset.MouseFilter = Control.MouseFilterEnum.Stop;
         reset.Modulate = new Color(1f, 1f, 1f, 0.75f);
@@ -157,10 +165,11 @@ internal sealed class OptionsPanel : IDisposable
                 refresh();
             PathingOptions.Notify();
         });
-        rows.AddChild(reset);
+        _rows.AddChild(reset);
 
         _root.AddChild(_panel);
         screen.AddChild(_root);
+        ResizePanel();
     }
 
     /// <summary>Hidden with the map screen, like every other panel this mod adds.</summary>
@@ -186,6 +195,14 @@ internal sealed class OptionsPanel : IDisposable
             _root.MoveToFront();
     }
 
+    /// <summary>
+    /// The panel follows its contents, so folding a section away takes the parchment
+    /// with it instead of leaving an empty card hanging under the gear.
+    /// </summary>
+    private void ResizePanel() =>
+        _panel.OffsetBottom = PanelTop
+            + Math.Max(200f, _rows.GetCombinedMinimumSize().Y + PanelPadding);
+
     private static void AddSpacer(Container into) => into.AddChild(new Control
     {
         CustomMinimumSize = new Vector2(0, 8),
@@ -193,11 +210,12 @@ internal sealed class OptionsPanel : IDisposable
     });
 
     /// <summary>
-    /// Path Mode as a proper pull-down: the current choice with the alternatives
-    /// tucked underneath until asked for, rather than a row that has to be clicked
-    /// blindly until the wanted mode comes round.
+    /// A choice as a proper pull-down: the current value with the alternatives tucked
+    /// underneath until asked for, rather than a row that has to be clicked blindly
+    /// until the wanted one comes round.
     /// </summary>
-    private void AddModeDropdown(Container into)
+    private void AddDropdown<T>(Container into, string name, Func<T> get, Action<T> set)
+        where T : struct, Enum
     {
         var options = new VBoxContainer
         {
@@ -209,35 +227,37 @@ internal sealed class OptionsPanel : IDisposable
         var header = MakeLabel(20, "");
         header.MouseFilter = Control.MouseFilterEnum.Stop;
         void RenderHeader() =>
-            header.Text = $"Path Mode: {PathingOptions.Mode}  {(options.Visible ? "▲" : "▼")}";
-        header.GuiInput += inputEvent => Guard.Run("Opening the path mode list", () =>
+            header.Text = $"{name}: {get()}  {(options.Visible ? "▲" : "▼")}";
+        header.GuiInput += inputEvent => Guard.Run($"Opening the {name} list", () =>
         {
             if (inputEvent is not InputEventMouseButton
                 { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
             options.Visible = !options.Visible;
             RenderHeader();
+            ResizePanel();
         });
         into.AddChild(header);
 
-        foreach (var mode in Enum.GetValues<PathMode>())
+        foreach (var value in Enum.GetValues<T>())
         {
-            var choice = mode;
-            var row = MakeLabel(18, $"   {mode}");
+            var choice = value;
+            var row = MakeLabel(18, $"   {value}");
             row.MouseFilter = Control.MouseFilterEnum.Stop;
             row.Modulate = new Color(1f, 1f, 1f, 0.8f);
-            row.MouseEntered += () => Guard.Run("Path mode hover", () =>
+            row.MouseEntered += () => Guard.Run($"{name} hover", () =>
                 row.Modulate = Colors.White);
-            row.MouseExited += () => Guard.Run("Path mode unhover", () =>
+            row.MouseExited += () => Guard.Run($"{name} unhover", () =>
                 row.Modulate = new Color(1f, 1f, 1f, 0.8f));
-            row.GuiInput += inputEvent => Guard.Run("Choosing a path mode", () =>
+            row.GuiInput += inputEvent => Guard.Run($"Choosing {name}", () =>
             {
                 if (inputEvent is not InputEventMouseButton
                     { ButtonIndex: MouseButton.Left, Pressed: false })
                     return;
-                PathingOptions.Mode = choice;
+                set(choice);
                 options.Visible = false;
                 RenderHeader();
+                ResizePanel();
                 PathingOptions.Notify();
             });
             options.AddChild(row);
@@ -248,21 +268,33 @@ internal sealed class OptionsPanel : IDisposable
         _refreshers.Add(RenderHeader);
     }
 
-    private void AddToggle(Container into, string name, Func<bool> get, Action<bool> set)
+    /// <summary>A collapsible heading; returns the box its rows go in.</summary>
+    private VBoxContainer AddSection(Container into, string name)
     {
-        var row = MakeLabel(20, Render(name, get()));
-        row.MouseFilter = Control.MouseFilterEnum.Stop;
-        _refreshers.Add(() => row.Text = Render(name, get()));
-        row.GuiInput += inputEvent => Guard.Run("Toggling a setting", () =>
+        var body = new VBoxContainer
+        {
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        body.AddThemeConstantOverride("separation", 4);
+
+        var header = MakeLabel(20, "");
+        header.MouseFilter = Control.MouseFilterEnum.Stop;
+        void RenderHeader() => header.Text = $"{name}  {(body.Visible ? "▲" : "▼")}";
+        header.GuiInput += inputEvent => Guard.Run($"Folding {name}", () =>
         {
             if (inputEvent is not InputEventMouseButton
                 { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
-            set(!get());
-            row.Text = Render(name, get());
-            PathingOptions.Notify();
+            body.Visible = !body.Visible;
+            RenderHeader();
+            ResizePanel();
         });
-        into.AddChild(row);
+        into.AddChild(header);
+        into.AddChild(body);
+
+        RenderHeader();
+        return body;
     }
 
     private void AddSlider(
@@ -303,8 +335,6 @@ internal sealed class OptionsPanel : IDisposable
         row.AddChild(slider);
         into.AddChild(row);
     }
-
-    private static string Render(string name, bool on) => $"[{(on ? "X" : "  ")}] {name}";
 
     private static string Render(string name, float value) =>
         $"{name}: {(Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";

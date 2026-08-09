@@ -1,6 +1,5 @@
 using Godot;
 using MegaCrit.Sts2.addons.mega_text;
-using MegaCrit.Sts2.Core.Helpers;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -16,20 +15,23 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal sealed class MapToolbar : IDisposable
 {
-    /// <summary>Tray geometry, and the slots the gear and the Zoom button sit in.</summary>
-    public const float Width = 330f;
+    /// <summary>
+    /// Tray geometry, and the slots along its button row: help, gear, then Zoom.
+    /// The tray grew to fit the help badge rather than squeezing the Zoom button,
+    /// which has to hold "Zoom Out" without wrapping.
+    /// </summary>
+    public const float Width = 348f;
     public const float ButtonRowTop = 22f;
     public const float ButtonHeight = 62f;
-    public const float GearLeft = 30f;
-    public const float GearSize = 54f;
-    public const float ZoomLeft = 98f;
-    public const float ZoomWidth = 206f;
+    public const float HelpLeft = 24f;
+    public const float HelpSize = 42f;
+    public const float GearLeft = 76f;
+    public const float GearSize = 46f;
+    public const float ZoomLeft = 132f;
+    public const float ZoomWidth = 192f;
 
     private const float BylineTop = 100f;
     private const float Height = 154f;
-
-    /// <summary>The map legend's own text colour — reads as written on the panel.</summary>
-    private static readonly Color Ink = StsColors.legendText;
 
     private readonly Control _root;
 
@@ -78,11 +80,15 @@ internal sealed class MapToolbar : IDisposable
         if (screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font") is { } font)
             byline.AddThemeFontOverride("font", font);
         byline.AddThemeFontSizeOverride("font_size", 16);
-        // Ink on parchment rather than pale text over it, with the outline the game
-        // gives its own lettering so the panel's grain cannot break it up.
-        byline.AddThemeColorOverride("font_color", Ink);
-        byline.AddThemeColorOverride("font_outline_color", new Color(1f, 0.97f, 0.90f, 0.55f));
+        // Pale lettering carried by a dark shadow, the way the game sets its own text
+        // over busy art: the drop shadow does the separating, so the glyphs stay light
+        // and thin instead of turning into dark ink the panel's grain can swallow.
+        byline.AddThemeColorOverride("font_color", new Color(0.96f, 0.93f, 0.86f));
+        byline.AddThemeColorOverride("font_outline_color", new Color(0.09f, 0.07f, 0.06f, 0.85f));
         byline.AddThemeConstantOverride("outline_size", 6);
+        byline.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.7f));
+        byline.AddThemeConstantOverride("shadow_offset_x", 2);
+        byline.AddThemeConstantOverride("shadow_offset_y", 3);
         _root.AddChild(byline);
 
         screen.AddChild(_root);
