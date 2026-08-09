@@ -56,10 +56,14 @@ longer on the stored route.
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Auto Path Mode** (default on) is the
-behaviour described above; with it off, `PathSolver.TruncateAtPins` cuts every route
-at its deepest pin and drops the rest, so the mod draws only what the player planned
-— pinnability is still computed from the full routes, so every node ahead stays
-reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
+behaviour described above. With it off the mod is connect-the-dots, and the two
+rules compose in this order: `PathSolver.RequireAllPins` keeps only routes visiting
+**every** pin — mandatory, not scored, because a route skipping a pin answers a
+different question and re-opening those was the bug that made pinning a second node
+*widen* the display — then `TruncateAtPins` cuts each survivor at its deepest pin so
+nothing is drawn past the plan. Pins that no single route can satisfy therefore draw
+nothing, which is the honest answer; unpin to recover. Pinnability is still computed
+from the full routes, so every node ahead stays reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
 geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
 `RouteSeparation`) and the landscape framing (`LandscapeFit`, `LandscapeZoom`,
 `LandscapeShiftX/Y`, re-fitted live through `MapZoom.Reapply`) for live tuning. The

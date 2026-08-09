@@ -58,6 +58,19 @@ public static class PathSolver
     }
 
     /// <summary>
+    /// Routes that visit every pin — the connect-the-dots rule for manual planning.
+    /// A pin the player placed is a place they intend to go, so a route that skips
+    /// one is not a worse answer to the same question, it is an answer to a
+    /// different one. No pins means every route.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string>> RequireAllPins(
+        IReadOnlyList<IReadOnlyList<string>> paths, IReadOnlyCollection<string> pins)
+    {
+        if (pins.Count == 0) return paths;
+        return paths.Where(p => pins.All(p.Contains)).ToList();
+    }
+
+    /// <summary>
     /// How far below the best pin coverage a route may fall and still be offered as a
     /// near-miss alternative.
     /// </summary>

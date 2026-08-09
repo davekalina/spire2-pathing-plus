@@ -299,7 +299,14 @@ internal sealed class PathingView : IDisposable
         _pins.RetainWhere(_pinnable.Contains);
 
         if (!PathingOptions.AutoPath)
+        {
+            // Connect the dots. Every pin is mandatory here — without that, pinning a
+            // second node further along re-opens every other way of reaching it, which
+            // is the opposite of drawing a line through the two. Then cut at the
+            // deepest pin, so the drawing stops where the plan does.
+            routes = PathSolver.RequireAllPins(routes, _pins.Ids);
             routes = PathSolver.TruncateAtPins(routes, _pins.IsSelected);
+        }
 
         var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
         // Up to ten candidates: keep the best five. Pin coverage stays paramount —

@@ -28,8 +28,10 @@ a `?`; the mod only reads the map and draws over it, and its manifest declares
 - **Controller support throughout.** Right Trigger zooms; in the zoomed views the
   d-pad walks the map node by node with a cursor ring, and select pins whatever it
   is on.
-- **Settings** behind a gear: manual path planning, marker size, and live sliders for
-  the trail's look and the wide view's framing.
+- **Settings** behind a gear: marker size, live sliders for the trail's look and the
+  wide view's framing, and **Auto Path Mode** — turn it off to plan by hand, where
+  the mod connects the dots between the nodes you pin and draws nothing past your
+  last one.
 
 ## Install
 
