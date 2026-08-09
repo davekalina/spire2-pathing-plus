@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
+using System.Reflection;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -127,28 +128,56 @@ internal static class MapScreenPatches
     /// held latch turns that into one toggle per pull.
     /// </summary>
     private static bool _rightTriggerHeld;
+    private static bool _leftTriggerHeld;
+
+    /// <summary>Switching quill and eraser is the screen's own doing; we just press it.</summary>
+    private static readonly MethodInfo? DrawingButtonPressed =
+        AccessTools.Method(typeof(NMapScreen), "OnMapDrawingButtonPressed");
+    private static readonly MethodInfo? ErasingButtonPressed =
+        AccessTools.Method(typeof(NMapScreen), "OnMapErasingButtonPressed");
 
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NMapScreen._Input))]
     private static void AfterInput(NMapScreen __instance, InputEvent __0) =>
-        Guard.Run("Zoom hotkey", () =>
+        Guard.Run("Map hotkeys", () =>
         {
-            if (__0.IsActionReleased(Controller.rightTrigger))
-            {
-                _rightTriggerHeld = false;
-                return;
-            }
-            if (!__0.IsActionPressed(Controller.rightTrigger) || _rightTriggerHeld)
-                return;
-            _rightTriggerHeld = true;
-            if (!__instance.IsOpen || !ActiveScreenContext.Instance.IsCurrent(__instance))
-                return;
-            if (Views.TryGetValue(__instance, out var view))
+            if (Pulled(__0, Controller.rightTrigger, ref _rightTriggerHeld) &&
+                Ready(__instance) && Views.TryGetValue(__instance, out var view))
             {
                 view.ToggleZoom();
                 __instance.GetViewport().SetInputAsHandled();
             }
+
+            // Left trigger cycles the drawing tools: nothing → quill → eraser → quill.
+            // Leaving drawing altogether stays with the game's own cancel.
+            if (!Pulled(__0, Controller.leftTrigger, ref _leftTriggerHeld) || !Ready(__instance))
+                return;
+            var next = __instance.Drawings.GetLocalDrawingMode() == DrawingMode.Drawing
+                ? ErasingButtonPressed
+                : DrawingButtonPressed;
+            next?.Invoke(__instance, [null]);
+            __instance.GetViewport().SetInputAsHandled();
         });
+
+    private static bool Ready(NMapScreen screen) =>
+        screen.IsOpen && ActiveScreenContext.Instance.IsCurrent(screen);
+
+    /// <summary>
+    /// One toggle per pull. A trigger is an axis, so crossing the threshold produces a
+    /// stream of events; the latch turns that into a single press.
+    /// </summary>
+    private static bool Pulled(InputEvent inputEvent, StringName action, ref bool held)
+    {
+        if (inputEvent.IsActionReleased(action))
+        {
+            held = false;
+            return false;
+        }
+        if (!inputEvent.IsActionPressed(action) || held)
+            return false;
+        held = true;
+        return true;
+    }
 
     internal static void Detach(NMapScreen screen)
     {

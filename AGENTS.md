@@ -173,8 +173,16 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
   "-600 + row * _distY" current-row formula.
-- Input actions: `Controller.rightTrigger` (`controller_right_trigger`) for Zoom,
-  `MegaInput.confirm` for the legend, and the `raw_l_stick_*` axes for the quill.
+- Input actions: `Controller.rightTrigger` for Zoom, `Controller.leftTrigger` to cycle
+  the drawing tools (nothing → quill → eraser → quill, by invoking the screen's own
+  private `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed`, which already
+  handle stopping and swapping), `MegaInput.confirm` for the legend, and the
+  `raw_l_stick_*` axes for the quill. Both triggers are axes, so each needs a held
+  latch or one pull fires repeatedly.
+- The quill's cursor moves in **screen** space at a fixed 700 px/s, which crosses
+  proportionally more map as the zoom shrinks it. `QuillSpeedPatch` measures the step
+  the game just took and rescales it by `TheMap.Scale`, covering every input source
+  without replicating the movement logic.
 - `NControllerManager.GetLeftAnalogStickDirection` is postfixed so the **left stick
   drives the drawing quill**. The quill already asks for that reading and only falls
   back to the d-pad when it is near zero; the gap is that under Steam Input the

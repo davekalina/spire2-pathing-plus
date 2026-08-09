@@ -25,9 +25,11 @@ a `?`; the mod only reads the map and draws over it, and its manifest declares
 - **Three map views.** A Zoom button cycles the game's normal view, the whole act on
   one screen, and the whole act rotated on its side — start at the left, boss at the
   right.
-- **Controller support throughout.** Right Trigger zooms; in the zoomed views the
-  d-pad walks the map node by node with a cursor ring, and select pins whatever it
-  is on.
+- **Controller support throughout.** Right Trigger zooms and Left Trigger cycles the
+  drawing tools; in the zoomed views the d-pad walks the map node by node with a
+  cursor ring, and select pins whatever it is on. The left stick drives the drawing
+  quill — which the game asks for but Steam Input can quietly withhold — and the
+  quill slows down as you zoom out so it tracks the map rather than the screen.
 - **Settings** behind a gear: marker size, live sliders for the trail's look and the
   wide view's framing, and a **Path Mode** with three settings — *Auto* scores routes
   to the boss, *Manual* connects only the nodes you pin, and *Drawing* takes over the
