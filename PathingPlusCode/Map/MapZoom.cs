@@ -39,8 +39,6 @@ internal sealed class MapZoom : IDisposable
     private static readonly FieldInfo? DistYField =
         AccessTools.Field(typeof(NMapScreen), "_distY");
 
-    private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
-
     /// <summary>Shared by every view-change animation, node icon counter-spin included.</summary>
     public const double TweenDuration = 0.55;
 
@@ -89,18 +87,28 @@ internal sealed class MapZoom : IDisposable
             Size = new Vector2(MapToolbar.ZoomWidth, MapToolbar.ButtonHeight),
         };
 
+        // The pause menu's own button face, shader and all: the same art the Resume
+        // button wears, so this reads as a button of the game rather than a tile.
         var background = new TextureRect
         {
-            Name = "BgPanel",
+            Name = "ButtonImage",
             Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/packed/common_ui/submenu_compendium_button.png",
+                "res://images/ui/reward_screen/reward_item_button.png",
                 null, ResourceLoader.CacheMode.Reuse),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-            ClipContents = true,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        Guard.Run("Zoom button tint", () =>
+        {
+            var shader = ResourceLoader.Load<Shader>(
+                "res://shaders/hsv.gdshader", null, ResourceLoader.CacheMode.Reuse);
+            var material = new ShaderMaterial { Shader = shader };
+            material.SetShaderParameter("h", 1.0f);
+            material.SetShaderParameter("s", 0.8f);
+            material.SetShaderParameter("v", 0.9f);
+            background.Material = material;
+        });
         _tray.AddChild(background);
 
         var button = new Control
@@ -112,23 +120,29 @@ internal sealed class MapZoom : IDisposable
         button.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _tray.AddChild(button);
 
+        // Lettering copied from the pause menu button: same font, cream, and the deep
+        // teal outline that keeps it legible against the button face.
         _label = new MegaLabel
         {
             AutoSizeEnabled = false,
-            Text = "Zoom",
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        if (screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font") is { } font)
-            _label.AddThemeFontOverride("font", font);
-        _label.AddThemeFontSizeOverride("font_size", 28);
-        _label.AddThemeColorOverride("font_color", Parchment);
-        _label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
+        Guard.Run("Zoom button lettering", () =>
+            _label.AddThemeFontOverride("font", ResourceLoader.Load<Font>(
+                "res://themes/kreon_bold_glyph_space_one.tres",
+                null, ResourceLoader.CacheMode.Reuse)));
+        _label.AddThemeFontSizeOverride("font_size", 22);
+        _label.AddThemeColorOverride("font_color", new Color(1f, 0.964706f, 0.886275f));
+        _label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.125f));
+        _label.AddThemeColorOverride("font_outline_color", new Color(0.144f, 0.3312f, 0.36f));
         _label.AddThemeConstantOverride("shadow_offset_x", 4);
-        _label.AddThemeConstantOverride("shadow_offset_y", 3);
+        _label.AddThemeConstantOverride("shadow_offset_y", 4);
+        _label.AddThemeConstantOverride("outline_size", 12);
         _label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         button.AddChild(_label);
+        UpdateLabel();
 
         button.GuiInput += inputEvent => Guard.Run("Zoom button", () =>
         {
@@ -195,15 +209,27 @@ internal sealed class MapZoom : IDisposable
             _tray.QueueFree();
     }
 
+    /// <summary>
+    /// The button says what pressing it will do, not where the map is now — so it
+    /// reads as an instruction rather than a state the player has to decode.
+    /// </summary>
+    private void UpdateLabel() => _label.Text = Mode switch
+    {
+        MapViewMode.Normal => "Zoom Out",
+        MapViewMode.Zoomed => "Rotate",
+        _ => "Zoom In",
+    };
+
     private void Apply()
     {
-        _label.AddThemeColorOverride("font_color", Zoomed ? StsColors.gold : Parchment);
+        UpdateLabel();
 
         var centers = _nodeCenters();
+        // Nothing drawn to frame yet: stay in the normal view, and say so.
         if (Mode != MapViewMode.Normal && centers.Count == 0)
         {
             Mode = MapViewMode.Normal;
-            _label.AddThemeColorOverride("font_color", Parchment);
+            UpdateLabel();
         }
 
         if (Mode == MapViewMode.Normal)

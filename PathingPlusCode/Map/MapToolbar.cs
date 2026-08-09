@@ -16,16 +16,16 @@ namespace PathingPlus.PathingPlusCode.Map;
 internal sealed class MapToolbar : IDisposable
 {
     /// <summary>Tray geometry, and the slots the gear and the Zoom button sit in.</summary>
-    public const float Width = 288f;
-    public const float ButtonRowTop = 12f;
-    public const float ButtonHeight = 60f;
-    public const float GearLeft = 14f;
-    public const float GearSize = 56f;
-    public const float ZoomLeft = 82f;
-    public const float ZoomWidth = 192f;
+    public const float Width = 330f;
+    public const float ButtonRowTop = 22f;
+    public const float ButtonHeight = 62f;
+    public const float GearLeft = 30f;
+    public const float GearSize = 54f;
+    public const float ZoomLeft = 98f;
+    public const float ZoomWidth = 206f;
 
-    private const float BylineTop = 78f;
-    private const float Height = 112f;
+    private const float BylineTop = 96f;
+    private const float Height = 140f;
 
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
 
@@ -42,19 +42,25 @@ internal sealed class MapToolbar : IDisposable
         _root.OffsetBottom = 190f + Height;
         _root.GrowHorizontal = Control.GrowDirection.Begin;
 
-        var background = new NinePatchRect
+        // The Compendium's own card panel, laid on its side: that art is portrait
+        // (368x490) and this dock is landscape, so it is built at swapped dimensions
+        // and turned a quarter clockwise. Rotating about the top-left corner sends
+        // local (x, y) to (-y, x), so the node starts at the tray's right edge for
+        // the turned rectangle to land exactly on the tray.
+        var background = new TextureRect
         {
             Name = "Tray",
-            SelfModulate = new Color(0f, 0f, 0f, 0.75f),
             Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
-            PatchMarginLeft = 12,
-            PatchMarginTop = 12,
-            PatchMarginRight = 12,
-            PatchMarginBottom = 12,
+                "res://images/packed/common_ui/submenu_panel_short.png",
+                null, ResourceLoader.CacheMode.Reuse),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = Control.MouseFilterEnum.Ignore,
+            PivotOffset = Vector2.Zero,
+            Size = new Vector2(Height, Width),
+            Position = new Vector2(Width, 0f),
+            RotationDegrees = 90f,
         };
-        background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(background);
 
         var byline = new MegaLabel

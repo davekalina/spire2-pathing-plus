@@ -22,9 +22,9 @@ a `?`; the mod only reads the map and draws over it, and its manifest declares
   map's own parchment. Hover a type to light up every node of that type; hover a
   route to preview it; select it to lock it in. Locked routes survive travelling
   along them, and pins survive restarting the game.
-- **Three map views.** A Zoom button cycles the game's normal view, the whole act on
-  one screen, and the whole act rotated on its side — start at the left, boss at the
-  right.
+- **Three map views.** A button cycles the game's normal view, the whole act on one
+  screen, and the whole act rotated on its side — start at the left, boss at the
+  right. It says what pressing it will do: Zoom Out, then Rotate, then Zoom In.
 - **Controller support throughout.** Right Trigger zooms and clicking the left stick
   cycles the drawing tools; in the zoomed views the d-pad walks the map node by node with a
   cursor ring, and select pins whatever it is on. The left stick drives the drawing

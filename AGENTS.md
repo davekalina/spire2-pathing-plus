@@ -53,9 +53,15 @@ advancing a floor along it shortens every recomputed route by its head, so the t
 IS the same plan; deviation clears it naturally because the new position is no
 longer on the stored route.
 
-`MapToolbar` is the mod's corner of the screen: one dark nine-patch tray holding the
-settings gear, the Zoom button, and the byline, with the slot geometry as constants
-the other two read. They were three loose widgets before and read as unrelated.
+`MapToolbar` is the mod's corner of the screen: one tray holding the settings gear,
+the view button, and the byline, with the slot geometry as constants the other two
+read. Its face is the Compendium's own card panel
+(`common_ui/submenu_panel_short.png`, portrait art) built at swapped dimensions and
+turned 90° — rotation about the top-left corner sends local (x, y) to (−y, x), so the
+node starts at the tray's right edge for the turned rectangle to land on the tray.
+The view button wears the pause menu's face (`reward_screen/reward_item_button.png`
+plus the `hsv` shader at s 0.8 / v 0.9) and its lettering, and **names the next
+action rather than the current state**: Zoom Out → Rotate → Zoom In.
 
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
