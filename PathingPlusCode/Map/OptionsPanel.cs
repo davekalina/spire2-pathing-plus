@@ -5,10 +5,10 @@ using MegaCrit.Sts2.Core.Helpers;
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
-/// The mod's settings, folded behind a gear beside the Zoom button so they cost no
-/// screen space until asked for. Clicking the gear drops a panel of toggle rows and
-/// sliders in the map's own tray styling; every change writes through
-/// <see cref="PathingOptions" />, which persists it and redraws the map.
+/// The mod's settings, folded behind the gear in the toolbar so they cost no screen
+/// space until asked for. The panel drops directly beneath the toolbar wearing the
+/// same Compendium card art — upright here, since this one is taller than it is wide
+/// — and closes when anything outside it is clicked.
 /// </summary>
 internal sealed class OptionsPanel : IDisposable
 {
@@ -17,8 +17,12 @@ internal sealed class OptionsPanel : IDisposable
     private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
     private static readonly Color GearIdle = new(1f, 1f, 1f, 0.6f);
 
+    private const float PanelWidth = 372f;
+    private const float PanelHeight = 500f;
+
     private readonly Control _root;
-    private readonly NinePatchRect _dropdown;
+    private readonly Control _catcher;
+    private readonly Control _panel;
     private readonly TextureRect _gear;
     private readonly Font? _font;
 
@@ -32,31 +36,50 @@ internal sealed class OptionsPanel : IDisposable
         _root = new Control { Name = "PathingPlusOptions", MouseFilter = Control.MouseFilterEnum.Ignore };
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-        // The panel exists before the gear that toggles it, so the gear's handlers
-        // close over a field that is already assigned.
-        _dropdown = new NinePatchRect
+        // Anything outside the panel dismisses it. Added before the panel so the
+        // panel keeps its own clicks, and only alive while the panel is open.
+        _catcher = new Control
+        {
+            Name = "Dismisser",
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Stop,
+        };
+        _catcher.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _catcher.GuiInput += inputEvent => Guard.Run("Dismissing the settings panel", () =>
+        {
+            if (inputEvent is InputEventMouseButton { Pressed: false })
+                SetOpen(false);
+        });
+        _root.AddChild(_catcher);
+
+        // Directly under the toolbar and sharing its right edge, so the panel reads as
+        // hanging off the gear rather than floating over the map.
+        _panel = new Control
         {
             Name = "OptionsDropdown",
             Visible = false,
-            SelfModulate = new Color(0f, 0f, 0f, 0.85f),
-            Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/ui/tiny_nine_patch.png", null, ResourceLoader.CacheMode.Reuse),
-            PatchMarginLeft = 12,
-            PatchMarginTop = 12,
-            PatchMarginRight = 12,
-            PatchMarginBottom = 12,
             MouseFilter = Control.MouseFilterEnum.Stop,
             AnchorLeft = 1f,
             AnchorRight = 1f,
-            // Left of the toolbar, and left of the widest the legend gets, so the
-            // panel never shares screen space with either.
-            OffsetLeft = -784f,
-            OffsetRight = -444f,
-            OffsetTop = 190f,
-            OffsetBottom = 646f,
+            OffsetLeft = -(PanelWidth + 24f),
+            OffsetRight = -24f,
+            OffsetTop = 336f,
+            OffsetBottom = 336f + PanelHeight,
+            GrowHorizontal = Control.GrowDirection.Begin,
         };
+        var parchment = new TextureRect
+        {
+            Name = "Panel",
+            Texture = ResourceLoader.Load<Texture2D>(
+                "res://images/packed/common_ui/submenu_panel_short.png",
+                null, ResourceLoader.CacheMode.Reuse),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        parchment.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _panel.AddChild(parchment);
 
-        // First slot in the toolbar's button row, left of Zoom.
         _gear = new TextureRect
         {
             Name = "OptionsGear",
@@ -73,34 +96,28 @@ internal sealed class OptionsPanel : IDisposable
         };
         _gear.MouseEntered += () => Guard.Run("Gear hover", () => _gear.Modulate = Colors.White);
         _gear.MouseExited += () => Guard.Run("Gear unhover", () =>
-            _gear.Modulate = _dropdown.Visible ? Colors.White : GearIdle);
+            _gear.Modulate = _panel.Visible ? Colors.White : GearIdle);
         _gear.GuiInput += inputEvent => Guard.Run("Toggling the settings panel", () =>
         {
-            if (inputEvent is not InputEventMouseButton
-                { ButtonIndex: MouseButton.Left, Pressed: false })
-                return;
-            _dropdown.Visible = !_dropdown.Visible;
-            // Last sibling wins Godot's input picking, so an open panel must be in
-            // front or the map underneath eats its clicks.
-            if (_dropdown.Visible)
-                _root.MoveToFront();
+            if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
+                SetOpen(!_panel.Visible);
         });
         toolbar.AddChild(_gear);
 
+        // The parchment's torn border eats the outer ~26 px, so the rows sit inside it.
         var margin = new MarginContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        margin.AddThemeConstantOverride("margin_left", 16);
-        margin.AddThemeConstantOverride("margin_right", 16);
-        margin.AddThemeConstantOverride("margin_top", 12);
-        margin.AddThemeConstantOverride("margin_bottom", 12);
+        margin.AddThemeConstantOverride("margin_left", 32);
+        margin.AddThemeConstantOverride("margin_right", 32);
+        margin.AddThemeConstantOverride("margin_top", 28);
+        margin.AddThemeConstantOverride("margin_bottom", 32);
         margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _dropdown.AddChild(margin);
+        _panel.AddChild(margin);
 
         var rows = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         rows.AddThemeConstantOverride("separation", 4);
         margin.AddChild(rows);
 
-        AddChoice(rows, "Path Mode",
-            () => PathingOptions.Mode, v => PathingOptions.Mode = v);
+        AddModeDropdown(rows);
         AddToggle(rows, "Small Path Markers",
             () => PathingOptions.SmallMarkers, v => PathingOptions.SmallMarkers = v);
 
@@ -127,7 +144,7 @@ internal sealed class OptionsPanel : IDisposable
             () => PathingOptions.LandscapeShiftY, v => PathingOptions.LandscapeShiftY = v);
 
         AddSpacer(rows);
-        var reset = MakeLabel(18, "Reset to defaults");
+        var reset = MakeLabel(17, "Reset to defaults");
         reset.MouseFilter = Control.MouseFilterEnum.Stop;
         reset.Modulate = new Color(1f, 1f, 1f, 0.75f);
         reset.GuiInput += inputEvent => Guard.Run("Resetting settings", () =>
@@ -142,7 +159,7 @@ internal sealed class OptionsPanel : IDisposable
         });
         rows.AddChild(reset);
 
-        _root.AddChild(_dropdown);
+        _root.AddChild(_panel);
         screen.AddChild(_root);
     }
 
@@ -151,10 +168,7 @@ internal sealed class OptionsPanel : IDisposable
     {
         _root.Visible = visible;
         if (!visible)
-        {
-            _dropdown.Visible = false;
-            _gear.Modulate = GearIdle;
-        }
+            SetOpen(false);
     }
 
     public void Dispose()
@@ -163,32 +177,76 @@ internal sealed class OptionsPanel : IDisposable
             _root.QueueFree();
     }
 
+    private void SetOpen(bool open)
+    {
+        _panel.Visible = open;
+        _catcher.Visible = open;
+        _gear.Modulate = open ? Colors.White : GearIdle;
+        if (open)
+            _root.MoveToFront();
+    }
+
     private static void AddSpacer(Container into) => into.AddChild(new Control
     {
         CustomMinimumSize = new Vector2(0, 8),
         MouseFilter = Control.MouseFilterEnum.Ignore,
     });
 
-    /// <summary>A row that cycles through the values of an enum on each click.</summary>
-    private void AddChoice(Container into, string name, Func<PathMode> get, Action<PathMode> set)
+    /// <summary>
+    /// Path Mode as a proper pull-down: the current choice with the alternatives
+    /// tucked underneath until asked for, rather than a row that has to be clicked
+    /// blindly until the wanted mode comes round.
+    /// </summary>
+    private void AddModeDropdown(Container into)
     {
-        var choices = Enum.GetValues<PathMode>();
-        var row = MakeLabel(20, Render(name, get()));
-        row.MouseFilter = Control.MouseFilterEnum.Stop;
-        _refreshers.Add(() => row.Text = Render(name, get()));
-        row.GuiInput += inputEvent => Guard.Run("Changing the path mode", () =>
+        var options = new VBoxContainer
+        {
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        options.AddThemeConstantOverride("separation", 0);
+
+        var header = MakeLabel(20, "");
+        header.MouseFilter = Control.MouseFilterEnum.Stop;
+        void RenderHeader() =>
+            header.Text = $"Path Mode: {PathingOptions.Mode}  {(options.Visible ? "▲" : "▼")}";
+        header.GuiInput += inputEvent => Guard.Run("Opening the path mode list", () =>
         {
             if (inputEvent is not InputEventMouseButton
                 { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
-            set(choices[(Array.IndexOf(choices, get()) + 1) % choices.Length]);
-            row.Text = Render(name, get());
-            PathingOptions.Notify();
+            options.Visible = !options.Visible;
+            RenderHeader();
         });
-        into.AddChild(row);
-    }
+        into.AddChild(header);
 
-    private static string Render(string name, PathMode mode) => $"{name}: {mode}";
+        foreach (var mode in Enum.GetValues<PathMode>())
+        {
+            var choice = mode;
+            var row = MakeLabel(18, $"   {mode}");
+            row.MouseFilter = Control.MouseFilterEnum.Stop;
+            row.Modulate = new Color(1f, 1f, 1f, 0.8f);
+            row.MouseEntered += () => Guard.Run("Path mode hover", () =>
+                row.Modulate = Colors.White);
+            row.MouseExited += () => Guard.Run("Path mode unhover", () =>
+                row.Modulate = new Color(1f, 1f, 1f, 0.8f));
+            row.GuiInput += inputEvent => Guard.Run("Choosing a path mode", () =>
+            {
+                if (inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
+                    return;
+                PathingOptions.Mode = choice;
+                options.Visible = false;
+                RenderHeader();
+                PathingOptions.Notify();
+            });
+            options.AddChild(row);
+        }
+        into.AddChild(options);
+
+        RenderHeader();
+        _refreshers.Add(RenderHeader);
+    }
 
     private void AddToggle(Container into, string name, Func<bool> get, Action<bool> set)
     {
@@ -214,8 +272,8 @@ internal sealed class OptionsPanel : IDisposable
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
 
-        var label = MakeLabel(18, Render(name, get()));
-        label.CustomMinimumSize = new Vector2(150f, 0f);
+        var label = MakeLabel(17, Render(name, get()));
+        label.CustomMinimumSize = new Vector2(158f, 0f);
         label.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(label);
 
@@ -225,7 +283,7 @@ internal sealed class OptionsPanel : IDisposable
             MaxValue = max,
             Step = step,
             Value = get(),
-            CustomMinimumSize = new Vector2(130f, 22f),
+            CustomMinimumSize = new Vector2(126f, 22f),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Stop,
         };
@@ -264,8 +322,8 @@ internal sealed class OptionsPanel : IDisposable
             label.AddThemeFontOverride("font", _font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", Parchment);
-        label.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.5f));
-        label.AddThemeConstantOverride("outline_size", 6);
+        label.AddThemeColorOverride("font_outline_color", new Color(0.12f, 0.10f, 0.08f));
+        label.AddThemeConstantOverride("outline_size", 8);
         return label;
     }
 }

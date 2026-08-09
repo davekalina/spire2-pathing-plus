@@ -1,5 +1,6 @@
 using Godot;
 using MegaCrit.Sts2.addons.mega_text;
+using MegaCrit.Sts2.Core.Helpers;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -24,10 +25,11 @@ internal sealed class MapToolbar : IDisposable
     public const float ZoomLeft = 98f;
     public const float ZoomWidth = 206f;
 
-    private const float BylineTop = 96f;
-    private const float Height = 140f;
+    private const float BylineTop = 100f;
+    private const float Height = 154f;
 
-    private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
+    /// <summary>The map legend's own text colour — reads as written on the panel.</summary>
+    private static readonly Color Ink = StsColors.legendText;
 
     private readonly Control _root;
 
@@ -70,15 +72,17 @@ internal sealed class MapToolbar : IDisposable
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
-            // Present, not shouting: it is a signature, not a control.
-            Modulate = new Color(1f, 1f, 1f, 0.7f),
             Position = new Vector2(0f, BylineTop),
-            Size = new Vector2(Width, 22f),
+            Size = new Vector2(Width, 24f),
         };
         if (screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font") is { } font)
             byline.AddThemeFontOverride("font", font);
-        byline.AddThemeFontSizeOverride("font_size", 15);
-        byline.AddThemeColorOverride("font_color", Parchment);
+        byline.AddThemeFontSizeOverride("font_size", 16);
+        // Ink on parchment rather than pale text over it, with the outline the game
+        // gives its own lettering so the panel's grain cannot break it up.
+        byline.AddThemeColorOverride("font_color", Ink);
+        byline.AddThemeColorOverride("font_outline_color", new Color(1f, 0.97f, 0.90f, 0.55f));
+        byline.AddThemeConstantOverride("outline_size", 6);
         _root.AddChild(byline);
 
         screen.AddChild(_root);

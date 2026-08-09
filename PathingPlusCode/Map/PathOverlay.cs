@@ -84,10 +84,20 @@ internal sealed class PathOverlay : IDisposable
         return layer;
     }
 
-    /// <summary>Up to <see cref="RouteColors" />.Length full routes, one colour each.</summary>
-    public void ShowRoutes(IReadOnlyList<Vector2[]> routes)
+    /// <summary>
+    /// Up to <see cref="RouteColors" />.Length full routes, one colour each, over an
+    /// optional backdrop of everything else that matched. The backdrop goes down
+    /// first so the coloured runs sit on top of it: a plan wider than the legend can
+    /// hold still shows all of itself, with the picks standing out from the rest.
+    /// </summary>
+    public void ShowRoutes(
+        IReadOnlyList<Vector2[]> routes, IEnumerable<(Vector2 From, Vector2 To)>? backdrop = null)
     {
         ClearDots();
+        if (backdrop is not null)
+            foreach (var (from, to) in backdrop)
+                ScatterDots([from, to], UnionColor, _unionDots);
+
         for (var i = 0; i < routes.Count; i++)
         {
             if (routes[i].Length < 2)

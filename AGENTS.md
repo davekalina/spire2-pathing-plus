@@ -63,6 +63,12 @@ The view button wears the pause menu's face (`reward_screen/reward_item_button.p
 plus the `hsv` shader at s 0.8 / v 0.9) and its lettering, and **names the next
 action rather than the current state**: Zoom Out → Rotate → Zoom In.
 
+The settings panel hangs directly beneath the toolbar on the same right edge, wearing
+the same card art upright, and any click outside it dismisses it (a full-rect catcher
+added before the panel, alive only while it is open). Path Mode is a pull-down built
+here rather than the native `settings_dropdown` scene, whose root is scriptless — its
+behaviour lives in the settings screen, so it cannot be instantiated as a control.
+
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Path Mode** has three settings.
@@ -89,7 +95,10 @@ choice). A pin no earlier floor can reach falls back to the nearest floor that c
 rather than dangling. Several waypoints may share a floor, which is what lets pins
 sit on rival branches. `AssembleRoutes` then stitches those links back into whole
 routes, because the legend counts what a **path** holds, not what each link holds —
-a plan that forks yields one route per branch.
+a plan that forks yields one route per branch. **Every assembled route is drawn**; the
+legend's five are ranked by elites, then fires, then shops, and only those get a
+colour and a column, the rest going down first as a faint backdrop. Cutting the extras
+instead would answer the player's own drawing with silence.
 
 Two earlier rules were wrong here and must not come back. Judging by "first waypoint
 reached" admits any detour that dodges every intermediate pin — up an edge column

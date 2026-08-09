@@ -41,6 +41,9 @@ internal sealed class PathingView : IDisposable
 
     /// <summary>Manual-mode links between pinned floors; what the eraser rubs out.</summary>
     private IReadOnlyList<IReadOnlyList<string>> _links = [];
+
+    /// <summary>Matching routes beyond the legend's five: drawn, but not coloured.</summary>
+    private IReadOnlyList<IReadOnlyList<string>> _backdropRoutes = [];
     private HashSet<string> _pinnable = [];
     private string _mapKey = "";
     private IReadOnlyList<string>? _lockedRouteIds;
@@ -403,13 +406,24 @@ internal sealed class PathingView : IDisposable
             // pinned floors, stitched back into whole routes so the legend counts
             // paths rather than the links they are made of.
             _links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
-            _shownRoutes = PathSolver.AssembleRoutes(_links)
-                .Take(PathSolver.LegendThreshold)
+
+            // Everything the plan allows is drawn; the legend's worth of best ones
+            // are the ones that get a colour and a column. Ranked by what a route is
+            // usually chosen for: elites, then fires, then shops.
+            var ranked = PathSolver.AssembleRoutes(_links)
+                .Select(route => (Route: route, Counts: LegendCounts(route)))
+                .OrderByDescending(entry => entry.Counts[5])
+                .ThenByDescending(entry => entry.Counts[3])
+                .ThenByDescending(entry => entry.Counts[1])
+                .Select(entry => entry.Route)
                 .ToList();
+            _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
+            _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold).ToList();
         }
         else
         {
             _links = [];
+            _backdropRoutes = [];
             var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
             // Up to ten candidates: keep the best five. Pin coverage stays paramount —
             // a route through every pin must never lose its slot to a near-miss — then
@@ -563,20 +577,27 @@ internal sealed class PathingView : IDisposable
             var polylines = _shownRoutes
                 .Select(route => route.Select(EndpointOf).OfType<Vector2>().ToArray())
                 .ToList();
-            _overlay.ShowRoutes(polylines);
+            _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes));
         }
         else
         {
-            var edges = new HashSet<(string, string)>();
-            foreach (var route in _shownRoutes)
-                for (var i = 1; i < route.Count; i++)
-                    edges.Add((route[i - 1], route[i]));
-
-            _overlay.ShowUnion(edges
-                .Select(edge => (From: EndpointOf(edge.Item1), To: EndpointOf(edge.Item2)))
-                .Where(edge => edge is { From: not null, To: not null })
-                .Select(edge => (edge.From!.Value, edge.To!.Value)));
+            _overlay.ShowUnion(EdgesOf(_shownRoutes));
         }
+    }
+
+    /// <summary>Each route's steps as drawable segments, shared edges counted once.</summary>
+    private IEnumerable<(Vector2 From, Vector2 To)> EdgesOf(
+        IReadOnlyList<IReadOnlyList<string>> routes)
+    {
+        var edges = new HashSet<(string, string)>();
+        foreach (var route in routes)
+            for (var i = 1; i < route.Count; i++)
+                edges.Add((route[i - 1], route[i]));
+
+        return edges
+            .Select(edge => (From: EndpointOf(edge.Item1), To: EndpointOf(edge.Item2)))
+            .Where(edge => edge is { From: not null, To: not null })
+            .Select(edge => (edge.From!.Value, edge.To!.Value));
     }
 
     private void UpdateLegend()
@@ -610,6 +631,7 @@ internal sealed class PathingView : IDisposable
         _navigator.SetNodes([], false);
         _legend.SetRoutes([]);
         _shownRoutes = [];
+        _backdropRoutes = [];
         _pinnable = [];
         _overlay.Clear();
     }
