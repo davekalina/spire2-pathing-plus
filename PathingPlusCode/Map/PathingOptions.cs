@@ -28,16 +28,13 @@ internal enum PathMode
 internal static class PathingOptions
 {
     /// <summary>How pins become drawn routes.</summary>
-    public static PathMode Mode { get; set; } = PathMode.Auto;
+    public static PathMode Mode { get; set; } = PathMode.Drawing;
 
     /// <summary>True while routes should run all the way to the boss.</summary>
     public static bool AutoPath => Mode == PathMode.Auto;
 
     /// <summary>Draw pin rings at 75%, to tell them apart from the game's own stamps.</summary>
     public static bool SmallMarkers { get; set; } = true;
-
-    /// <summary>Write drawing-mode diagnostics to the game log. Off; for chasing bugs.</summary>
-    public static bool DebugLogging { get; set; }
 
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
@@ -55,13 +52,13 @@ internal static class PathingOptions
     public static float RouteSeparation { get; set; } = 10f;
 
     /// <summary>Landscape view: the share of the screen width the map is fitted into.</summary>
-    public static float LandscapeFit { get; set; } = 0.85f;
+    public static float LandscapeFit { get; set; } = 0.95f;
 
     /// <summary>Landscape view: scale applied on top of that fit, to fill the frame.</summary>
-    public static float LandscapeZoom { get; set; } = 1.1f;
+    public static float LandscapeZoom { get; set; } = 1f;
 
     /// <summary>Landscape view: horizontal nudge in pixels, positive moves right.</summary>
-    public static float LandscapeShiftX { get; set; }
+    public static float LandscapeShiftX { get; set; } = 30f;
 
     /// <summary>Landscape view: vertical nudge in pixels, positive moves down.</summary>
     public static float LandscapeShiftY { get; set; }
@@ -72,17 +69,16 @@ internal static class PathingOptions
     /// </summary>
     public static void ResetDefaults()
     {
-        Mode = PathMode.Auto;
+        Mode = PathMode.Drawing;
         SmallMarkers = true;
-        DebugLogging = false;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
         DashSpacing = 15f;
         RouteSeparation = 10f;
-        LandscapeFit = 0.85f;
-        LandscapeZoom = 1.1f;
-        LandscapeShiftX = 0f;
+        LandscapeFit = 0.95f;
+        LandscapeZoom = 1f;
+        LandscapeShiftX = 30f;
         LandscapeShiftY = 0f;
     }
 
@@ -107,7 +103,6 @@ internal static class PathingOptions
 
         public string? Mode { get; set; }
         public bool? SmallMarkers { get; set; }
-        public bool? DebugLogging { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -132,7 +127,6 @@ internal static class PathingOptions
             : saved.AutoPath is { } autoPath ? autoPath ? PathMode.Auto : PathMode.Manual
             : Mode;
         SmallMarkers = saved.SmallMarkers ?? SmallMarkers;
-        DebugLogging = saved.DebugLogging ?? DebugLogging;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -149,7 +143,6 @@ internal static class PathingOptions
         {
             Mode = Mode.ToString(),
             SmallMarkers = SmallMarkers,
-            DebugLogging = DebugLogging,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,

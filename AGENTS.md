@@ -56,7 +56,7 @@ longer on the stored route.
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Path Mode** has three settings.
-*Auto* (default) is the behaviour described above. *Manual* and *Drawing* share the
+*Drawing* is the default; *Auto* is the behaviour described above. *Manual* and *Drawing* share the
 same drawing rule and differ only in how pins are placed — *Drawing* prefixes
 `NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
 passes through for both mouse and controller, suppresses the native line, and pins

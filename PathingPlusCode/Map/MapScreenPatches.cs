@@ -227,9 +227,6 @@ internal static class MapScreenPatches
 
         if (carryOver is { } position && CursorOf(tool) is { } cursor)
             cursor.GlobalPosition = position;
-
-        Diag.Log($"tool switch -> {wanted}, mode now {screen.Drawings.GetLocalDrawingMode()}, " +
-            $"retired {live.Count}, cursor {(carryOver is null ? "fresh" : "carried")}");
     }
 
     private static Control? CursorOf(Node? input) =>
@@ -326,13 +323,7 @@ internal static class MapDrawingSnapPatch
                 return true;
             var drawing = __instance.GetLocalDrawingMode();
             if (drawing is not (DrawingMode.Drawing or DrawingMode.Erasing))
-            {
-                // A stroke arriving with no tool selected means something cleared the
-                // mode out from under it — worth seeing in the log, since the tool
-                // still looks chosen on screen while nothing it does registers.
-                Diag.Log($"stroke ignored: drawing mode is {drawing}");
                 return true;
-            }
             // The game hands us the point in the drawings node's own space, and it is
             // the cursor for a controller as much as the mouse for a pointer — so it,
             // not the mouse, is what the stroke follows.

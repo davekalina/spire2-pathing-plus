@@ -275,17 +275,11 @@ internal sealed class PathingView : IDisposable
             .Select(candidate => candidate.Id)
             .FirstOrDefault();
 
-        if (Diag.Enabled)
-            Diag.Log($"stroke {(erasing ? "erase" : "draw")} raw={pointInDrawings} " +
-                $"map={cursor} nearest={nearest ?? "none"} pinnable={_pinnable.Count} " +
-                $"pins={_pins.Count} zoom={_zoom.Mode}");
-
         if (!erasing)
         {
             if (nearest is null || _pins.IsSelected(nearest))
                 return true;
             _pins.Toggle(nearest);
-            Diag.Log($"pinned {nearest}");
             Refresh();
             return true;
         }

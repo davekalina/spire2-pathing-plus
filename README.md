@@ -31,10 +31,10 @@ a `?`; the mod only reads the map and draws over it, and its manifest declares
   quill — which the game asks for but Steam Input can quietly withhold — and the
   quill slows down as you zoom out so it tracks the map rather than the screen.
 - **Settings** behind a gear: marker size, live sliders for the trail's look and the
-  wide view's framing, and a **Path Mode** with three settings — *Auto* scores routes
-  to the boss, *Manual* connects only the nodes you pin, and *Drawing* takes over the
-  map's quill so a stroke over the map snaps to the nodes it passes instead of
-  leaving a freehand line.
+  wide view's framing, and a **Path Mode** with three settings — *Drawing* (the
+  default) takes over the map's quill so a stroke over the map snaps to the nodes it
+  passes instead of leaving a freehand line, *Manual* connects only the nodes you
+  pin, and *Auto* scores whole routes to the boss.
 
 ## Install
 

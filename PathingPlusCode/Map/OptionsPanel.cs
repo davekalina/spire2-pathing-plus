@@ -132,8 +132,6 @@ internal sealed class OptionsPanel : IDisposable
             () => PathingOptions.Mode, v => PathingOptions.Mode = v);
         AddToggle(rows, "Small Path Markers",
             () => PathingOptions.SmallMarkers, v => PathingOptions.SmallMarkers = v);
-        AddToggle(rows, "Debug Logging",
-            () => PathingOptions.DebugLogging, v => PathingOptions.DebugLogging = v);
 
         AddSpacer(rows);
         AddSlider(rows, "Thickness", 0.5f, 4f, 0.1f,
