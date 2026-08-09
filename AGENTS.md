@@ -56,14 +56,17 @@ longer on the stored route.
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear left of the Zoom button)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
 `Changed`, which redraws the open map. **Auto Path Mode** (default on) is the
-behaviour described above. With it off the mod is connect-the-dots, and the two
-rules compose in this order: `PathSolver.RequireAllPins` keeps only routes visiting
-**every** pin — mandatory, not scored, because a route skipping a pin answers a
-different question and re-opening those was the bug that made pinning a second node
-*widen* the display — then `TruncateAtPins` cuts each survivor at its deepest pin so
-nothing is drawn past the plan. Pins that no single route can satisfy therefore draw
-nothing, which is the honest answer; unpin to recover. Pinnability is still computed
-from the full routes, so every node ahead stays reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
+behaviour described above. With it off, `PathSolver.ConnectWaypoints` replaces route
+enumeration entirely: the pins plus the player's current position are waypoints, and
+walking forward from each one and stopping at the first waypoint reached yields the
+segments between *adjacent* waypoints (so A→B→C draws two lines, not a third
+redundant A→C). Every way between one pair is returned — that is the auto-pathing
+between placed nodes — and a pair nothing connects contributes nothing, which is what
+lets pins sit on rival branches. Two earlier attempts were wrong and should not be
+reinstated: best-match scoring made a second pin *widen* the picture by re-admitting
+routes that skipped the first, and requiring every pin on one route drew **nothing**
+the moment two pins sat on different branches. Pinnability is still computed from the
+full routes, so every node ahead stays reachable. **Small Path Markers** (default on) scales pin rings to 75%. Sliders expose the dash
 geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
 `RouteSeparation`) and the landscape framing (`LandscapeFit`, `LandscapeZoom`,
 `LandscapeShiftX/Y`, re-fitted live through `MapZoom.Reapply`) for live tuning. The

@@ -58,16 +58,60 @@ public static class PathSolver
     }
 
     /// <summary>
-    /// Routes that visit every pin — the connect-the-dots rule for manual planning.
-    /// A pin the player placed is a place they intend to go, so a route that skips
-    /// one is not a worse answer to the same question, it is an answer to a
-    /// different one. No pins means every route.
+    /// Manual planning, drawn the way a player draws it: a line between each pinned
+    /// node and the next one along, for every pair that a path actually connects.
+    /// The player's current position counts as a waypoint too, so the first leg
+    /// appears without pinning where you already stand.
+    ///
+    /// Walking forward from each waypoint and stopping at the first waypoint reached
+    /// gives exactly the segments between *adjacent* waypoints: a plan of A → B → C
+    /// draws A→B and B→C rather than also drawing the redundant A→C on top of them.
+    /// Where several ways connect one pair, all of them are returned — that is the
+    /// auto-pathing between placed nodes. Waypoints nothing connects simply
+    /// contribute no segment, which is what lets pins sit on rival branches.
     /// </summary>
-    public static IReadOnlyList<IReadOnlyList<string>> RequireAllPins(
-        IReadOnlyList<IReadOnlyList<string>> paths, IReadOnlyCollection<string> pins)
+    public static IReadOnlyList<IReadOnlyList<string>> ConnectWaypoints(
+        SpireMapGraph graph, string origin, IReadOnlyCollection<string> pins)
     {
-        if (pins.Count == 0) return paths;
-        return paths.Where(p => pins.All(p.Contains)).ToList();
+        var waypoints = pins.Where(graph.Contains).ToHashSet();
+        if (graph.Contains(origin))
+            waypoints.Add(origin);
+        if (waypoints.Count < 2)
+            return [];
+
+        var segments = new List<IReadOnlyList<string>>();
+        var seen = new HashSet<string>();
+        var stack = new List<string>();
+
+        foreach (var from in waypoints
+            .OrderBy(id => graph.Node(id).Row)
+            .ThenBy(id => id, StringComparer.Ordinal))
+        {
+            stack.Clear();
+            stack.Add(from);
+            Walk(from);
+        }
+        return segments;
+
+        void Walk(string id)
+        {
+            if (segments.Count >= MaxPaths)
+                return;
+            foreach (var next in graph.Successors(id))
+            {
+                stack.Add(next);
+                if (waypoints.Contains(next))
+                {
+                    if (seen.Add(string.Join("|", stack)))
+                        segments.Add(stack.ToArray());
+                }
+                else
+                {
+                    Walk(next);
+                }
+                stack.RemoveAt(stack.Count - 1);
+            }
+        }
     }
 
     /// <summary>
@@ -111,30 +155,6 @@ public static class PathSolver
                 break;
         }
         return new PinMatch(shown, maxHits, countAtMax);
-    }
-
-    /// <summary>
-    /// Manual pathing: cut every route short at its deepest pinned node, so the mod
-    /// draws only as far as the player has actually planned. Routes reaching no pin
-    /// are dropped, and routes sharing a prefix collapse into one.
-    /// </summary>
-    public static IReadOnlyList<IReadOnlyList<string>> TruncateAtPins(
-        IReadOnlyList<IReadOnlyList<string>> paths, Func<string, bool> isPinned)
-    {
-        var result = new List<IReadOnlyList<string>>();
-        var seen = new HashSet<string>();
-        foreach (var path in paths)
-        {
-            var length = path.Count;
-            while (length > 0 && !isPinned(path[length - 1]))
-                length--;
-            if (length == 0)
-                continue;
-            var trimmed = path.Take(length).ToArray();
-            if (seen.Add(string.Join("|", trimmed)))
-                result.Add(trimmed);
-        }
-        return result;
     }
 
     /// <summary>

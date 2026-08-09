@@ -300,29 +300,30 @@ internal sealed class PathingView : IDisposable
 
         if (!PathingOptions.AutoPath)
         {
-            // Connect the dots. Every pin is mandatory here — without that, pinning a
-            // second node further along re-opens every other way of reaching it, which
-            // is the opposite of drawing a line through the two. Then cut at the
-            // deepest pin, so the drawing stops where the plan does.
-            routes = PathSolver.RequireAllPins(routes, _pins.Ids);
-            routes = PathSolver.TruncateAtPins(routes, _pins.IsSelected);
+            // Manual planning draws the player's own line: a segment between each
+            // waypoint and the next one that connects to it. Pins on rival branches
+            // are not a contradiction here — each pair that connects draws, and the
+            // pairs that cannot simply do not.
+            _shownRoutes = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
         }
-
-        var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
-        // Up to ten candidates: keep the best five. Pin coverage stays paramount —
-        // a route through every pin must never lose its slot to a near-miss — then
-        // elites + fires (the resources a route is chosen for), then "?" nodes.
-        // The same ordering is the display order.
-        _shownRoutes = match.Shown.Count <= PathSolver.BestPickPool
-            ? match.Shown
-                .Select(s => (s.Path, s.Hits, Counts: LegendCounts(s.Path)))
-                .OrderByDescending(x => x.Hits)
-                .ThenByDescending(x => x.Counts[5] + x.Counts[3])
-                .ThenByDescending(x => x.Counts[0])
-                .Take(PathSolver.LegendThreshold)
-                .Select(x => x.Path)
-                .ToList()
-            : match.Shown.Select(s => s.Path).ToList();
+        else
+        {
+            var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
+            // Up to ten candidates: keep the best five. Pin coverage stays paramount —
+            // a route through every pin must never lose its slot to a near-miss — then
+            // elites + fires (the resources a route is chosen for), then "?" nodes.
+            // The same ordering is the display order.
+            _shownRoutes = match.Shown.Count <= PathSolver.BestPickPool
+                ? match.Shown
+                    .Select(s => (s.Path, s.Hits, Counts: LegendCounts(s.Path)))
+                    .OrderByDescending(x => x.Hits)
+                    .ThenByDescending(x => x.Counts[5] + x.Counts[3])
+                    .ThenByDescending(x => x.Counts[0])
+                    .Take(PathSolver.LegendThreshold)
+                    .Select(x => x.Path)
+                    .ToList()
+                : match.Shown.Select(s => s.Path).ToList();
+        }
         _hotRoute = -1;
 
         // A locked route survives recomputes (and restarts) as long as it still

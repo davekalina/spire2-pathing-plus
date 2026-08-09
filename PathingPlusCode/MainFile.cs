@@ -26,6 +26,6 @@ public partial class MainFile : Node
         PathingPlusCode.Map.PathingOptions.Load();
 
         // Keep this string in sync with the manifest version.
-        Logger.Info("Pathing Plus v0.13.0 initialized.");
+        Logger.Info("Pathing Plus v0.13.1 initialized.");
     }
 }
