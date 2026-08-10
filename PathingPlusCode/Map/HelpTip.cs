@@ -13,13 +13,16 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal sealed class HelpTip : IDisposable
 {
-    private const float TipWidth = 566f;
-    private const float TipHeight = 700f;
+    private const float TipWidth = 600f;
+    private const float TipHeight = 830f;
 
     /// <summary>Gap between the tip's right edge and the toolbar's left edge.</summary>
     private const float TipGap = 16f;
 
-    private static readonly Color Parchment = new(0.898f, 0.882f, 0.831f);
+    /// <summary>Inset from the panel's edge, clear of the art's torn border.</summary>
+    private const float Pad = 46f;
+
+    private static readonly Color Parchment = new(0.96f, 0.94f, 0.88f);
     private static readonly Color BadgeIdle = new(1f, 1f, 1f, 0.6f);
 
     private readonly Control _root;
@@ -49,10 +52,13 @@ internal sealed class HelpTip : IDisposable
             AnchorRight = 1f,
             OffsetRight = -(MapToolbar.Width + 24f + TipGap),
             OffsetLeft = -(MapToolbar.Width + 24f + TipGap + TipWidth),
-            OffsetTop = 172f,
-            OffsetBottom = 172f + TipHeight,
+            OffsetTop = 148f,
+            OffsetBottom = 148f + TipHeight,
             GrowHorizontal = Control.GrowDirection.Begin,
         };
+        // Darkened well below the card's own tone: this panel is a wall of body text,
+        // and pale lettering only separates from parchment once the parchment stops
+        // competing with it for the light end of the range.
         var parchment = new TextureRect
         {
             Name = "Panel",
@@ -61,6 +67,7 @@ internal sealed class HelpTip : IDisposable
                 null, ResourceLoader.CacheMode.Reuse),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.Scale,
+            Modulate = new Color(0.40f, 0.36f, 0.33f),
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         parchment.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -69,17 +76,17 @@ internal sealed class HelpTip : IDisposable
         // Absolute placement rather than a container: an autowrapping Label reports a
         // near-zero minimum width, so inside a VBox it would collapse to one word per
         // line. Given an explicit rect it wraps to the width it was handed.
-        const float pad = 38f;
-        var title = MakeLabel(23, $"{MainFile.ModName} {MainFile.Version}\nby {MainFile.Author}");
+        const float bodyTop = 138f;
+        var title = MakeLabel(24, $"{MainFile.ModName} {MainFile.Version}\nby {MainFile.Author}");
         title.HorizontalAlignment = HorizontalAlignment.Center;
-        title.Position = new Vector2(pad, 34f);
-        title.Size = new Vector2(TipWidth - pad * 2f, 68f);
+        title.Position = new Vector2(Pad, 44f);
+        title.Size = new Vector2(TipWidth - Pad * 2f, 76f);
         _tip.AddChild(title);
 
-        var body = MakeLabel(18, Instructions);
+        var body = MakeLabel(17, Instructions);
         body.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        body.Position = new Vector2(pad, 112f);
-        body.Size = new Vector2(TipWidth - pad * 2f, TipHeight - 112f - pad);
+        body.Position = new Vector2(Pad, bodyTop);
+        body.Size = new Vector2(TipWidth - Pad * 2f, TipHeight - bodyTop - Pad);
         _tip.AddChild(body);
 
         _root.AddChild(_tip);
@@ -192,8 +199,16 @@ internal sealed class HelpTip : IDisposable
             label.AddThemeFontOverride("font", _font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", Parchment);
-        label.AddThemeColorOverride("font_outline_color", new Color(0.12f, 0.10f, 0.08f));
-        label.AddThemeConstantOverride("outline_size", 8);
+        // A drop shadow, not an outline. An outline traces every glyph on all sides,
+        // which at this size closes the counters and thickens the strokes until a
+        // paragraph turns into a grey mass; the game's own body text casts a shadow
+        // down-right and leaves the letterforms alone.
+        label.AddThemeConstantOverride("outline_size", 0);
+        label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.75f));
+        label.AddThemeConstantOverride("shadow_offset_x", 2);
+        label.AddThemeConstantOverride("shadow_offset_y", 3);
+        label.AddThemeConstantOverride("shadow_outline_size", 1);
+        label.AddThemeConstantOverride("line_spacing", 5);
         return label;
     }
 }

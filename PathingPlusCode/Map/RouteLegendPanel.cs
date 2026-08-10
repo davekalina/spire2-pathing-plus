@@ -52,7 +52,7 @@ internal sealed class RouteLegendPanel : IDisposable
     private readonly List<Control> _iconCells = [];
     private readonly List<MegaLabel> _typeNames = [];
     private readonly List<Control> _columns = [];
-    private readonly List<ColorRect> _columnMarks = [];
+    private readonly List<Panel> _columnMarks = [];
     private readonly List<Color> _columnColors = [];
     private int _hot = -1;
     private int _locked = -1;
@@ -209,7 +209,7 @@ internal sealed class RouteLegendPanel : IDisposable
                 MouseFilter = Control.MouseFilterEnum.Stop,
             };
 
-            var mark = new ColorRect
+            var mark = new Panel
             {
                 Visible = false,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -273,13 +273,37 @@ internal sealed class RouteLegendPanel : IDisposable
             var locked = i == _locked;
             var hot = i == _hot;
             _columnMarks[i].Visible = locked || hot;
-            // A locked column wears its route's own color; a merely-hot one darkens.
-            // Both strong enough to survive light parchment.
-            _columnMarks[i].Color = locked
-                ? _columnColors[i] with { A = 0.35f }
-                : new Color(0f, 0f, 0f, 0.15f);
+            if (!locked && !hot)
+                continue;
+
+            var style = new StyleBoxFlat
+            {
+                CornerRadiusTopLeft = 8,
+                CornerRadiusTopRight = 8,
+                CornerRadiusBottomLeft = 8,
+                CornerRadiusBottomRight = 8,
+            };
+            if (locked)
+            {
+                // The route's own colour, but deepened and framed. Half the palette is
+                // pale, and a pale wash over pale parchment reads as nothing — it was
+                // the border that made a locked column unmistakable, not the fill.
+                style.BgColor = Deepen(_columnColors[i], 0.55f) with { A = 0.42f };
+                style.BorderColor = Deepen(_columnColors[i], 0.7f);
+                style.SetBorderWidthAll(4);
+            }
+            else
+            {
+                // Merely hovered: a shadow, deliberately weaker than a lock.
+                style.BgColor = new Color(0f, 0f, 0f, 0.15f);
+            }
+            _columnMarks[i].AddThemeStyleboxOverride("panel", style);
         }
     }
+
+    /// <summary>Toward black, keeping the hue, so light route colours still bite.</summary>
+    private static Color Deepen(Color color, float amount) =>
+        new(color.R * amount, color.G * amount, color.B * amount, color.A);
 
     /// <summary>Where the legend hotkey lands; null when the panel is hidden.</summary>
     public Control? FirstFocus => _panel.Visible ? _iconCells.FirstOrDefault() : null;

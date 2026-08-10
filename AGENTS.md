@@ -78,9 +78,17 @@ Everything but those two lives under a collapsible **Advanced** heading.
 (`map_circle_4`) with a "?" over it, showing a parchment panel of instructions on
 hover, pinned open by a click. It exists because the mod repurposes controls the game
 already taught — the quill, the eraser, Clear Drawings — so nothing on screen would
-otherwise say they now mean something different. Its text is laid out **absolutely,
-not in a container**: an autowrapping `Label` reports a near-zero minimum width, so
-inside a `VBoxContainer` it collapses to one word per line.
+otherwise say they now mean something different. The prose lives in one string,
+`HelpTip.Instructions`; `\n\n` starts a paragraph and wrapping is automatic, so the
+copy can be edited without touching the layout.
+
+Two things about that panel are load-bearing. Its text is laid out **absolutely, not
+in a container**: an autowrapping `Label` reports a near-zero minimum width, so inside
+a `VBoxContainer` it collapses to one word per line. And body text gets a **drop
+shadow, never an outline** — `outline_size` traces every glyph on all sides, which at
+17px closes the counters and thickens the strokes until a paragraph reads as a grey
+mass. The card art is modulated to ~40% brightness underneath, because pale lettering
+only separates once the parchment stops competing for the light end of the range.
 
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
@@ -179,7 +187,11 @@ names instead, reading like the native legend. Route selection: up to
 lose its slot to a near-miss), then elites + fires, then "?" count; that ranking is
 also the display order. Type icon hover/focus fires the game's own
 `HighlightPointType` broadcast; column hover darkens the column (black 0.15),
-locking fills it with the route's color at 0.35 alpha. The native legend is
+locking gives it a `StyleBoxFlat` — a 4px border in the route's colour plus a fill of
+the same colour at 0.42 alpha, both **deepened toward black** first. A plain wash in
+the route's own colour is what it used to be, and it was invisible: half the palette
+is pale, and pale over pale parchment reads as nothing. The border, not the fill, is
+what makes a locked column unmistakable. The native legend is
 `Visible = false` for the view's lifetime (restored on dispose) and its hotkey
 handler `OnLegendHotkeyPressed` is prefix-rerouted into this panel with the same
 toggle semantics. Hovering or focusing a type icon also bands that whole row inside
