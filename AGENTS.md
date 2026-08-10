@@ -62,8 +62,9 @@ node starts at the tray's right edge for the turned rectangle to land on the tra
 The view button wears the pause menu's face (`reward_screen/reward_item_button.png`
 plus the `hsv` shader at s 0.8 / v 0.9) and its lettering, and **names the next
 action rather than the current state**: Zoom Out → Rotate → Zoom In. The byline is
-pale lettering over a dark outline and drop shadow rather than dark ink on the
-parchment — the panel's grain eats dark text at that size.
+pale lettering over a dark outline and a light drop shadow rather than dark ink on the
+parchment — the panel's grain eats dark text at that size. It carries the **name and
+version only**; the author is said once, properly, in the help panel.
 
 The settings panel hangs directly beneath the toolbar on the same right edge, wearing
 the same card art upright, and any click outside it dismisses it (a full-rect catcher
@@ -99,8 +100,20 @@ same drawing rule and differ only in how pins are placed — *Drawing* prefixes
 passes through for both mouse and controller, suppresses the native line, and pins
 the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
 itself). Erasing there is the inverse: it lifts a pin under the cursor, or the pin a
-crossed link leads to, and only falls through to the game's own eraser when neither
-is near. Use the **point the patch is handed** — it is the controller's cursor as much as the
+crossed link leads to, and does nothing when neither is near.
+
+Suppressing that funnel is **not enough on its own** to keep native ink off the map.
+`BeginLineLocal` creates the `Line2D` and seeds it with two points half a pixel apart,
+which round-capped in the character's drawing colour renders as a dot — so with every
+later point dropped, that seed became the only thing drawn, one blob per stroke.
+`MapDrawingBeginPatch` begins no line at all in this mode, which also keeps the
+phantom stroke off the wire. Two consequences follow and must not be undone: the
+`UpdateCurrentLinePositionLocal` prefix must **always** skip the original in Drawing
+mode, since the game reads the current line's last point without checking there is
+one; and the eraser has no native ink to remove while the mode is on, so it only ever
+lifts pins (Clear drawings still takes everything).
+
+Use the **point the patch is handed** — it is the controller's cursor as much as the
 mouse — but converting it back is a trap worth knowing. The game produces it with
 `Transform2D.Inverse()`, which Godot only defines for an **orthonormal** basis:
 rotation is fine, scale is not. Vanilla never scales the map so their conversion
@@ -120,6 +133,14 @@ a plan that forks yields one route per branch. **Every assembled route is drawn*
 legend's five are ranked by elites, then fires, then shops, and only those get a
 colour and a column, the rest going down first as a faint backdrop. Cutting the extras
 instead would answer the player's own drawing with silence.
+
+**Only complete routes are tabulated.** A route earns a colour and a column only if it
+ends where the act ends — the terminal nodes of the full enumerated routes, the boss
+already trimmed off. A half-drawn path is a plan in progress, and putting it in the
+table invites a comparison that means nothing: of course the short one has fewer
+elites. Incomplete routes still draw, as backdrop, so a path does not vanish while it
+is being made — which is why `UpdateOverlay` clears only when the backdrop is empty
+too, not merely when nothing is shown.
 
 Two earlier rules were wrong here and must not come back. Judging by "first waypoint
 reached" admits any detour that dodges every intermediate pin — up an edge column

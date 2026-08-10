@@ -23,12 +23,12 @@ internal sealed class MapToolbar : IDisposable
     public const float Width = 348f;
     public const float ButtonRowTop = 22f;
     public const float ButtonHeight = 62f;
-    public const float HelpLeft = 24f;
-    public const float HelpSize = 42f;
-    public const float GearLeft = 76f;
+    public const float HelpLeft = 22f;
+    public const float HelpSize = 52f;
+    public const float GearLeft = 84f;
     public const float GearSize = 46f;
-    public const float ZoomLeft = 132f;
-    public const float ZoomWidth = 192f;
+    public const float ZoomLeft = 140f;
+    public const float ZoomWidth = 184f;
 
     private const float BylineTop = 100f;
     private const float Height = 154f;
@@ -70,7 +70,9 @@ internal sealed class MapToolbar : IDisposable
         var byline = new MegaLabel
         {
             AutoSizeEnabled = false,
-            Text = $"{MainFile.ModName} {MainFile.Version} by {MainFile.Author}",
+            // Name and version only. The author belongs in the help panel, where
+            // there is room to say it once and properly.
+            Text = $"{MainFile.ModName} {MainFile.Version}",
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -86,9 +88,9 @@ internal sealed class MapToolbar : IDisposable
         byline.AddThemeColorOverride("font_color", new Color(0.96f, 0.93f, 0.86f));
         byline.AddThemeColorOverride("font_outline_color", new Color(0.09f, 0.07f, 0.06f, 0.85f));
         byline.AddThemeConstantOverride("outline_size", 6);
-        byline.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.7f));
-        byline.AddThemeConstantOverride("shadow_offset_x", 2);
-        byline.AddThemeConstantOverride("shadow_offset_y", 3);
+        byline.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.4f));
+        byline.AddThemeConstantOverride("shadow_offset_x", 1);
+        byline.AddThemeConstantOverride("shadow_offset_y", 2);
         _root.AddChild(byline);
 
         screen.AddChild(_root);

@@ -117,7 +117,9 @@ internal sealed class HelpTip : IDisposable
         };
         _badge.AddChild(_circle);
 
-        var mark = MakeLabel(24, "?");
+        // Well inside the ring: the glyph filling the circle read as a crowded blob
+        // rather than a badge.
+        var mark = MakeLabel(22, "?");
         mark.HorizontalAlignment = HorizontalAlignment.Center;
         mark.VerticalAlignment = VerticalAlignment.Center;
         mark.Size = new Vector2(MapToolbar.HelpSize, MapToolbar.HelpSize);

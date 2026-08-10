@@ -283,13 +283,16 @@ internal static class MapScreenPatches
         }
     }
 
-    /// <returns>True when the mod consumed the stroke point.</returns>
-    internal static bool RouteDrawingPoint(NMapDrawings drawings, Vector2 point, bool erasing)
+    internal static void RouteDrawingPoint(NMapDrawings drawings, Vector2 point, bool erasing)
     {
         foreach (var (screen, view) in Views)
+        {
             if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
-                return view.OnDrawingPoint(drawings, point, erasing);
-        return false;
+            {
+                view.OnDrawingPoint(drawings, point, erasing);
+                return;
+            }
+        }
     }
 
     internal static void RouteClearDrawings(NMapDrawings drawings)
@@ -316,20 +319,49 @@ internal static class MapScreenPatches
 internal static class MapDrawingSnapPatch
 {
     [HarmonyPrefix]
-    private static bool BeforeUpdateLine(NMapDrawings __instance, Vector2 __0) =>
+    private static bool BeforeUpdateLine(NMapDrawings __instance, Vector2 __0)
+    {
+        if (PathingOptions.Mode != PathMode.Drawing)
+            return true;
+
         Guard.Run("Snapping a drawn stroke to the map", () =>
         {
-            if (PathingOptions.Mode != PathMode.Drawing)
-                return true;
             var drawing = __instance.GetLocalDrawingMode();
             if (drawing is not (DrawingMode.Drawing or DrawingMode.Erasing))
-                return true;
+                return;
             // The game hands us the point in the drawings node's own space, and it is
             // the cursor for a controller as much as the mouse for a pointer — so it,
             // not the mouse, is what the stroke follows.
-            return !MapScreenPatches.RouteDrawingPoint(
+            MapScreenPatches.RouteDrawingPoint(
                 __instance, __0, drawing == DrawingMode.Erasing);
-        }, true);
+        });
+
+        // Never the original, whatever happened above: no line was begun in this mode
+        // (see MapDrawingBeginPatch), and the game's update reads the current line's
+        // last point without checking there is one.
+        return false;
+    }
+}
+
+/// <summary>
+/// The stroke that is never begun.
+///
+/// <c>BeginLineLocal</c> creates a Line2D and seeds it with two points half a pixel
+/// apart — which, round-capped and in the character's drawing colour, renders as a
+/// dot. In Drawing path mode every later point of that stroke is dropped, so the seed
+/// is the only thing that ever gets drawn: one blob of native ink per stroke, left on
+/// the map after the mod has drawn the real route. Beginning no line at all removes
+/// the blob, and keeps the phantom stroke off the wire for other players too.
+///
+/// The cost is that the native eraser has nothing to erase with while this mode is
+/// on. Nothing local writes native ink here, so the only ink it could have removed is
+/// from another mode or another player — and Clear drawings still takes all of it.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.BeginLineLocal))]
+internal static class MapDrawingBeginPatch
+{
+    [HarmonyPrefix]
+    private static bool BeforeBeginLine() => PathingOptions.Mode != PathMode.Drawing;
 }
 
 /// <summary>

@@ -266,14 +266,15 @@ internal sealed class PathingView : IDisposable
     /// pins are only added, so a stroke wandering back over itself cannot undo itself.
     /// Erasing is the reverse: it lifts a pin the stroke touches, or the pin at the far
     /// end of a drawn link it crosses, so rubbing out a line takes the plan with it.
+    /// The game never draws any of these points: the stroke it would have drawn them
+    /// into is suppressed at its source, in <c>MapDrawingBeginPatch</c>.
     /// </summary>
-    /// <returns>True if the mod handled the point and the game should not draw it.</returns>
-    public bool OnDrawingPoint(Control drawings, Vector2 pointInDrawings, bool erasing)
+    public void OnDrawingPoint(Control drawings, Vector2 pointInDrawings, bool erasing)
     {
         if (!_screen.IsOpen || _adapter is null || _nodesByCoord is null)
-            return false;
+            return;
         if (MapPoint() is not { } cursor)
-            return false;
+            return;
 
         var nearest = _pinnable
             .Select(id => (Id: id, Center: EndpointOf(id)))
@@ -287,23 +288,22 @@ internal sealed class PathingView : IDisposable
         if (!erasing)
         {
             if (nearest is null || _pins.IsSelected(nearest))
-                return true;
+                return;
             _pins.Toggle(nearest);
             Refresh();
-            return true;
+            return;
         }
 
         // A pin under the eraser goes first; failing that, the link being rubbed out
-        // loses the pin it leads to. If neither, the game erases its own ink.
+        // loses the pin it leads to. Over neither, the eraser simply does nothing.
         var target = nearest is not null && _pins.IsSelected(nearest)
             ? nearest
             : PinnedEndOfLinkNear(cursor);
         if (target is null)
-            return false;
+            return;
 
         _pins.Toggle(target);
         Refresh();
-        return true;
 
         // Getting back to map space is subtler than it looks. The game hands us
         // `Drawings.GetGlobalTransform().Inverse() * globalPoint`, and Godot's
@@ -409,11 +409,22 @@ internal sealed class PathingView : IDisposable
             // pinned floors, stitched back into whole routes so the legend counts
             // paths rather than the links they are made of.
             _links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
+            var assembled = PathSolver.AssembleRoutes(_links);
 
-            // Everything the plan allows is drawn; the legend's worth of best ones
-            // are the ones that get a colour and a column. Ranked by what a route is
+            // Only a plan that runs to the end of the act earns a column. A path
+            // stopping halfway is a plan in progress, and tabulating it invites a
+            // comparison that means nothing — of course the short one has fewer
+            // elites. `routes` are the complete walks, so their last nodes are exactly
+            // where the act ends (the boss having already been trimmed off).
+            var terminals = routes.Select(route => route[^1]).ToHashSet();
+            bool Complete(IReadOnlyList<string> route) =>
+                route.Count > 1 && terminals.Contains(route[^1]);
+
+            // Everything the plan allows is still drawn; the legend's worth of best
+            // complete ones get a colour and a column. Ranked by what a route is
             // usually chosen for: elites, then fires, then shops.
-            var ranked = PathSolver.AssembleRoutes(_links)
+            var ranked = assembled
+                .Where(Complete)
                 .Select(route => (Route: route, Counts: LegendCounts(route)))
                 .OrderByDescending(entry => entry.Counts[5])
                 .ThenByDescending(entry => entry.Counts[3])
@@ -421,7 +432,9 @@ internal sealed class PathingView : IDisposable
                 .Select(entry => entry.Route)
                 .ToList();
             _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
-            _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold).ToList();
+            _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold)
+                .Concat(assembled.Where(route => !Complete(route)))
+                .ToList();
         }
         else
         {
@@ -573,7 +586,9 @@ internal sealed class PathingView : IDisposable
 
     private void UpdateOverlay()
     {
-        if (_shownRoutes.Count == 0)
+        // A plan with nothing finished yet is still a plan: the backdrop alone must
+        // keep drawing, or half-drawn paths would vanish as they were being made.
+        if (_shownRoutes.Count == 0 && _backdropRoutes.Count == 0)
         {
             _overlay.Clear();
         }
