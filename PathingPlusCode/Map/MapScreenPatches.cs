@@ -336,32 +336,57 @@ internal static class MapDrawingSnapPatch
                 __instance, __0, drawing == DrawingMode.Erasing);
         });
 
-        // Never the original, whatever happened above: no line was begun in this mode
-        // (see MapDrawingBeginPatch), and the game's update reads the current line's
-        // last point without checking there is one.
+        // Never the original, whatever happened above. The line exists — it has to,
+        // or the game stops forwarding motion at all (see MapDrawingBeginPatch) — but
+        // it must never gain a point: the mod's own trails are the drawing here.
         return false;
     }
 }
 
 /// <summary>
-/// The stroke that is never begun.
+/// The stroke that is begun but never seen.
 ///
-/// <c>BeginLineLocal</c> creates a Line2D and seeds it with two points half a pixel
-/// apart — which, round-capped and in the character's drawing colour, renders as a
-/// dot. In Drawing path mode every later point of that stroke is dropped, so the seed
-/// is the only thing that ever gets drawn: one blob of native ink per stroke, left on
-/// the map after the mod has drawn the real route. Beginning no line at all removes
-/// the blob, and keeps the phantom stroke off the wire for other players too.
+/// <c>BeginLine</c> creates a Line2D and seeds it with two points half a pixel apart —
+/// which, round-capped and in the character's drawing colour, renders as a dot. In
+/// Drawing path mode every later point of that stroke is dropped, so the seed is the
+/// only thing that ever gets drawn: one blob of native ink per stroke, left on the map
+/// after the mod has drawn the real route.
 ///
-/// The cost is that the native eraser has nothing to erase with while this mode is
-/// on. Nothing local writes native ink here, so the only ink it could have removed is
-/// from another mode or another player — and Clear drawings still takes all of it.
+/// The line still has to be **created**, though, and that is not optional.
+/// <c>IsDrawing</c> is defined as <c>currentlyDrawingLine != null</c>, and every input
+/// driver — mouse mode, mouse-held, and the controller — forwards motion only while
+/// <c>IsLocalDrawing()</c>. Refusing to begin the line therefore does not suppress a
+/// stroke, it suppresses every point of it, and Drawing mode stops working entirely.
+/// So the line is made as usual and hidden, which leaves the drivers satisfied and the
+/// map clean. Each hidden line is a two-point node that lives until the drawings are
+/// cleared, exactly as the game's own lines do.
+///
+/// The flag scopes this to the local player's strokes: <c>CreateLineForPlayer</c> also
+/// runs for lines arriving from other players, and those should still be visible.
 /// </summary>
 [HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.BeginLineLocal))]
 internal static class MapDrawingBeginPatch
 {
+    internal static bool Hiding;
+
     [HarmonyPrefix]
-    private static bool BeforeBeginLine() => PathingOptions.Mode != PathMode.Drawing;
+    private static void BeforeBeginLine() => Hiding = PathingOptions.Mode == PathMode.Drawing;
+
+    [HarmonyFinalizer]
+    private static void AfterBeginLine() => Hiding = false;
+}
+
+/// <summary>Hides the line <see cref="MapDrawingBeginPatch" /> is standing over.</summary>
+[HarmonyPatch(typeof(NMapDrawings), "CreateLineForPlayer")]
+internal static class MapDrawingCreateLinePatch
+{
+    [HarmonyPostfix]
+    private static void AfterCreateLine(Line2D __result) =>
+        Guard.Run("Hiding a native stroke", () =>
+        {
+            if (MapDrawingBeginPatch.Hiding && GodotObject.IsInstanceValid(__result))
+                __result.Visible = false;
+        });
 }
 
 /// <summary>

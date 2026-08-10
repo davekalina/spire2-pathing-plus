@@ -103,15 +103,25 @@ itself). Erasing there is the inverse: it lifts a pin under the cursor, or the p
 crossed link leads to, and does nothing when neither is near.
 
 Suppressing that funnel is **not enough on its own** to keep native ink off the map.
-`BeginLineLocal` creates the `Line2D` and seeds it with two points half a pixel apart,
+`BeginLine` creates the `Line2D` and seeds it with two points half a pixel apart,
 which round-capped in the character's drawing colour renders as a dot — so with every
-later point dropped, that seed became the only thing drawn, one blob per stroke.
-`MapDrawingBeginPatch` begins no line at all in this mode, which also keeps the
-phantom stroke off the wire. Two consequences follow and must not be undone: the
-`UpdateCurrentLinePositionLocal` prefix must **always** skip the original in Drawing
-mode, since the game reads the current line's last point without checking there is
-one; and the eraser has no native ink to remove while the mode is on, so it only ever
-lifts pins (Clear drawings still takes everything).
+later point dropped, that seed became the only thing drawn: one blob per stroke.
+
+**The line must still be created.** `IsDrawing` is defined as
+`currentlyDrawingLine != null`, and every input driver — `NMouseModeMapDrawingInput`,
+`NMouseHeldMapDrawingInput`, `NControllerMapDrawingInput` — forwards motion only while
+`IsLocalDrawing()`. Refusing to begin the line does not suppress a stroke, it
+suppresses every *point* of it, and Drawing mode stops working altogether; that was
+tried and it broke the mode outright. So the line is begun as usual and hidden:
+`MapDrawingBeginPatch` raises a flag around `BeginLineLocal` and
+`MapDrawingCreateLinePatch` sets `Visible = false` on the `Line2D` that comes back.
+The flag is what scopes it to the local player — `CreateLineForPlayer` also runs for
+lines arriving from other players, and theirs should still show.
+
+Two consequences follow. The `UpdateCurrentLinePositionLocal` prefix **always** skips
+the original in Drawing mode, so the hidden line never gains a point. And the eraser
+has no visible native ink to remove while the mode is on, so it only ever lifts pins
+(Clear drawings still takes everything).
 
 Use the **point the patch is handed** — it is the controller's cursor as much as the
 mouse — but converting it back is a trap worth knowing. The game produces it with
