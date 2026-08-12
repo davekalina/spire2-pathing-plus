@@ -266,7 +266,12 @@ between two neighbours is a coin toss. Its radius is `HoverRadius` (14), not the
 quill's `SnapRadius` (55) — that one is scaled to a node and swallows whole bundles of
 lines. Backdrop routes have no column but are hoverable too: they are drawn as merged
 edges, so there is nothing per-route to light, and `ShowTrace` picks the one route out
-over the top instead. Column hover darkens the column (black 0.15),
+over the top instead. Only the **run between two nodes** answers the pointer: hover is
+off while a drawing tool is in hand (the mouse is drawing, not pointing, and lighting
+whatever the stroke crosses fights the gesture) and off over a node (that is something
+about to be clicked, and a route lighting under it makes the map twitch on the way to
+every pin). The node radius comes from the node's own rect, not a constant, so it
+tracks whatever the game draws. Column hover darkens the column (black 0.15),
 locking gives it a `StyleBoxFlat` — a 4px border in the route's colour plus a fill of
 the same colour at 0.42 alpha, both **deepened toward black** first. A plain wash in
 the route's own colour is what it used to be, and it was invisible: half the palette

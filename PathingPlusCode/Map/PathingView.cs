@@ -211,8 +211,15 @@ internal sealed class PathingView : IDisposable
                 _overlay.PulsePins();
         }
 
-        var route = RouteNear(point);
-        var backdrop = route >= 0 ? -1 : BackdropNear(point);
+        // Only the line between two nodes answers the pointer. A drawing tool in hand
+        // means the mouse is drawing rather than pointing, and highlighting whatever
+        // the stroke crosses fights the gesture; a node under the cursor is something
+        // you are about to click, and lighting a route through it makes the map twitch
+        // on the way to every pin.
+        var picking = _screen.Drawings.GetLocalDrawingMode() == DrawingMode.None
+            && !OverNode(point);
+        var route = picking ? RouteNear(point) : -1;
+        var backdrop = picking && route < 0 ? BackdropNear(point) : -1;
         if (route == _pointerRoute && backdrop == _pointerBackdrop)
             return;
         _pointerRoute = route;
@@ -268,6 +275,26 @@ internal sealed class PathingView : IDisposable
 
     private List<Vector2> Polyline(IReadOnlyList<string> route) =>
         route.Select(EndpointOf).OfType<Vector2>().ToList();
+
+    /// <summary>
+    /// Whether the pointer is on a map node rather than on the run between two. Sized
+    /// from the node's own rect, so it tracks whatever the game draws rather than a
+    /// guess that drifts when the art changes.
+    /// </summary>
+    private bool OverNode(Vector2 point)
+    {
+        if (_nodesByCoord is null)
+            return false;
+        foreach (var node in _nodesByCoord.Values)
+        {
+            if (!GodotObject.IsInstanceValid(node))
+                continue;
+            var center = node.Position + node.Size * 0.5f;
+            if (center.DistanceTo(point) <= Math.Max(node.Size.X, node.Size.Y) * 0.5f)
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// A global point in the map's own space. Scale makes this less trivial than it
