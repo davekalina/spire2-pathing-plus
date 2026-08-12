@@ -15,7 +15,12 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal static class PinStore
 {
-    internal sealed record Saved(string MapKey, string[] Pins, string[]? LockedRoute);
+    /// <param name="Blocked">
+    /// Nodes the eraser struck. Nullable so a file written before erasing was sticky
+    /// still loads, as an empty set.
+    /// </param>
+    internal sealed record Saved(
+        string MapKey, string[] Pins, string[]? LockedRoute, string[]? Blocked = null);
 
     private static string FilePath =>
         Path.Combine(OS.GetUserDataDir(), "PathingPlus.pins.json");

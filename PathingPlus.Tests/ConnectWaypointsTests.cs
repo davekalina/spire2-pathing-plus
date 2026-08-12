@@ -92,6 +92,40 @@ public class ConnectWaypointsTests
     }
 
     [Fact]
+    public void An_erased_node_is_not_routed_through()
+    {
+        // The point of blocking. Pin "top" with "left" erased and the line must take
+        // the right-hand way; without it the solver picks the shortest link, which
+        // runs straight back through the node just rubbed out.
+        var segments = PathSolver.ConnectWaypoints(
+            Graph(), "here", new[] { "top" }, new[] { "left" });
+
+        Assert.NotEmpty(segments);
+        Assert.All(segments, s => Assert.DoesNotContain("left", s));
+        Assert.Contains(segments, s => s.SequenceEqual(new[] { "here", "mid", "right", "top" }));
+    }
+
+    [Fact]
+    public void An_erased_node_cannot_be_a_waypoint()
+    {
+        var segments = PathSolver.ConnectWaypoints(
+            Graph(), "here", new[] { "left" }, new[] { "left" });
+
+        Assert.Empty(segments);
+    }
+
+    [Fact]
+    public void Erasing_the_only_way_through_leaves_the_pin_unlinked()
+    {
+        // "mid" is the sole route out of "here", so blocking it cannot be routed
+        // around — the plan loses that leg rather than quietly ignoring the erase.
+        var segments = PathSolver.ConnectWaypoints(
+            Graph(), "here", new[] { "top" }, new[] { "mid" });
+
+        Assert.Empty(segments);
+    }
+
+    [Fact]
     public void The_long_way_round_is_culled_in_favour_of_the_direct_one()
     {
         // "here" reaches "goal" directly, or by a four-hop detour out to the side —

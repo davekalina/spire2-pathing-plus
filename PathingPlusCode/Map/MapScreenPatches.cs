@@ -154,6 +154,17 @@ internal static class MapScreenPatches
     private static void AfterInput(NMapScreen __instance, InputEvent __0) =>
         Guard.Run("Map hotkeys", () =>
         {
+            // The controller's gold ring is a cursor only while the controller is the
+            // cursor. Nothing announces the switch to a mouse — the focus events that
+            // place the ring simply stop coming — so the mouse's own first move is
+            // what takes it down.
+            if (__0 is InputEventMouse && Views.TryGetValue(__instance, out var pointed))
+            {
+                pointed.OnPointerUsed();
+                if (__0 is InputEventMouseMotion motion)
+                    pointed.OnPointerMoved(motion.GlobalPosition);
+            }
+
             if (Pulled(__0, Controller.rightTrigger, ref _rightTriggerHeld) &&
                 Ready(__instance) && Views.TryGetValue(__instance, out var view))
             {

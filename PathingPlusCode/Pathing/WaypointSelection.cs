@@ -24,6 +24,9 @@ public sealed class WaypointSelection
         return true;
     }
 
+    /// <summary>Unconditionally off, for the eraser — which must never turn one on.</summary>
+    public void Remove(string id) => _ids.Remove(id);
+
     public void Clear() => _ids.Clear();
 
     /// <summary>Drop waypoints that no longer exist, e.g. after the map model changes.</summary>

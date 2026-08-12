@@ -37,7 +37,9 @@ the traveled-ink color on the map while the rest fade. Pinned nodes are stamped 
 the game's own map_circle art tinted rust — always `map_circle_4`, the completed
 frame: the earlier four are the drawing animation and look torn as stills. The
 controller cursor is the same art in gold, shown only while
-`NControllerManager.IsUsingDirectionalNavigation`.
+`NControllerManager.IsUsingDirectionalNavigation` — and taken down by the mouse's own
+first event, since nothing announces the switch away from a controller: the focus
+events that place the ring simply stop arriving, leaving it stranded on the map.
 
 Overlay stacking is tree order only — **never `ZIndex`**: a nonzero ZIndex is
 canvas-global and draws over screens the game layers above the map (a z-10 route
@@ -99,8 +101,32 @@ same drawing rule and differ only in how pins are placed — *Drawing* prefixes
 `NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
 passes through for both mouse and controller, suppresses the native line, and pins
 the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
-itself). Erasing there is the inverse: it lifts a pin under the cursor, or the pin a
-crossed link leads to, and does nothing when neither is near.
+itself). Erasing there is the inverse, and it is **sticky**: the node under the cursor
+— or the nearer end of the crossed step — goes onto a `_blocked` set that
+`ConnectWaypoints` keeps out of both the waypoints and the routing. Without the second
+half the erase appears to do nothing: the solver simply re-links the neighbouring
+floors through the node just rubbed out, since that is the shortest way. Erasing used
+to lift the pin a link *led to*, which on a sparse plan is the anchor for everything
+between two waypoints — so rubbing out one step took a whole branch with it. Drawing
+over a blocked node unblocks it; the quill has to be able to undo the eraser. Blocked
+nodes persist beside the pins and are dropped once they fall behind the marker.
+
+**A click always beats a block.** Clicking a node clears it from `_blocked` before
+toggling the pin — the same right the quill has. Without it, clicking a node the
+eraser had struck did nothing whatsoever: the pin went on, the block kept it out of
+the plan, and the orphan sweep took it straight back off, so a reachable node was
+simply unselectable with no indication why.
+
+**The erase cascades to orphans.** A block can cut the only way to a node pinned
+further on — erase `c0r8` and a pin on `c0r9` has no legal approach left — which drew
+a ring with nothing attached and no way to see why, since blocks are invisible. Any
+pin appearing in no link is therefore dropped and the links recomputed once. The
+cascade goes exactly as far as it must and never leaves an orphan to puzzle at.
+
+**A plan one floor short of the end is finished for the player.** `WithLastStep` adds
+the act's end nodes as waypoints once the topmost pin sits on the floor below them.
+Unreachable ends contribute nothing, so adding them all is safe. They stay out of
+`_pins`, so they are never persisted and the eraser has nothing of its own to lift.
 
 Suppressing that funnel is **not enough on its own** to keep native ink off the map.
 `BeginLine` creates the `Line2D` and seeds it with two points half a pixel apart,
@@ -162,8 +188,16 @@ reinstated: best-match scoring made a second pin *widen* the picture by re-admit
 routes that skipped the first, and requiring every pin on one route drew **nothing**
 the moment two pins sat on different branches. Pinnability is still computed from the
 full routes, so every node ahead stays reachable. **Path Markers** picks the pin ring:
-*None* (the default — in Drawing mode the stroke already says where the plan goes, and
-a ring on every node it touched is noise), *Small* (75%), or *Regular*. Sliders expose the dash
+**Path markers have no setting** — they are small, and **transient**: they fade in when
+the plan changes, hold three seconds, then fade out, and hovering a pinned node brings
+them back (asking where the plan goes should not require changing it). Once transient,
+none of *off* / *small* / *regular* was worth choosing between, so the option went.
+A ring
+that stays put reads as "somewhere I have been", which is the wrong thing to see on a
+node ahead at the moment of choosing where to move; as feedback while drawing it is
+exactly right. `ShowPins` is therefore told *whether the plan changed*: a redraw for
+travelling, zooming, or reopening the map must not restart the timer, or the markers
+come back at precisely the wrong moment. Sliders expose the dash
 geometry (`DashWidth`, `DashLength`, `DashLengthVariance`, `DashSpacing`,
 `RouteSeparation`) and the landscape framing (`LandscapeFit`, `LandscapeZoom`,
 `LandscapeShiftX/Y`, re-fitted live through `MapZoom.Reapply`) for live tuning. The
@@ -216,8 +250,23 @@ names instead, reading like the native legend. Route selection: up to
 `BestPickPool` (10) candidates survive `MatchByPins`, and the best
 `LegendThreshold` (5) are shown — ranked by pin hits first (a full match must never
 lose its slot to a near-miss), then elites + fires, then "?" count; that ranking is
-also the display order. Type icon hover/focus fires the game's own
-`HighlightPointType` broadcast; column hover darkens the column (black 0.15),
+also the display order, and the remainder go down as backdrop. **The best five are
+always named**, however wide the field: a large match set used to fall back to an
+unlabelled union with an empty table, which answered "which of these is better?" with
+silence at exactly the moment the question was being asked. The union view is now only
+for **no pins at all**, where no route is a better answer than any other and the shape
+of the whole act is the honest display. Type icon hover/focus fires the game's own
+`HighlightPointType` broadcast. Hovering works **both ways**: a column lights its route
+on the map, and a drawn route under the mouse lights its column — which is why the
+pointer handler stands down while the pointer is over the legend (`Covers`), or it
+would clear the column the legend had just lit. Map-side hit testing must use
+`PathOverlay.RouteShift`, the same sideways offset the routes are **drawn** with:
+against the shared centreline every route lies on top of every other and picking
+between two neighbours is a coin toss. Its radius is `HoverRadius` (14), not the
+quill's `SnapRadius` (55) — that one is scaled to a node and swallows whole bundles of
+lines. Backdrop routes have no column but are hoverable too: they are drawn as merged
+edges, so there is nothing per-route to light, and `ShowTrace` picks the one route out
+over the top instead. Column hover darkens the column (black 0.15),
 locking gives it a `StyleBoxFlat` — a 4px border in the route's colour plus a fill of
 the same colour at 0.42 alpha, both **deepened toward black** first. A plain wash in
 the route's own colour is what it used to be, and it was invisible: half the palette

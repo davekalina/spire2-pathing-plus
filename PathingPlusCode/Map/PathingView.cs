@@ -46,10 +46,36 @@ internal sealed class PathingView : IDisposable
     /// <summary>Matching routes beyond the legend's five: drawn, but not coloured.</summary>
     private IReadOnlyList<IReadOnlyList<string>> _backdropRoutes = [];
     private HashSet<string> _pinnable = [];
+
+    /// <summary>
+    /// Nodes the eraser struck. Kept out of the plan *and* out of the solver's
+    /// routing, so rubbing out a step removes that step instead of the solver
+    /// re-linking its neighbours straight back through it.
+    /// </summary>
+    private HashSet<string> _blocked = [];
+
+    /// <summary>The pin set as last drawn, so a redraw can tell a change from a repeat.</summary>
+    private string _pinSignature = PinsChangedSentinel;
+
+    /// <summary>Forces the next redraw to count as a change; equals the empty set's own signature, which is harmless since nothing is then shown.</summary>
+    private const string PinsChangedSentinel = "";
+
     private string _mapKey = "";
     private IReadOnlyList<string>? _lockedRouteIds;
     private int _hotRoute = -1;
     private int _lockedRoute = -1;
+
+    /// <summary>The drawn route under the mouse, and whether a pinned node is too.</summary>
+    private int _pointerRoute = -1;
+    private int _pointerBackdrop = -1;
+    private bool _overPin;
+
+    /// <summary>
+    /// How near the mouse must pass a drawn line to pick it — far tighter than the
+    /// quill's <c>SnapRadius</c>, which is scaled to a node and made neighbouring
+    /// routes impossible to tell apart.
+    /// </summary>
+    private const float HoverRadius = 14f;
 
     public PathingView(NMapScreen screen)
     {
@@ -116,6 +142,9 @@ internal sealed class PathingView : IDisposable
     {
         if (!_screen.IsOpen)
             return;
+        // Changing the marker size should show what it looks like, not leave the
+        // player staring at a map that appears not to have changed.
+        _pinSignature = PinsChangedSentinel;
         _zoom.Reapply();
         Refresh();
     });
@@ -156,6 +185,99 @@ internal sealed class PathingView : IDisposable
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
 
+    /// <summary>The mouse took over; the controller's focus ring is no longer the cursor.</summary>
+    public void OnPointerUsed() => _overlay.HideCursor();
+
+    /// <summary>
+    /// The mouse moved over the map. Two things answer it: a pinned node under the
+    /// pointer brings the markers back — asking where the plan goes should be enough,
+    /// without having to change it — and a drawn route under the pointer lights its
+    /// legend column, the mirror of hovering the column to light the route.
+    /// </summary>
+    public void OnPointerMoved(Vector2 globalPoint) => Guard.Run("Map hover", () =>
+    {
+        if (!_screen.IsOpen || _legend.Covers(globalPoint))
+            return;
+        if (MapPointFromGlobal(globalPoint) is not { } point)
+            return;
+
+        var overPin = _pins.Ids
+            .Select(EndpointOf).OfType<Vector2>()
+            .Any(center => center.DistanceTo(point) <= SnapRadius);
+        if (overPin != _overPin)
+        {
+            _overPin = overPin;
+            if (overPin)
+                _overlay.PulsePins();
+        }
+
+        var route = RouteNear(point);
+        var backdrop = route >= 0 ? -1 : BackdropNear(point);
+        if (route == _pointerRoute && backdrop == _pointerBackdrop)
+            return;
+        _pointerRoute = route;
+        _pointerBackdrop = backdrop;
+
+        _legend.SetHot(route);
+        _overlay.SetHighlight(route >= 0 ? route : _hotRoute >= 0 ? _hotRoute : _lockedRoute);
+        if (backdrop >= 0)
+            _overlay.ShowTrace(Polyline(_backdropRoutes[backdrop]));
+        else
+            _overlay.ClearTrace();
+    });
+
+    /// <summary>
+    /// The coloured route the point lies on, nearest first, or -1 for none. Tested
+    /// against where each route is actually **drawn**, sideways of the nodes it joins
+    /// — against the shared centreline the routes all coincide and picking one of two
+    /// neighbours is a coin toss.
+    /// </summary>
+    private int RouteNear(Vector2 point)
+    {
+        var best = (Index: -1, Distance: float.MaxValue);
+        for (var i = 0; i < _shownRoutes.Count; i++)
+        {
+            var shift = PathOverlay.RouteShift(i, _shownRoutes.Count);
+            var centers = Polyline(_shownRoutes[i]).Select(center => center + shift).ToList();
+            for (var step = 1; step < centers.Count; step++)
+            {
+                var distance = DistanceToSegment(point, centers[step - 1], centers[step]);
+                if (distance <= HoverRadius && distance < best.Distance)
+                    best = (i, distance);
+            }
+        }
+        return best.Index;
+    }
+
+    /// <summary>
+    /// The uncoloured route under the point. The backdrop is drawn as merged edges, so
+    /// several routes can share the step being hovered; the first one is as good an
+    /// answer as any, and beats refusing to answer at all.
+    /// </summary>
+    private int BackdropNear(Vector2 point)
+    {
+        for (var i = 0; i < _backdropRoutes.Count; i++)
+        {
+            var centers = Polyline(_backdropRoutes[i]);
+            for (var step = 1; step < centers.Count; step++)
+                if (DistanceToSegment(point, centers[step - 1], centers[step]) <= HoverRadius)
+                    return i;
+        }
+        return -1;
+    }
+
+    private List<Vector2> Polyline(IReadOnlyList<string> route) =>
+        route.Select(EndpointOf).OfType<Vector2>().ToList();
+
+    /// <summary>
+    /// A global point in the map's own space. Scale makes this less trivial than it
+    /// looks: only an affine inverse survives the zoom's non-orthonormal basis.
+    /// </summary>
+    private Vector2? MapPointFromGlobal(Vector2 globalPoint) =>
+        _screen.GetNodeOrNull<Control>("TheMap") is { } theMap
+            ? theMap.GetGlobalTransform().AffineInverse() * globalPoint
+            : null;
+
     public bool ZoomActive => _zoom.Zoomed;
 
     public void ToggleZoom() => _zoom.Toggle();
@@ -191,6 +313,7 @@ internal sealed class PathingView : IDisposable
     public void ClearPins()
     {
         _pins.Clear();
+        _blocked.Clear();
         _hotRoute = -1;
         _lockedRoute = -1;
         if (_screen.IsOpen)
@@ -203,6 +326,7 @@ internal sealed class PathingView : IDisposable
         _iconBaseRotations.Clear();
         _adapter = null;
         _pins.Clear();
+        _blocked.Clear();
         if (_screen.IsOpen)
             Refresh();
     }
@@ -220,6 +344,11 @@ internal sealed class PathingView : IDisposable
         if (!_pinnable.Contains(id))
             return;
 
+        // A click is the plainest statement of intent there is, so it always wins over
+        // an earlier erase. Without this, clicking a node the eraser had struck did
+        // nothing visible at all: the pin went on, the block kept it out of the plan,
+        // and the orphan sweep took it straight back off again.
+        _blocked.Remove(id);
         _pins.Toggle(id);
         Refresh();
     }
@@ -253,6 +382,8 @@ internal sealed class PathingView : IDisposable
 
         foreach (var target in targets)
         {
+            if (!unpinAll)
+                _blocked.Remove(target);
             if (_pins.IsSelected(target) == !unpinAll)
                 continue;
             _pins.Toggle(target);
@@ -287,22 +418,31 @@ internal sealed class PathingView : IDisposable
 
         if (!erasing)
         {
-            if (nearest is null || _pins.IsSelected(nearest))
+            // Drawing over an erased node takes it off the blocked list: the quill is
+            // how you say "yes, this one" and it has to be able to undo the eraser.
+            if (nearest is null)
                 return;
-            _pins.Toggle(nearest);
+            var unblocked = _blocked.Remove(nearest);
+            if (!unblocked && _pins.IsSelected(nearest))
+                return;
+            if (!_pins.IsSelected(nearest))
+                _pins.Toggle(nearest);
             Refresh();
             return;
         }
 
-        // A pin under the eraser goes first; failing that, the link being rubbed out
-        // loses the pin it leads to. Over neither, the eraser simply does nothing.
-        var target = nearest is not null && _pins.IsSelected(nearest)
+        // The eraser takes off one node — the one under it, or the nearer end of the
+        // link being rubbed out. It used to remove the pin a link *led to*, which on a
+        // sparse plan is the anchor for everything between two waypoints, so rubbing
+        // one step took out a whole branch.
+        var target = nearest is not null && OnPlan(nearest)
             ? nearest
-            : PinnedEndOfLinkNear(cursor);
+            : NodeOfLinkNear(cursor);
         if (target is null)
             return;
 
-        _pins.Toggle(target);
+        _pins.Remove(target);
+        _blocked.Add(target);
         Refresh();
 
         // Getting back to map space is subtler than it looks. The game hands us
@@ -324,20 +464,65 @@ internal sealed class PathingView : IDisposable
         }
     }
 
-    /// <summary>The pinned node a drawn link leads to, if the point lies on that link.</summary>
-    private string? PinnedEndOfLinkNear(Vector2 point)
+    /// <summary>Whether this node is part of the plan as currently drawn.</summary>
+    private bool OnPlan(string id) => _links.Any(link => link.Contains(id));
+
+    /// <summary>
+    /// The pins, plus the act's end nodes once the plan already reaches the floor
+    /// below them. Drawing to one short of the end is not an ambiguous gesture, and
+    /// making the player trace that last step adds nothing — but it stays out of
+    /// <c>_pins</c>, so it is never persisted and the eraser has nothing of its own
+    /// to take off.
+    /// </summary>
+    private IReadOnlyCollection<string> WithLastStep(IReadOnlySet<string> terminals)
     {
+        if (_adapter is null || _pins.Count == 0 || terminals.Count == 0)
+            return _pins.Ids;
+
+        var endFloor = terminals.Max(id => _adapter.Graph.Node(id).Row);
+        var planTop = _pins.Ids
+            .Where(_adapter.Graph.Contains)
+            .Select(id => _adapter.Graph.Node(id).Row)
+            .DefaultIfEmpty(-1)
+            .Max();
+        if (planTop != endFloor - 1)
+            return _pins.Ids;
+
+        // Unreachable ends contribute nothing, so adding them all is safe: only the
+        // one the drawn plan can actually get to produces a link.
+        var reaching = _pins.Ids.ToHashSet();
+        foreach (var id in terminals.Where(id => !_blocked.Contains(id)))
+            reaching.Add(id);
+        return reaching;
+    }
+
+    /// <summary>
+    /// The node to lift when the eraser is on a link rather than on a node: whichever
+    /// end of the crossed step is nearer the cursor. Erasing a step should cost that
+    /// step, and the nearer end is the one the player is pointing at.
+    /// </summary>
+    private string? NodeOfLinkNear(Vector2 point)
+    {
+        var best = (Id: (string?)null, Distance: float.MaxValue);
         foreach (var link in _links)
         {
-            var centers = link.Select(EndpointOf).OfType<Vector2>().ToList();
-            if (centers.Count < 2)
-                continue;
-            var onLink = Enumerable.Range(1, centers.Count - 1).Any(i =>
-                DistanceToSegment(point, centers[i - 1], centers[i]) <= SnapRadius);
-            if (onLink && _pins.IsSelected(link[^1]))
-                return link[^1];
+            for (var i = 1; i < link.Count; i++)
+            {
+                if (EndpointOf(link[i - 1]) is not { } from || EndpointOf(link[i]) is not { } to)
+                    continue;
+                if (DistanceToSegment(point, from, to) > SnapRadius)
+                    continue;
+
+                // Never the origin: the player is standing on it.
+                var (nearId, nearPoint) = point.DistanceTo(from) <= point.DistanceTo(to)
+                    ? (link[i - 1], from)
+                    : (link[i], to);
+                var distance = point.DistanceTo(nearPoint);
+                if (_pinnable.Contains(nearId) && distance < best.Distance)
+                    best = (nearId, distance);
+            }
         }
-        return null;
+        return best.Id;
     }
 
     private static float DistanceToSegment(Vector2 point, Vector2 from, Vector2 to)
@@ -372,12 +557,14 @@ internal sealed class PathingView : IDisposable
             _adapter = MapGraphAdapter.Build(map);
             _mapKey = PinStore.KeyFor(_adapter.Graph);
             _pins.Clear();
+            _blocked.Clear();
             _lockedRouteIds = null;
             // Same map as a previous session: the pins belong to it, bring them back.
             if (PinStore.Load() is { } saved && saved.MapKey == _mapKey)
             {
                 foreach (var id in saved.Pins)
                     _pins.Toggle(id);
+                _blocked = [.. saved.Blocked ?? []];
                 _lockedRouteIds = saved.LockedRoute;
             }
         }
@@ -402,23 +589,40 @@ internal sealed class PathingView : IDisposable
         // every node ahead even when it draws only as far as the plan goes.
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
+        // A node behind the marker cannot be planned around any more, so keeping it
+        // blocked would only narrow future routes for no reason.
+        _blocked.RemoveWhere(id => !_pinnable.Contains(id));
 
         if (!PathingOptions.AutoPath)
         {
-            // Manual planning draws the player's own line: links between consecutive
-            // pinned floors, stitched back into whole routes so the legend counts
-            // paths rather than the links they are made of.
-            _links = PathSolver.ConnectWaypoints(_adapter.Graph, startId, _pins.Ids);
-            var assembled = PathSolver.AssembleRoutes(_links);
-
-            // Only a plan that runs to the end of the act earns a column. A path
-            // stopping halfway is a plan in progress, and tabulating it invites a
-            // comparison that means nothing — of course the short one has fewer
-            // elites. `routes` are the complete walks, so their last nodes are exactly
-            // where the act ends (the boss having already been trimmed off).
+            // `routes` are the complete walks, so their last nodes are exactly where
+            // the act ends (the boss having already been trimmed off).
             var terminals = routes.Select(route => route[^1]).ToHashSet();
             bool Complete(IReadOnlyList<string> route) =>
                 route.Count > 1 && terminals.Contains(route[^1]);
+
+            // Manual planning draws the player's own line: links between consecutive
+            // pinned floors, stitched back into whole routes so the legend counts
+            // paths rather than the links they are made of.
+            _links = PathSolver.ConnectWaypoints(
+                _adapter.Graph, startId, WithLastStep(terminals), _blocked);
+
+            // A block can cut the only way to a pinned node, leaving a ring with
+            // nothing attached and no way to see why. Erasing the node that fed a pin
+            // takes the pin too: the cascade goes exactly as far as it must, and there
+            // is never an orphan left over to puzzle at.
+            var orphans = _pins.Ids
+                .Where(id => !_links.Any(link => link.Contains(id)))
+                .ToList();
+            if (orphans.Count > 0)
+            {
+                foreach (var id in orphans)
+                    _pins.Remove(id);
+                _links = PathSolver.ConnectWaypoints(
+                    _adapter.Graph, startId, WithLastStep(terminals), _blocked);
+            }
+
+            var assembled = PathSolver.AssembleRoutes(_links);
 
             // Everything the plan allows is still drawn; the legend's worth of best
             // complete ones get a colour and a column. Ranked by what a route is
@@ -439,24 +643,39 @@ internal sealed class PathingView : IDisposable
         else
         {
             _links = [];
-            _backdropRoutes = [];
             var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
-            // Up to ten candidates: keep the best five. Pin coverage stays paramount —
-            // a route through every pin must never lose its slot to a near-miss — then
-            // elites + fires (the resources a route is chosen for), then "?" nodes.
-            // The same ordering is the display order.
-            _shownRoutes = match.Shown.Count <= PathSolver.BestPickPool
-                ? match.Shown
+            if (_pins.Ids.Count == 0)
+            {
+                // Nothing pinned, so no route is a better answer than any other:
+                // show the shape of the whole act rather than colouring five at random.
+                _shownRoutes = match.Shown.Select(s => s.Path).ToList();
+                _backdropRoutes = [];
+            }
+            else
+            {
+                // Keep the best five, whatever the field size. Pin coverage stays
+                // paramount — a route through every pin must never lose its slot to a
+                // near-miss — then elites + fires (the resources a route is chosen
+                // for), then "?" nodes. The same ordering is the display order, and
+                // the rest go down as backdrop: a wide field used to be answered with
+                // an unlabelled union and an empty table, which said nothing about
+                // which way was actually better.
+                var ranked = match.Shown
                     .Select(s => (s.Path, s.Hits, Counts: LegendCounts(s.Path)))
                     .OrderByDescending(x => x.Hits)
                     .ThenByDescending(x => x.Counts[5] + x.Counts[3])
                     .ThenByDescending(x => x.Counts[0])
-                    .Take(PathSolver.LegendThreshold)
                     .Select(x => x.Path)
-                    .ToList()
-                : match.Shown.Select(s => s.Path).ToList();
+                    .ToList();
+                _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
+                _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold).ToList();
+            }
         }
         _hotRoute = -1;
+        // The redraw clears the trace with the dots it was drawn over, so forget what
+        // the pointer was on: the next movement decides again from scratch.
+        _pointerRoute = -1;
+        _pointerBackdrop = -1;
 
         // A locked route survives recomputes (and restarts) as long as it still
         // exists — including as the tail of itself after advancing a floor along it.
@@ -470,9 +689,14 @@ internal sealed class PathingView : IDisposable
         // With travel live, the game is already marking the reachable next nodes —
         // a pin ring on one of them reads as "you are here". The pin keeps filtering;
         // only its ring yields until travel resolves the step.
-        _overlay.ShowPins(_pins.Ids
-            .Where(id => !(_screen.IsTravelEnabled && IsTravelableNode(id)))
-            .Select(EndpointOf).OfType<Vector2>());
+        var signature = string.Join("|", _pins.Ids.OrderBy(id => id, StringComparer.Ordinal));
+        var pinsChanged = signature != _pinSignature;
+        _pinSignature = signature;
+        _overlay.ShowPins(
+            _pins.Ids
+                .Where(id => !(_screen.IsTravelEnabled && IsTravelableNode(id)))
+                .Select(EndpointOf).OfType<Vector2>(),
+            pinsChanged);
         _overlay.SetHighlight(_lockedRoute);
         _legend.SetLocked(_lockedRoute);
         _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
@@ -508,7 +732,8 @@ internal sealed class PathingView : IDisposable
         PinStore.SaveIfChanged(new PinStore.Saved(
             _mapKey,
             _pins.Ids.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
-            _lockedRouteIds?.ToArray()));
+            _lockedRouteIds?.ToArray(),
+            _blocked.OrderBy(id => id, StringComparer.Ordinal).ToArray()));
     }
 
     /// <summary>

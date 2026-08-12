@@ -48,8 +48,16 @@ internal sealed class PathOverlay : IDisposable
     private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
 
-    /// <summary>Ring size for a pinned node, and the smaller alternative.</summary>
-    private const float PinRingScale = 0.87f;
+    /// <summary>
+    /// Ring size for a pinned node. Smaller than the game's own stamp on a visited
+    /// node, so the two are never confused at a glance.
+    /// </summary>
+    private const float PinRingScale = 0.87f * 0.75f;
+
+    /// <summary>How long a marker answers the gesture that made it, and how it arrives and leaves.</summary>
+    private const double MarkerFadeIn = 0.15;
+    private const double MarkerHold = 3.0;
+    private const double MarkerFadeOut = 0.6;
 
     private readonly Control _layer;
     private readonly Control _dotLayer;
@@ -58,7 +66,9 @@ internal sealed class PathOverlay : IDisposable
     private readonly List<List<(TextureRect Dot, Vector2 BaseScale)>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
+    private readonly List<(TextureRect Dot, Vector2 BaseScale)> _traceDots = [];
     private readonly List<TextureRect> _pinRings = [];
+    private Tween? _pinFade;
     private TextureRect? _cursor;
 
     public PathOverlay(Control theMap, Control points)
@@ -102,14 +112,44 @@ internal sealed class PathOverlay : IDisposable
         {
             if (routes[i].Length < 2)
                 continue;
-            var shift = new Vector2(
-                (i - (routes.Count - 1) * 0.5f) * PathingOptions.RouteSeparation, 0f);
+            var shift = RouteShift(i, routes.Count);
             var color = RouteColors[i % RouteColors.Length];
             var dots = new List<(TextureRect, Vector2)>();
             ScatterDots(routes[i].Select(p => p + shift).ToArray(), color, dots);
             _routeDots.Add(dots);
             _routeColors.Add(color);
         }
+    }
+
+    /// <summary>
+    /// Where route <paramref name="index" /> of <paramref name="count" /> is actually
+    /// drawn, sideways of the nodes it joins, so parallel runs stay legible. Hit
+    /// testing has to use the same offset — against the shared centreline every route
+    /// sits on top of every other, and picking between neighbours is impossible.
+    /// </summary>
+    public static Vector2 RouteShift(int index, int count) =>
+        new((index - (count - 1) * 0.5f) * PathingOptions.RouteSeparation, 0f);
+
+    /// <summary>
+    /// A single route picked out over everything else, for one that has no colour of
+    /// its own — the backdrop is drawn as merged edges, so there is nothing per-route
+    /// there to light up. Hovering it should still say which way it goes.
+    /// </summary>
+    public void ShowTrace(IReadOnlyList<Vector2> points)
+    {
+        ClearTrace();
+        if (points.Count < 2)
+            return;
+        ScatterDots([.. points], HighlightInk, _traceDots);
+        foreach (var (dot, baseScale) in _traceDots)
+            dot.Scale = baseScale * HighlightScaleFactor;
+    }
+
+    public void ClearTrace()
+    {
+        foreach (var (dot, _) in _traceDots)
+            dot.QueueFree();
+        _traceDots.Clear();
     }
 
     /// <summary>
@@ -144,24 +184,56 @@ internal sealed class PathOverlay : IDisposable
                 _dotLayer.MoveChild(dot, _dotLayer.GetChildCount() - 1);
     }
 
-    public void ShowPins(IEnumerable<Vector2> centers)
+    /// <summary>
+    /// Rings on the pinned nodes — but only just after the plan changed.
+    ///
+    /// A ring that stays put is read as "somewhere I have been", which is precisely
+    /// the wrong thing to see on a node ahead at the moment of choosing where to move.
+    /// As feedback while drawing it is exactly right. So it fades in on the change,
+    /// holds, and fades out, and the map is clean again by the time it matters.
+    /// </summary>
+    /// <param name="changed">
+    /// Whether the plan just changed. A redraw for any other reason — travelling,
+    /// zooming, reopening the map — must not restart the timer, or the markers
+    /// reappear at the worst moment.
+    /// </param>
+    public void ShowPins(IEnumerable<Vector2> centers, bool changed)
     {
         foreach (var ring in _pinRings)
             ring.QueueFree();
         _pinRings.Clear();
 
-        if (PathingOptions.Markers is MarkerSize.None)
-            return;
-
-        var scale = PathingOptions.Markers is MarkerSize.Small
-            ? PinRingScale * 0.75f
-            : PinRingScale;
         foreach (var center in centers)
         {
-            var ring = MakeInkRing(center, PinInk, scale);
+            var ring = MakeInkRing(center, PinInk, PinRingScale);
             _pinRings.Add(ring);
             _pinLayer.AddChild(ring);
         }
+
+        if (!changed)
+            return;
+        if (_pinRings.Count == 0)
+        {
+            _pinFade?.Kill();
+            _pinLayer.Modulate = _pinLayer.Modulate with { A = 0f };
+            return;
+        }
+        PulsePins();
+    }
+
+    /// <summary>
+    /// Show the markers and start the clock again — for asking after them rather than
+    /// changing them, as hovering a pinned node does.
+    /// </summary>
+    public void PulsePins()
+    {
+        if (_pinRings.Count == 0)
+            return;
+        _pinFade?.Kill();
+        _pinFade = _pinLayer.CreateTween();
+        _pinFade.TweenProperty(_pinLayer, "modulate:a", 1f, MarkerFadeIn);
+        _pinFade.TweenInterval(MarkerHold);
+        _pinFade.TweenProperty(_pinLayer, "modulate:a", 0f, MarkerFadeOut);
     }
 
     /// <summary>The controller cursor: a gold ink ring on whichever node holds focus.</summary>
@@ -208,7 +280,7 @@ internal sealed class PathOverlay : IDisposable
     public void Clear()
     {
         ClearDots();
-        ShowPins([]);
+        ShowPins([], true);
         HideCursor();
     }
 
@@ -279,6 +351,7 @@ internal sealed class PathOverlay : IDisposable
         _routeDots.Clear();
         _routeColors.Clear();
         _unionDots.Clear();
+        ClearTrace();
     }
 
     /// <summary>Stable per-route seed so the wobble survives a recompute unchanged.</summary>

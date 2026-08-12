@@ -305,6 +305,13 @@ internal sealed class RouteLegendPanel : IDisposable
     private static Color Deepen(Color color, float amount) =>
         new(color.R * amount, color.G * amount, color.B * amount, color.A);
 
+    /// <summary>
+    /// Whether the pointer is over the panel. Map-side route hover has to stand down
+    /// while it is, or it would clear the very column the legend just lit.
+    /// </summary>
+    public bool Covers(Vector2 globalPoint) =>
+        _panel.Visible && _panel.GetGlobalRect().HasPoint(globalPoint);
+
     /// <summary>Where the legend hotkey lands; null when the panel is hidden.</summary>
     public Control? FirstFocus => _panel.Visible ? _iconCells.FirstOrDefault() : null;
 

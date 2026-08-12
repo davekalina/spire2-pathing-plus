@@ -123,8 +123,6 @@ internal sealed class OptionsPanel : IDisposable
 
         AddDropdown(_rows, "Path Mode",
             () => PathingOptions.Mode, v => PathingOptions.Mode = v);
-        AddDropdown(_rows, "Path Markers",
-            () => PathingOptions.Markers, v => PathingOptions.Markers = v);
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.

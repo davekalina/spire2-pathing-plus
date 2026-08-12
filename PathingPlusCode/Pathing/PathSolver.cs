@@ -70,10 +70,19 @@ public static class PathSolver
     /// auto-pathing between placed nodes. Waypoints nothing connects simply
     /// contribute no segment, which is what lets pins sit on rival branches.
     /// </summary>
+    /// <param name="blocked">
+    /// Nodes the eraser has struck. They are neither waypoints nor available to route
+    /// *through*, which is what makes rubbing out a step remove it: without this the
+    /// solver simply re-links the neighbouring floors straight back through the node
+    /// that was just erased, and the erase appears to do nothing.
+    /// </param>
     public static IReadOnlyList<IReadOnlyList<string>> ConnectWaypoints(
-        SpireMapGraph graph, string origin, IReadOnlyCollection<string> pins)
+        SpireMapGraph graph, string origin, IReadOnlyCollection<string> pins,
+        IReadOnlyCollection<string>? blocked = null)
     {
-        var waypoints = pins.Where(graph.Contains).ToHashSet();
+        var barred = blocked as IReadOnlySet<string> ?? blocked?.ToHashSet() ?? [];
+        var waypoints = pins.Where(id => graph.Contains(id) && !barred.Contains(id)).ToHashSet();
+        // The origin is where the player stands; erasing it would be meaningless.
         if (graph.Contains(origin))
             waypoints.Add(origin);
         if (waypoints.Count < 2)
@@ -105,7 +114,7 @@ public static class PathSolver
                     var linked = false;
                     foreach (var from in floors[j])
                     {
-                        var shortest = ShortestPaths(graph, from, to);
+                        var shortest = ShortestPaths(graph, from, to, barred);
                         if (shortest.Count == 0)
                             continue;
                         segments.AddRange(shortest);
@@ -177,8 +186,11 @@ public static class PathSolver
     /// Ties are all returned: two equally short ways are a real choice, not clutter.
     /// </summary>
     private static List<IReadOnlyList<string>> ShortestPaths(
-        SpireMapGraph graph, string from, string to)
+        SpireMapGraph graph, string from, string to, IReadOnlySet<string>? barred = null)
     {
+        if (barred is not null && (barred.Contains(from) || barred.Contains(to)))
+            return [];
+
         var distance = new Dictionary<string, int> { [from] = 0 };
         var queue = new Queue<string>();
         queue.Enqueue(from);
@@ -187,7 +199,7 @@ public static class PathSolver
             var id = queue.Dequeue();
             foreach (var next in graph.Successors(id))
             {
-                if (distance.ContainsKey(next))
+                if (distance.ContainsKey(next) || barred?.Contains(next) == true)
                     continue;
                 distance[next] = distance[id] + 1;
                 queue.Enqueue(next);
