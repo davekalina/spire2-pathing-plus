@@ -191,17 +191,24 @@ internal sealed class HelpTip : IDisposable
         var current = new List<string>();
         foreach (var line in lines)
         {
-            if (line.Trim().Length > 0)
+            var text = line.Trim();
+            if (text.Length == 0)
             {
-                current.Add(line.Trim());
+                if (current.Count > 0)
+                    paragraphs.Add(string.Join('\n', current));
+                current.Clear();
                 continue;
             }
-            if (current.Count > 0)
-                paragraphs.Add(string.Join(' ', current));
-            current.Clear();
+            // A bullet is its own line; anything else continues the line above it. Without
+            // this a list would be joined into one run-on paragraph by the same rule that
+            // usefully unwraps prose.
+            if (current.Count == 0 || text.StartsWith("- ") || text.StartsWith("* "))
+                current.Add(text);
+            else
+                current[^1] = $"{current[^1]} {text}";
         }
         if (current.Count > 0)
-            paragraphs.Add(string.Join(' ', current));
+            paragraphs.Add(string.Join('\n', current));
 
         return paragraphs.Count > 0 ? string.Join("\n\n", paragraphs) : MissingText;
     }, MissingText);

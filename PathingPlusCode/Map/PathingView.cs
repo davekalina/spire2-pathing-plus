@@ -390,6 +390,10 @@ internal sealed class PathingView : IDisposable
         if (!_pinnable.Contains(id))
             return;
 
+        // Selecting a node says it belongs in the plan, so it takes with it any step
+        // the eraser had cut at it — the same right the quill has when drawn across.
+        if (!_pins.IsSelected(id))
+            _cut.RemoveWhere(edge => edge.From == id || edge.To == id);
         _pins.Toggle(id);
         Refresh();
     }
@@ -649,11 +653,13 @@ internal sealed class PathingView : IDisposable
         // every node ahead even when it draws only as far as the plan goes.
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
-        // A step behind the marker cannot be planned around any more, so keeping it
-        // cut would only narrow future routes for no reason. The origin end stays
-        // valid: the first step out of where the player stands is still ahead.
+        // A cut only means anything while both its ends are in the plan. Letting one
+        // outlive a deselected end is invisible state of exactly the kind the node
+        // blocks used to be: two adjacent nodes selected, no line between them, and
+        // nothing on screen to say why. Deselecting either end forgets the cut, so
+        // selecting them again draws the step.
         _cut.RemoveWhere(edge =>
-            !_pinnable.Contains(edge.To) || (edge.From != startId && !_pinnable.Contains(edge.From)));
+            !(edge.From == startId || _pins.IsSelected(edge.From)) || !_pins.IsSelected(edge.To));
 
         if (!PathingOptions.AutoPath)
         {

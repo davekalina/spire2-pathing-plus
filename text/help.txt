@@ -6,23 +6,20 @@
 #
 # Formatting:
 #   - A blank line starts a new paragraph.
-#   - Lines within a paragraph are joined, so wrap them however reads best here.
+#   - A line starting with "- " is a bullet and keeps its own line.
+#   - Any other line continues the line above it, so prose can be wrapped
+#     however reads best here without the wraps showing up in game.
 #   - Lines starting with # are comments and are not shown.
 
-Pathing Plus is designed to help you draw better paths (and hopefully make
-better pathing decisions as a result).
+How to use Pathing Plus:
 
-How it works: in Drawing Mode, Pathing Plus overrides the standard drawing
-controls to draw best-fit paths where you decide to draw. Use the eraser to
-remove unwanted paths, and Clear Drawings to clear all of them.
+- Use the Drawing and Eraser tools to draw paths on the map.
+- Alternatively, click on individual nodes that you want to visit.
+- Double-click on node types to select all nodes of that type.
+- When paths have been completed, the Legend will show node type counts.
+- Use the Legend to pin down a desired path.
+- Use the Zoom Out / Rotate button for alternate views of the map.
 
-In Auto Mode, click the nodes you most want to visit and the mod works out the
-path or paths that connect your nodes of choice. Double-click a node type in the
-legend to select every node of that type.
-
-Manual Mode is Auto Mode without the attempt to run every path on to the boss.
-
-Use the Zoom Out / Rotate button for different views of the map.
-
-This mod was also designed with FULL GAMEPAD SUPPORT in mind, because drawing
-lines on the map with a gamepad isn't really a thing.
+This mod was also designed with FULL GAMEPAD SUPPORT in mind, specifically:
+- In zoomed out modes, you can use the d-pad to move a cursor around the map and select nodes.
+- In drawing mode, you can switch between draw and eraser with the left analog stick button.

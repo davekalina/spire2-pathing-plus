@@ -116,6 +116,12 @@ next restores a cut step between *that pair only*; `_lastDrawn` tracks it and is
 cleared when the stroke ends (`MapDrawingStopPatch`), or a later stroke starting
 elsewhere would restore a link nobody drew over.
 
+**A cut lives only while both its ends are selected.** Deselecting either end forgets
+it, and selecting a node clears every cut at that node. A cut outliving its context is
+invisible state of exactly the kind the old node blocks were — two adjacent nodes
+selected, no line between them, nothing on screen to say why — and it is the one way
+this model can still surprise. Keep the invariant.
+
 **A plan one floor short of the end is finished for the player.** `WithLastStep` adds
 an act end node once some selected node is a direct predecessor of it. They stay out
 of `_pins`, so they are never persisted and the eraser has nothing of its own to lift.
