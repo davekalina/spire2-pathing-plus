@@ -1,6 +1,7 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.ControllerInput;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
@@ -79,13 +80,16 @@ internal static class MapScreenPatches
         {
             if (!ZoomActive(__instance))
                 return true;
-            return PathingOptions.Mode == PathMode.Drawing &&
+            return PathingOptions.OverrideDrawing &&
                 __0 is InputEventMouseButton
                 {
                     Pressed: true,
                     ButtonIndex: MouseButton.Right or MouseButton.Middle,
                 };
         }, true);
+
+    /// <summary>Whether the whole-act view is up, where scrolling is suspended.</summary>
+    internal static bool ZoomedOut(NMapScreen screen) => ZoomActive(screen);
 
     private static bool ZoomActive(NMapScreen screen) =>
         Views.TryGetValue(screen, out var view) && view.ZoomActive;
@@ -165,6 +169,16 @@ internal static class MapScreenPatches
                     pointed.OnPointerMoved(motion.GlobalPosition);
             }
 
+            // The device may have just changed; a tool in hand has to change with it.
+            // Deferred for the same reason the tool switch is: the tree cannot be
+            // rearranged while input is being processed.
+            if (Ready(__instance) && LiveTools(__instance).Count > 0)
+            {
+                var current = __instance;
+                Callable.From(() => Guard.Run("Matching the drawing tool to the input",
+                    () => SyncToolToInput(current))).CallDeferred();
+            }
+
             if (Pulled(__0, Controller.rightTrigger, ref _rightTriggerHeld) &&
                 Ready(__instance) && Views.TryGetValue(__instance, out var view))
             {
@@ -210,12 +224,48 @@ internal static class MapScreenPatches
         if (!GodotObject.IsInstanceValid(screen) || !screen.IsOpen)
             return;
 
-        var live = screen.GetChildren().OfType<NMapDrawingInput>()
-            .Where(input => GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion())
-            .ToList();
+        var live = LiveTools(screen);
         var wanted = live.Any(input => input.DrawingMode == DrawingMode.Drawing)
             ? DrawingMode.Erasing
             : DrawingMode.Drawing;
+        BuildTool(screen, wanted, live);
+    }
+
+    /// <summary>
+    /// Rebuild the tool when the player changes device mid-draw.
+    ///
+    /// <c>NMapDrawingInput.Create</c> picks its implementation from
+    /// <c>IsUsingDirectionalNavigation</c> **at the moment of creation** and never
+    /// revisits it. Pick the quill up with the mouse and you hold a
+    /// <c>NMouseModeMapDrawingInput</c> for as long as it stays out — one that follows
+    /// the pointer and never asks the left stick anything, so on a controller the
+    /// cursor simply will not move. The reverse strands a controller cursor when the
+    /// mouse comes back. Swapping the tool for the matching kind, keeping mode and
+    /// cursor position, is the whole fix.
+    /// </summary>
+    private static void SyncToolToInput(NMapScreen screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsOpen)
+            return;
+        var live = LiveTools(screen);
+        if (live.Count == 0)
+            return;
+
+        var wantController = NControllerManager.Instance?.IsUsingDirectionalNavigation == true;
+        if (wantController == live.Any(input => input is NControllerMapDrawingInput))
+            return;
+
+        BuildTool(screen, live[0].DrawingMode, live);
+    }
+
+    private static List<NMapDrawingInput> LiveTools(NMapScreen screen) =>
+        screen.GetChildren().OfType<NMapDrawingInput>()
+            .Where(input => GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion())
+            .ToList();
+
+    private static void BuildTool(
+        NMapScreen screen, DrawingMode wanted, List<NMapDrawingInput> live)
+    {
         var carryOver = live.Select(CursorOf).OfType<Control>().FirstOrDefault()?.GlobalPosition;
 
         foreach (var input in live)
@@ -344,7 +394,7 @@ internal static class MapDrawingSnapPatch
     [HarmonyPrefix]
     private static bool BeforeUpdateLine(NMapDrawings __instance, Vector2 __0)
     {
-        if (PathingOptions.Mode != PathMode.Drawing)
+        if (!PathingOptions.OverrideDrawing)
             return true;
 
         Guard.Run("Snapping a drawn stroke to the map", () =>
@@ -393,7 +443,7 @@ internal static class MapDrawingBeginPatch
     internal static bool Hiding;
 
     [HarmonyPrefix]
-    private static void BeforeBeginLine() => Hiding = PathingOptions.Mode == PathMode.Drawing;
+    private static void BeforeBeginLine() => Hiding = PathingOptions.OverrideDrawing;
 
     [HarmonyFinalizer]
     private static void AfterBeginLine() => Hiding = false;

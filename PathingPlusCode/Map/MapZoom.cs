@@ -47,6 +47,10 @@ internal sealed class MapZoom : IDisposable
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
     private readonly Control _tray;
     private readonly MegaLabel _label;
+    private Control? _button;
+
+    /// <summary>The face's resting tone; focus lifts it to full so the d-pad is visible.</summary>
+    private static readonly Color TrayIdle = new(0.92f, 0.92f, 0.92f);
     private HotkeyGlyph? _hotkeyGlyph;
     private Tween? _tween;
 
@@ -61,6 +65,9 @@ internal sealed class MapZoom : IDisposable
     public event Action? Toggled;
 
     /// <summary>The button, hidden while the map screen itself is closed.</summary>
+    /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
+    public Control? Focusable => _button;
+
     public void SetButtonVisible(bool visible)
     {
         _tray.Visible = visible;
@@ -114,9 +121,10 @@ internal sealed class MapZoom : IDisposable
         var button = new Control
         {
             Name = "ZoomButton",
-            FocusMode = Control.FocusModeEnum.None,
+            FocusMode = Control.FocusModeEnum.All,
             MouseFilter = Control.MouseFilterEnum.Stop,
         };
+        _button = button;
         button.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _tray.AddChild(button);
 
@@ -144,12 +152,19 @@ internal sealed class MapZoom : IDisposable
         button.AddChild(_label);
         UpdateLabel();
 
+        button.FocusEntered += () => Guard.Run("Zoom focus", () => _tray.Modulate = Colors.White);
+        button.FocusExited += () => Guard.Run("Zoom unfocus", () => _tray.Modulate = TrayIdle);
         button.GuiInput += inputEvent => Guard.Run("Zoom button", () =>
         {
-            if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
-                Toggle();
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
+                return;
+            Toggle();
+            button.AcceptEvent();
         });
 
+        _tray.Modulate = TrayIdle;
         toolbar.AddChild(_tray);
 
         // The glyph for the hotkey that does the same thing, inside the button on its

@@ -57,6 +57,10 @@ internal sealed class RouteLegendPanel : IDisposable
     private int _hot = -1;
     private int _locked = -1;
 
+    /// <summary>The five that earned a column, and the headerless one under the cursor.</summary>
+    private IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> _routes = [];
+    private (Color Color, IReadOnlyList<int> Counts)? _preview;
+
     public RouteLegendPanel(Control screen)
     {
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
@@ -183,6 +187,36 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>One column per route: its colour, its letter, its counts in row order.</summary>
     public void SetRoutes(IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> routes)
     {
+        _routes = routes;
+        _preview = null;
+        _hot = -1;
+        Render();
+    }
+
+    /// <summary>
+    /// A headerless extra column for the route under the cursor when it is not one of
+    /// the five. Above the legend threshold most of what is drawn has no column, and
+    /// hovering one of those used to light the map while the table said nothing — the
+    /// one moment the counts are actually being asked for.
+    /// </summary>
+    public void SetPreview(Color color, IReadOnlyList<int> counts)
+    {
+        if (_preview is { } shown && shown.Counts.SequenceEqual(counts))
+            return;
+        _preview = (color, counts);
+        Render();
+    }
+
+    public void ClearPreview()
+    {
+        if (_preview is null)
+            return;
+        _preview = null;
+        Render();
+    }
+
+    private void Render()
+    {
         foreach (var column in _columns)
         {
             _panel.RemoveChild(column);
@@ -191,7 +225,10 @@ internal sealed class RouteLegendPanel : IDisposable
         _columns.Clear();
         _columnMarks.Clear();
         _columnColors.Clear();
-        _hot = -1;
+
+        var routes = _preview is { } extra
+            ? [.. _routes, (extra.Color, "", extra.Counts)]
+            : _routes;
 
         FitWidth(routes.Count);
         foreach (var name in _typeNames)
@@ -200,6 +237,10 @@ internal sealed class RouteLegendPanel : IDisposable
         for (var i = 0; i < routes.Count; i++)
         {
             var index = i;
+            // The preview column reports nothing: it exists because the pointer is on
+            // the map, and clicking a column that vanishes on the next mouse move
+            // would lock a route the player cannot see the name of.
+            var interactive = i < _routes.Count;
             var column = new Control
             {
                 Name = $"Route{routes[i].Letter}",
@@ -234,22 +275,31 @@ internal sealed class RouteLegendPanel : IDisposable
                 column.AddChild(count);
             }
 
-            column.MouseEntered += () => Guard.Run("Column hover", () => ColumnHot?.Invoke(index));
-            column.MouseExited += () => Guard.Run("Column unhover", () => ColumnCold?.Invoke(index));
-            column.FocusEntered += () => Guard.Run("Column focus", () => ColumnHot?.Invoke(index));
-            column.FocusExited += () => Guard.Run("Column unfocus", () => ColumnCold?.Invoke(index));
-            column.GuiInput += inputEvent => Guard.Run("Column select", () =>
+            if (interactive)
             {
-                var selected = inputEvent.IsActionPressed(MegaInput.select) ||
-                    inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
-                if (selected)
-                    ColumnLockToggled?.Invoke(index);
-            });
+                column.MouseEntered += () => Guard.Run("Column hover", () => ColumnHot?.Invoke(index));
+                column.MouseExited += () => Guard.Run("Column unhover", () => ColumnCold?.Invoke(index));
+                column.FocusEntered += () => Guard.Run("Column focus", () => ColumnHot?.Invoke(index));
+                column.FocusExited += () => Guard.Run("Column unfocus", () => ColumnCold?.Invoke(index));
+                column.GuiInput += inputEvent => Guard.Run("Column select", () =>
+                {
+                    var selected = inputEvent.IsActionPressed(MegaInput.select) ||
+                        inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
+                    if (selected)
+                        ColumnLockToggled?.Invoke(index);
+                });
+            }
+            else
+            {
+                column.FocusMode = Control.FocusModeEnum.None;
+                column.MouseFilter = Control.MouseFilterEnum.Ignore;
+            }
 
             _columns.Add(column);
             _panel.AddChild(column);
         }
 
+        RefreshMarks();
         WireIconFocus();
     }
 
@@ -270,8 +320,9 @@ internal sealed class RouteLegendPanel : IDisposable
     {
         for (var i = 0; i < _columnMarks.Count; i++)
         {
+            // The preview column is only ever there because the pointer is on its route.
             var locked = i == _locked;
-            var hot = i == _hot;
+            var hot = i == _hot || i >= _routes.Count;
             _columnMarks[i].Visible = locked || hot;
             if (!locked && !hot)
                 continue;
@@ -332,21 +383,40 @@ internal sealed class RouteLegendPanel : IDisposable
     /// which chain horizontally. Every edge is parked — an unset neighbour falls back
     /// to a viewport-wide search.
     /// </summary>
+    /// <summary>
+    /// Where the d-pad goes on leaving the top of the legend — the mod's toolbar, which
+    /// is otherwise unreachable without a mouse.
+    /// </summary>
+    public void SetTopNeighbor(Control? control)
+    {
+        _topNeighbor = control;
+        WireIconFocus();
+    }
+
+    private Control? _topNeighbor;
+
     private void WireIconFocus()
     {
         var self = new NodePath(".");
+        // Relative to the control that carries the property, never to the panel: these
+        // live one level down, so a path measured from the panel resolves short and
+        // Godot rejects it outright ("Neighbor focus node path is invalid").
+        var above = _topNeighbor is { } target && GodotObject.IsInstanceValid(target)
+            ? target
+            : null;
+        NodePath Up(Control from) => above is null ? self : from.GetPathTo(above);
         for (var r = 0; r < _iconCells.Count; r++)
         {
             var cell = _iconCells[r];
             cell.FocusNeighborLeft = self;
-            cell.FocusNeighborTop = r > 0 ? cell.GetPathTo(_iconCells[r - 1]) : self;
+            cell.FocusNeighborTop = r > 0 ? cell.GetPathTo(_iconCells[r - 1]) : Up(cell);
             cell.FocusNeighborBottom = r < _iconCells.Count - 1 ? cell.GetPathTo(_iconCells[r + 1]) : self;
             cell.FocusNeighborRight = _columns.Count > 0 ? cell.GetPathTo(_columns[0]) : self;
         }
         for (var i = 0; i < _columns.Count; i++)
         {
             var column = _columns[i];
-            column.FocusNeighborTop = self;
+            column.FocusNeighborTop = Up(column);
             column.FocusNeighborBottom = self;
             column.FocusNeighborLeft = i > 0
                 ? column.GetPathTo(_columns[i - 1])

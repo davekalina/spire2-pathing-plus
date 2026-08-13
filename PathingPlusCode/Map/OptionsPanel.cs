@@ -1,6 +1,8 @@
 using Godot;
 using MegaCrit.Sts2.addons.mega_text;
+using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -32,6 +34,9 @@ internal sealed class OptionsPanel : IDisposable
 
     /// <summary>Each row's way of re-reading its option, for the reset button.</summary>
     private readonly List<Action> _refreshers = [];
+
+    /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
+    public Control Focusable => _gear;
 
     public OptionsPanel(Control screen, Control toolbar)
     {
@@ -92,6 +97,7 @@ internal sealed class OptionsPanel : IDisposable
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.All,
             Modulate = GearIdle,
             Position = new Vector2(
                 MapToolbar.GearLeft,
@@ -101,10 +107,18 @@ internal sealed class OptionsPanel : IDisposable
         _gear.MouseEntered += () => Guard.Run("Gear hover", () => _gear.Modulate = Colors.White);
         _gear.MouseExited += () => Guard.Run("Gear unhover", () =>
             _gear.Modulate = _panel.Visible ? Colors.White : GearIdle);
+        _gear.FocusEntered += () => Guard.Run("Gear focus", () => _gear.Modulate = Colors.White);
+        _gear.FocusExited += () => Guard.Run("Gear unfocus", () =>
+            _gear.Modulate = _panel.Visible ? Colors.White : GearIdle);
         _gear.GuiInput += inputEvent => Guard.Run("Toggling the settings panel", () =>
         {
-            if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false })
-                SetOpen(!_panel.Visible);
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
+                return;
+            SetOpen(!_panel.Visible);
+            // Or the same press travels on to the map and moves the player a node.
+            _gear.AcceptEvent();
         });
         toolbar.AddChild(_gear);
 
@@ -121,8 +135,8 @@ internal sealed class OptionsPanel : IDisposable
         _rows.AddThemeConstantOverride("separation", 4);
         margin.AddChild(_rows);
 
-        AddDropdown(_rows, "Path Mode",
-            () => PathingOptions.Mode, v => PathingOptions.Mode = v);
+        AddToggle(_rows, "Override Drawing Controls",
+            () => PathingOptions.OverrideDrawing, v => PathingOptions.OverrideDrawing = v);
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.
@@ -207,64 +221,26 @@ internal sealed class OptionsPanel : IDisposable
         MouseFilter = Control.MouseFilterEnum.Ignore,
     });
 
-    /// <summary>
-    /// A choice as a proper pull-down: the current value with the alternatives tucked
-    /// underneath until asked for, rather than a row that has to be clicked blindly
-    /// until the wanted one comes round.
-    /// </summary>
-    private void AddDropdown<T>(Container into, string name, Func<T> get, Action<T> set)
-        where T : struct, Enum
+    /// <summary>A row that reads as a checkbox and toggles on click or select.</summary>
+    private void AddToggle(Container into, string name, Func<bool> get, Action<bool> set)
     {
-        var options = new VBoxContainer
+        var row = MakeLabel(20, Render(name, get()));
+        row.MouseFilter = Control.MouseFilterEnum.Stop;
+        _refreshers.Add(() => row.Text = Render(name, get()));
+        row.GuiInput += inputEvent => Guard.Run($"Toggling {name}", () =>
         {
-            Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        };
-        options.AddThemeConstantOverride("separation", 0);
-
-        var header = MakeLabel(20, "");
-        header.MouseFilter = Control.MouseFilterEnum.Stop;
-        void RenderHeader() =>
-            header.Text = $"{name}: {get()}  {(options.Visible ? "▲" : "▼")}";
-        header.GuiInput += inputEvent => Guard.Run($"Opening the {name} list", () =>
-        {
-            if (inputEvent is not InputEventMouseButton
-                { ButtonIndex: MouseButton.Left, Pressed: false })
-                return;
-            options.Visible = !options.Visible;
-            RenderHeader();
-            ResizePanel();
-        });
-        into.AddChild(header);
-
-        foreach (var value in Enum.GetValues<T>())
-        {
-            var choice = value;
-            var row = MakeLabel(18, $"   {value}");
-            row.MouseFilter = Control.MouseFilterEnum.Stop;
-            row.Modulate = new Color(1f, 1f, 1f, 0.8f);
-            row.MouseEntered += () => Guard.Run($"{name} hover", () =>
-                row.Modulate = Colors.White);
-            row.MouseExited += () => Guard.Run($"{name} unhover", () =>
-                row.Modulate = new Color(1f, 1f, 1f, 0.8f));
-            row.GuiInput += inputEvent => Guard.Run($"Choosing {name}", () =>
-            {
-                if (inputEvent is not InputEventMouseButton
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
                     { ButtonIndex: MouseButton.Left, Pressed: false })
-                    return;
-                set(choice);
-                options.Visible = false;
-                RenderHeader();
-                ResizePanel();
-                PathingOptions.Notify();
-            });
-            options.AddChild(row);
-        }
-        into.AddChild(options);
-
-        RenderHeader();
-        _refreshers.Add(RenderHeader);
+                return;
+            set(!get());
+            row.Text = Render(name, get());
+            PathingOptions.Notify();
+        });
+        into.AddChild(row);
     }
+
+    private static string Render(string name, bool on) => $"[{(on ? "X" : "  ")}] {name}";
 
     /// <summary>A collapsible heading; returns the box its rows go in.</summary>
     private VBoxContainer AddSection(Container into, string name)

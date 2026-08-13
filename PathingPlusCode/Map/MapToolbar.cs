@@ -30,8 +30,14 @@ internal sealed class MapToolbar : IDisposable
     public const float ZoomLeft = 140f;
     public const float ZoomWidth = 184f;
 
-    private const float BylineTop = 100f;
-    private const float Height = 154f;
+    /// <summary>The Auto-Path pull-down, its own row beneath the buttons.</summary>
+    public const float AutoPathTop = 94f;
+    public const float AutoPathHeight = 40f;
+    public const float AutoPathLeft = 22f;
+    public const float AutoPathWidth = Width - AutoPathLeft * 2f;
+
+    private const float BylineTop = 146f;
+    private const float Height = 196f;
 
     private readonly Control _root;
 

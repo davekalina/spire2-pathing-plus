@@ -45,6 +45,13 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>Highlight is the game's traveled-path ink: dark reads on parchment, white does not.</summary>
     private static readonly Color HighlightInk = StsColors.pathDotTraveled;
 
+    /// <summary>
+    /// A route with no colour of its own, picked out under the pointer. Deliberately
+    /// outside the five route colours so it is never mistaken for one of them, and
+    /// deliberately not the ink: nothing has been chosen yet.
+    /// </summary>
+    public static readonly Color TraceColor = new(1f, 0.78f, 0.24f);
+
     private const float HighlightScaleFactor = 1.25f;
     private const float FadedAlpha = 0.15f;
 
@@ -140,10 +147,17 @@ internal sealed class PathOverlay : IDisposable
         ClearTrace();
         if (points.Count < 2)
             return;
-        ScatterDots([.. points], HighlightInk, _traceDots);
+        ScatterDots([.. points], TraceColor, _traceDots);
         foreach (var (dot, baseScale) in _traceDots)
             dot.Scale = baseScale * HighlightScaleFactor;
     }
+
+    /// <summary>
+    /// The same hue, fuller and brighter. Lifting toward white would wash out on
+    /// parchment; saturating it makes the route jump forward while staying itself.
+    /// </summary>
+    private static Color Deepen(Color color) => Color.FromHsv(
+        color.H, Math.Min(1f, color.S * 1.4f), Math.Min(1f, color.V * 1.15f), color.A);
 
     public void ClearTrace()
     {
@@ -163,14 +177,31 @@ internal sealed class PathOverlay : IDisposable
             ScatterDots([from, to], UnionColor, _unionDots);
     }
 
-    /// <summary>−1 restores every route; otherwise that route turns to ink while the rest fade.</summary>
-    public void SetHighlight(int index)
+    /// <summary>How a singled-out route is drawn.</summary>
+    public enum Emphasis
+    {
+        /// <summary>
+        /// Passing interest: the route's own colour, deepened. Turning it to ink on
+        /// hover reads as a commitment the player has not made, and loses the colour
+        /// that ties the line to its legend column at the moment they are matching
+        /// one to the other.
+        /// </summary>
+        Hover,
+
+        /// <summary>Chosen: ink, the way the game marks a path already travelled.</summary>
+        Lock,
+    }
+
+    /// <summary>−1 restores every route; otherwise that one stands out and the rest fade.</summary>
+    public void SetHighlight(int index, Emphasis emphasis = Emphasis.Lock)
     {
         for (var i = 0; i < _routeDots.Count; i++)
         {
             var (color, factor) = index < 0 ? (_routeColors[i], 1f)
-                : i == index ? (HighlightInk, HighlightScaleFactor)
-                : (_routeColors[i] with { A = FadedAlpha }, 1f);
+                : i == index
+                    ? (emphasis is Emphasis.Lock ? HighlightInk : Deepen(_routeColors[i]),
+                        HighlightScaleFactor)
+                    : (_routeColors[i] with { A = FadedAlpha }, 1f);
             foreach (var (dot, baseScale) in _routeDots[i])
             {
                 dot.Modulate = color;

@@ -30,6 +30,7 @@ internal sealed class PathingView : IDisposable
     private readonly MapToolbar _toolbar;
     private readonly OptionsPanel _options;
     private readonly HelpTip _help;
+    private readonly AutoPathMenu _autoPath;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
@@ -46,6 +47,10 @@ internal sealed class PathingView : IDisposable
     /// <summary>Matching routes beyond the legend's five: drawn, but not coloured.</summary>
     private IReadOnlyList<IReadOnlyList<string>> _backdropRoutes = [];
     private HashSet<string> _pinnable = [];
+
+    /// <summary>Every complete route, and where the player stands — what Auto-Path scores.</summary>
+    private IReadOnlyList<IReadOnlyList<string>> _completeRoutes = [];
+    private string _startId = "";
 
     /// <summary>
     /// Steps the eraser has cut, as (from, to) in row order. Edges rather than nodes,
@@ -107,7 +112,7 @@ internal sealed class PathingView : IDisposable
         _zoom.Toggled += () => Guard.Run("Syncing map navigation", () =>
         {
             _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
-            _navigator.SetActive(_zoom.Zoomed);
+            _navigator.SetActive(_zoom.Zoomed, takeFocus: !ToolbarHasFocus());
             if (!_zoom.Zoomed)
                 _overlay.HideCursor();
             SyncIconRotation();
@@ -130,7 +135,7 @@ internal sealed class PathingView : IDisposable
         {
             _hotRoute = index;
             _legend.SetHot(index);
-            _overlay.SetHighlight(index);
+            ApplyHighlight();
         });
         _legend.ColumnCold += index => Guard.Run("Unhighlighting a legend route", () =>
         {
@@ -148,6 +153,9 @@ internal sealed class PathingView : IDisposable
         });
         _options = new OptionsPanel(screen, _toolbar.Root);
         _help = new HelpTip(screen, _toolbar.Root);
+        _autoPath = new AutoPathMenu(screen, _toolbar.Root);
+        _autoPath.GoalChosen += goal => Guard.Run("Auto-pathing", () => ApplyAutoPath(goal));
+        WireToolbarFocus();
         PathingOptions.Changed += OnOptionsChanged;
         _screen.Closed += OnScreenClosed;
     }
@@ -199,6 +207,18 @@ internal sealed class PathingView : IDisposable
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
 
+    /// <summary>
+    /// Whether focus is on something of the mod's own. Anything that reacts to a
+    /// button press has to leave focus where it was, or a controller player is thrown
+    /// back to the map after every press and the second one moves them a node.
+    /// </summary>
+    private bool ToolbarHasFocus()
+    {
+        if (_screen.GetViewport()?.GuiGetFocusOwner() is not { } focused)
+            return false;
+        return _toolbar.Root.IsAncestorOf(focused) || _autoPath.OwnsFocus(focused);
+    }
+
     /// <summary>A stroke finished, so the next one starts with no node behind it.</summary>
     public void OnStrokeEnded() => _lastDrawn = null;
 
@@ -243,12 +263,32 @@ internal sealed class PathingView : IDisposable
         _pointerBackdrop = backdrop;
 
         _legend.SetHot(route);
-        _overlay.SetHighlight(route >= 0 ? route : _hotRoute >= 0 ? _hotRoute : _lockedRoute);
+        ApplyHighlight();
         if (backdrop >= 0)
+        {
             _overlay.ShowTrace(Polyline(_backdropRoutes[backdrop]));
+            _legend.SetPreview(PathOverlay.TraceColor, LegendCounts(_backdropRoutes[backdrop]));
+        }
         else
+        {
             _overlay.ClearTrace();
+            _legend.ClearPreview();
+        }
     });
+
+    /// <summary>
+    /// Hover deepens a route's own colour; a locked one goes to ink. The pointer wins
+    /// over the legend, since it is the more recent statement of interest.
+    /// </summary>
+    private void ApplyHighlight()
+    {
+        if (_pointerRoute >= 0)
+            _overlay.SetHighlight(_pointerRoute, PathOverlay.Emphasis.Hover);
+        else if (_hotRoute >= 0)
+            _overlay.SetHighlight(_hotRoute, PathOverlay.Emphasis.Hover);
+        else
+            _overlay.SetHighlight(_lockedRoute, PathOverlay.Emphasis.Lock);
+    }
 
     /// <summary>
     /// The coloured route the point lies on, nearest first, or -1 for none. Tested
@@ -335,6 +375,7 @@ internal sealed class PathingView : IDisposable
         _legend.SetShellVisible(true);
         _options.SetShellVisible(true);
         _help.SetShellVisible(true);
+        _autoPath.SetShellVisible(true);
         Refresh();
     }
 
@@ -651,6 +692,8 @@ internal sealed class PathingView : IDisposable
         // node (index 0) and everything already behind the marker never qualify.
         // Pinnability comes from the full routes, so manual mode can still reach
         // every node ahead even when it draws only as far as the plan goes.
+        _completeRoutes = routes;
+        _startId = startId;
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
         // A cut only means anything while both its ends are in the plan. Letting one
@@ -661,69 +704,35 @@ internal sealed class PathingView : IDisposable
         _cut.RemoveWhere(edge =>
             !(edge.From == startId || _pins.IsSelected(edge.From)) || !_pins.IsSelected(edge.To));
 
-        if (!PathingOptions.AutoPath)
-        {
-            // `routes` are the complete walks, so their last nodes are exactly where
-            // the act ends (the boss having already been trimmed off).
-            var terminals = routes.Select(route => route[^1]).ToHashSet();
-            bool Complete(IReadOnlyList<string> route) =>
-                route.Count > 1 && terminals.Contains(route[^1]);
+        // `routes` are the complete walks, so their last nodes are exactly where
+        // the act ends (the boss having already been trimmed off).
+        var terminals = routes.Select(route => route[^1]).ToHashSet();
+        bool Complete(IReadOnlyList<string> route) =>
+            route.Count > 1 && terminals.Contains(route[^1]);
 
-            // The plan is exactly the steps between selected neighbours — no
-            // pathfinding, so nothing is ever drawn that the player did not point at.
-            // No orphan sweep either: a selection nothing joins is simply a selection
-            // nothing joins, and it says so by sitting there with no line on it.
-            _links = PathSolver.ConnectSelected(
-                _adapter.Graph, startId, WithLastStep(terminals), _cut);
-            var assembled = PathSolver.AssembleRoutes(_links);
+        // The plan is exactly the steps between selected neighbours — no
+        // pathfinding, so nothing is ever drawn that the player did not point at.
+        // No orphan sweep either: a selection nothing joins is simply a selection
+        // nothing joins, and it says so by sitting there with no line on it.
+        _links = PathSolver.ConnectSelected(
+            _adapter.Graph, startId, WithLastStep(terminals), _cut);
+        var assembled = PathSolver.AssembleRoutes(_links);
 
-            // Everything the plan allows is still drawn; the legend's worth of best
-            // complete ones get a colour and a column. Ranked by what a route is
-            // usually chosen for: elites, then fires, then shops.
-            var ranked = assembled
-                .Where(Complete)
-                .Select(route => (Route: route, Counts: LegendCounts(route)))
-                .OrderByDescending(entry => entry.Counts[5])
-                .ThenByDescending(entry => entry.Counts[3])
-                .ThenByDescending(entry => entry.Counts[1])
-                .Select(entry => entry.Route)
-                .ToList();
-            _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
-            _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold)
-                .Concat(assembled.Where(route => !Complete(route)))
-                .ToList();
-        }
-        else
-        {
-            _links = [];
-            var match = PathSolver.MatchByPins(routes, _pins.Ids, PathSolver.BestPickPool);
-            if (_pins.Ids.Count == 0)
-            {
-                // Nothing pinned, so no route is a better answer than any other:
-                // show the shape of the whole act rather than colouring five at random.
-                _shownRoutes = match.Shown.Select(s => s.Path).ToList();
-                _backdropRoutes = [];
-            }
-            else
-            {
-                // Keep the best five, whatever the field size. Pin coverage stays
-                // paramount — a route through every pin must never lose its slot to a
-                // near-miss — then elites + fires (the resources a route is chosen
-                // for), then "?" nodes. The same ordering is the display order, and
-                // the rest go down as backdrop: a wide field used to be answered with
-                // an unlabelled union and an empty table, which said nothing about
-                // which way was actually better.
-                var ranked = match.Shown
-                    .Select(s => (s.Path, s.Hits, Counts: LegendCounts(s.Path)))
-                    .OrderByDescending(x => x.Hits)
-                    .ThenByDescending(x => x.Counts[5] + x.Counts[3])
-                    .ThenByDescending(x => x.Counts[0])
-                    .Select(x => x.Path)
-                    .ToList();
-                _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
-                _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold).ToList();
-            }
-        }
+        // Everything the plan allows is still drawn; the legend's worth of best
+        // complete ones get a colour and a column. Ranked by what a route is
+        // usually chosen for: elites, then fires, then shops.
+        var ranked = assembled
+            .Where(Complete)
+            .Select(route => (Route: route, Counts: LegendCounts(route)))
+            .OrderByDescending(entry => entry.Counts[5])
+            .ThenByDescending(entry => entry.Counts[3])
+            .ThenByDescending(entry => entry.Counts[1])
+            .Select(entry => entry.Route)
+            .ToList();
+        _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
+        _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold)
+            .Concat(assembled.Where(route => !Complete(route)))
+            .ToList();
         _hotRoute = -1;
         // The redraw clears the trace with the dots it was drawn over, so forget what
         // the pointer was on: the next movement decides again from scratch.
@@ -750,7 +759,7 @@ internal sealed class PathingView : IDisposable
                 .Where(id => !(_screen.IsTravelEnabled && IsTravelableNode(id)))
                 .Select(EndpointOf).OfType<Vector2>(),
             pinsChanged);
-        _overlay.SetHighlight(_lockedRoute);
+        ApplyHighlight();
         _legend.SetLocked(_lockedRoute);
         _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
         PersistState();
@@ -813,6 +822,7 @@ internal sealed class PathingView : IDisposable
         PathingOptions.Changed -= OnOptionsChanged;
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
+        _autoPath.Dispose();
         _help.Dispose();
         _options.Dispose();
         _toolbar.Dispose();
@@ -843,15 +853,16 @@ internal sealed class PathingView : IDisposable
         _legend.SetShellVisible(false);
         _options.SetShellVisible(false);
         _help.SetShellVisible(false);
+        _autoPath.SetShellVisible(false);
         _toolbar.SetVisible(false);
-        _overlay.SetHighlight(_lockedRoute);
+        ApplyHighlight();
     });
 
     private void OnRouteCold(int index)
     {
         if (_hotRoute == index)
             _hotRoute = -1;
-        _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
+        ApplyHighlight();
     }
 
     private void OnRouteLockToggled(int index)
@@ -859,7 +870,7 @@ internal sealed class PathingView : IDisposable
         _lockedRoute = _lockedRoute == index ? -1 : index;
         _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
         _legend.SetLocked(_lockedRoute);
-        _overlay.SetHighlight(_hotRoute >= 0 ? _hotRoute : _lockedRoute);
+        ApplyHighlight();
         PersistState();
     }
 
@@ -970,4 +981,83 @@ internal sealed class PathingView : IDisposable
         PointDictionaryField?.GetValue(_screen) as Dictionary<MapCoord, NMapPoint>
         ?? throw new InvalidOperationException(
             "NMapScreen._mapPointDictionary is gone; the game layout has moved.");
+
+    /// <summary>
+    /// Left to right along the button row, then down to the pull-down, then on into
+    /// the legend. Without this the whole toolbar is mouse-only: nothing in it is
+    /// reachable from the map or the legend with a d-pad.
+    /// </summary>
+    private void WireToolbarFocus() => Guard.Run("Wiring toolbar focus", () =>
+    {
+        var row = new[] { _help.Focusable, _options.Focusable, _zoom.Focusable }
+            .OfType<Control>()
+            .Where(GodotObject.IsInstanceValid)
+            .ToList();
+        var below = _autoPath.Focusable;
+        for (var i = 0; i < row.Count; i++)
+        {
+            if (i > 0)
+                row[i].FocusNeighborLeft = row[i].GetPathTo(row[i - 1]);
+            if (i < row.Count - 1)
+                row[i].FocusNeighborRight = row[i].GetPathTo(row[i + 1]);
+            row[i].FocusNeighborBottom = row[i].GetPathTo(below);
+        }
+        if (row.Count > 0)
+            below.FocusNeighborTop = below.GetPathTo(row[Math.Min(1, row.Count - 1)]);
+        _legend.SetTopNeighbor(below);
+        if (_legend.FirstFocus is { } legendTop)
+            below.FocusNeighborBottom = below.GetPathTo(legendTop);
+    });
+
+    /// <summary>
+    /// Replace the plan with the routes that collect the most of one thing. The map is
+    /// cleared first: this is an answer to "show me the best X", not an addition to
+    /// whatever was already drawn.
+    /// </summary>
+    private void ApplyAutoPath(AutoPathGoal goal)
+    {
+        if (_adapter is null || _completeRoutes.Count == 0)
+            return;
+
+        var row = goal.Row();
+        var ranked = _completeRoutes
+            .Select(route => (Route: route, Counts: LegendCounts(route)))
+            .OrderByDescending(entry => entry.Counts[row])
+            .ThenByDescending(entry => entry.Counts[5])
+            .ThenByDescending(entry => entry.Counts[3])
+            .ThenByDescending(entry => entry.Counts[1])
+            .ToList();
+        var best = ranked[0].Counts[row];
+        var chosen = ranked
+            .Where(entry => entry.Counts[row] == best)
+            .Take(PathSolver.LegendThreshold)
+            .Select(entry => entry.Route)
+            .ToList();
+
+        _pins.Clear();
+        _cut.Clear();
+        _lastDrawn = null;
+        foreach (var id in chosen.SelectMany(route => route.Skip(1)).Distinct())
+            if (_pinnable.Contains(id))
+                _pins.Toggle(id);
+
+        // Selecting every node of several routes also selects pairs those routes never
+        // step between, and the edge model would draw them as extra routes nobody asked
+        // for. Cutting them is what makes "the best five" mean exactly five.
+        var wanted = new HashSet<(string, string)>();
+        foreach (var route in chosen)
+            for (var i = 1; i < route.Count; i++)
+                wanted.Add((route[i - 1], route[i]));
+        var selected = _pins.Ids.ToHashSet();
+        selected.Add(_startId);
+        foreach (var from in selected)
+            foreach (var to in _adapter.Graph.Successors(from))
+                if (selected.Contains(to) && !wanted.Contains((from, to)))
+                    _cut.Add((from, to));
+
+        _lockedRoute = -1;
+        _lockedRouteIds = null;
+        _pinSignature = PinsChangedSentinel;
+        Refresh();
+    }
 }

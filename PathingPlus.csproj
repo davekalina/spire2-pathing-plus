@@ -33,6 +33,15 @@
            Condition="'$(Sts2DataDir)' == '' or !Exists('$(Sts2DataDir)')" />
   </Target>
 
+  <!-- The mod list's description is player-facing text, so it is edited as prose in
+       text/description.txt and copied into the manifest here. ContinueOnError on
+       purpose: a description that will not sync must never fail a build. -->
+  <Target Name="SyncManifestDescription" BeforeTargets="BeforeBuild"
+          Condition="Exists('$(MSBuildProjectDirectory)\text\description.txt')">
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\sync-manifest-description.ps1&quot; -Root &quot;$(MSBuildProjectDirectory)&quot;"
+          ContinueOnError="true" StandardOutputImportance="high" />
+  </Target>
+
   <Target Name="CopyToModsFolderOnBuild" AfterTargets="PostBuildEvent" Condition="'$(SkipModInstall)' != 'true'">
     <Message Text="Copying .dll .pdb and .json to $(ModsPath)$(MSBuildProjectName)/" Importance="high" />
     <!-- The DLL goes first, alone: when the game is running it is locked and this

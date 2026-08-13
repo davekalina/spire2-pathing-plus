@@ -1,5 +1,7 @@
 using Godot;
 using MegaCrit.Sts2.addons.mega_text;
+using MegaCrit.Sts2.Core.ControllerInput;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -96,6 +98,7 @@ internal sealed class HelpTip : IDisposable
         {
             Name = "HelpBadge",
             MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.All,
             Position = new Vector2(
                 MapToolbar.HelpLeft,
                 MapToolbar.ButtonRowTop + (MapToolbar.ButtonHeight - MapToolbar.HelpSize) / 2f),
@@ -131,16 +134,29 @@ internal sealed class HelpTip : IDisposable
             if (!_pinned)
                 Show(false);
         });
+        // On a controller there is no hovering: focus shows the panel outright, which
+        // is the only way this badge can be read at all with a d-pad.
+        _badge.FocusEntered += () => Guard.Run("Help focus", () => Show(true));
+        _badge.FocusExited += () => Guard.Run("Help unfocus", () =>
+        {
+            if (!_pinned)
+                Show(false);
+        });
         _badge.GuiInput += inputEvent => Guard.Run("Pinning the help panel", () =>
         {
-            if (inputEvent is not InputEventMouseButton
-                { ButtonIndex: MouseButton.Left, Pressed: false })
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
             _pinned = !_pinned;
             Show(_pinned || _tip.Visible);
+            _badge.AcceptEvent();
         });
         toolbar.AddChild(_badge);
     }
+
+    /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
+    public Control Focusable => _badge;
 
     /// <summary>Hidden with the map screen, like every other panel this mod adds.</summary>
     public void SetShellVisible(bool visible)

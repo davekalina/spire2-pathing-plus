@@ -34,7 +34,12 @@ internal sealed class NodeNavigator : IDisposable
 
     public NodeNavigator(NMapScreen screen) => _screen = screen;
 
-    public void SetActive(bool active)
+    /// <param name="takeFocus">
+    /// False when focus belongs to something of the mod's own — pressing the Zoom
+    /// button with a controller would otherwise throw focus onto the map, so a second
+    /// press lands on a node and travels there instead of zooming back.
+    /// </param>
+    public void SetActive(bool active, bool takeFocus = true)
     {
         if (Active == active)
             return;
@@ -42,6 +47,8 @@ internal sealed class NodeNavigator : IDisposable
         if (active)
         {
             ApplyWiring();
+            if (!takeFocus)
+                return;
             var start = _screen.DefaultFocusedControl as NMapPoint;
             if (start is null || !_saved.ContainsKey(start))
                 start = _saved.Keys.FirstOrDefault(GodotObject.IsInstanceValid);
@@ -50,7 +57,8 @@ internal sealed class NodeNavigator : IDisposable
         else
         {
             RestoreWiring();
-            _screen.DefaultFocusedControl?.CallDeferred(Control.MethodName.GrabFocus);
+            if (takeFocus)
+                _screen.DefaultFocusedControl?.CallDeferred(Control.MethodName.GrabFocus);
         }
     }
 

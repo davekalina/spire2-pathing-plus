@@ -1,0 +1,10 @@
+# The one-line description shown in the game's own mod list
+# (Settings -> Mod Settings). Separate from the Workshop page text, which is
+# workshop/workshop-description.txt.
+#
+# Building copies this into PathingPlus.json. Keep it to a sentence or two:
+# the mod list gives it a single narrow row.
+#
+# Lines starting with # are comments and are not used.
+
+Improved pathing support with straight line paths, path analysis, and alternate map views.

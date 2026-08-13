@@ -88,8 +88,11 @@ there is no loose file to package and no way for the two to disagree; `#` lines 
 comments and the lines within a paragraph are joined, so the file can be hard-wrapped
 for editing without every wrap becoming a line break on screen. The title above it
 (name, version, author) stays generated from the manifest — a version typed into a
-text file goes stale. The same rule covers `workshop/workshop-description.txt`, which
-`package-workshop.ps1` copies into `workshop.json`.
+text file goes stale. The same rule covers `text/description.txt` (the in-game mod
+list; a build target copies it into `PathingPlus.json`) and
+`workshop/workshop-description.txt` (the Workshop page; `package-workshop.ps1` copies
+it into `workshop.json`). Both syncs are one-way and never fail the build — the `.txt`
+wins, so never hand-edit those JSON fields.
 
 Two things about that panel are load-bearing. Its text is laid out **absolutely, not
 in a container**: an autowrapping `Label` reports a near-zero minimum width, so inside
@@ -99,11 +102,43 @@ shadow, never an outline** — `outline_size` traces every glyph on all sides, w
 mass. The card art is modulated to ~40% brightness underneath, because pale lettering
 only separates once the parchment stops competing for the light end of the range.
 
+`AutoPathMenu` is the pull-down on the toolbar's second row: pick Max Elites / Fires /
+Shops / Events / Combats and every complete route is scored by that legend row, the
+best up to five replacing the plan outright. It wears the pause-menu button face
+because a bare label is nearly invisible when focused — there is nothing to light up
+but the text. Treasure is not offered: an act carries one, so maximising it is not a
+choice. Selecting every node of five routes also selects pairs those routes never step
+between, and the edge model would draw them as extra routes nobody asked for, so
+`ApplyAutoPath` **cuts every step no chosen route uses**. That is what makes "the best
+five" mean five.
+
+**The toolbar is reachable with a gamepad.** `WireToolbarFocus` chains help ↔ gear ↔
+zoom across the button row, down to Auto-Path, and on into the legend, with
+`RouteLegendPanel.SetTopNeighbor` closing the loop upward. Two rules keep it working.
+Focus neighbour paths must be computed **from the control that carries the property**,
+never from a parent — a path measured from the legend panel resolves one level short
+and Godot rejects it outright (`Neighbor focus node path is invalid`). And every
+control that acts on `select` must call `AcceptEvent()`, or the same press travels on
+to the map and moves the player a node; for the same reason `NodeNavigator.SetActive`
+takes `takeFocus: false` while the toolbar holds focus.
+
+**The right stick scrolls the map** (`RightStickScrollPatch`), the arrangement the
+first game used: left stick and d-pad for selection, right for the view. It nudges
+`_targetDragPos` in a prefix on `NMapScreen._Process`, so the screen's own easing and
+its rubber-band clamp back into [-600, 1800] still apply; writing the container
+position would fight both. Suspended while zoomed out, where the whole act is on
+screen already.
+
+**Beware `NMapDrawingInput.Create`.** It picks its implementation from
+`IsUsingDirectionalNavigation` **at the moment of creation** and never revisits it, so
+a quill picked up with the mouse stays a `NMouseModeMapDrawingInput` — one that
+follows the pointer and never asks the left stick anything, which looks exactly like a
+broken stick. `SyncToolToInput` rebuilds the tool when the device changes, keeping
+mode and cursor position.
+
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
 persist to `PathingPlus.settings.json` in the game's user data dir and raise
-`Changed`, which redraws the open map. **Path Mode** has three settings.
-*Drawing* is the default; *Auto* is the behaviour described above. *Manual* and *Drawing* share the
-same drawing rule and differ only in how pins are placed — *Drawing* prefixes
+`Changed`, which redraws the open map. **Override Drawing Controls** (on by default) is the only behavioural setting left; the three path modes are gone, since drawing is simply how the mod works. With it on, the mod prefixes
 `NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
 passes through for both mouse and controller, suppresses the native line, and pins
 the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
@@ -264,7 +299,16 @@ unlabelled union with an empty table, which answered "which of these is better?"
 silence at exactly the moment the question was being asked. The union view is now only
 for **no pins at all**, where no route is a better answer than any other and the shape
 of the whole act is the honest display. Type icon hover/focus fires the game's own
-`HighlightPointType` broadcast. Hovering works **both ways**: a column lights its route
+`HighlightPointType` broadcast. **Hover deepens, selection inks.** A hovered route
+keeps its own colour, saturated (`PathOverlay.Emphasis.Hover`); only a locked one goes
+to the game's traveled-path ink. Turning a route black on hover reads as a commitment
+not yet made, and throws away the colour tying the line to its column at the very
+moment the two are being matched. A hovered route with **no** column gets a headerless
+one appended to the legend (`SetPreview`), drawn in `TraceColor` — deliberately
+outside the five route colours, and display-only, since a column that vanishes on the
+next mouse move must not be lockable.
+
+Hovering works **both ways**: a column lights its route
 on the map, and a drawn route under the mouse lights its column — which is why the
 pointer handler stands down while the pointer is over the legend (`Covers`), or it
 would clear the column the legend had just lit. Map-side hit testing must use
