@@ -168,8 +168,8 @@ fell back to ever-earlier floors when a link was cut. That is the trap to rememb
 row, so "shortest" discriminates nothing and asking for the shortest paths between two
 floors returns *every* path between them. A fallback from a distant floor therefore
 drew a whole fan of line at once, and erasing one step could summon a sweep of route
-across the far side of the map. `ConnectWaypoints` and its tests are still in the tree
-for comparison during this trial; delete them if the edge model stays.
+across the far side of the map. `ConnectWaypoints` and `ShortestPaths` are gone; do
+not reintroduce shortest-path bridging here.
 
 `AssembleRoutes` then stitches those steps back into whole
 routes, because the legend counts what a **path** holds, not what each link holds —
