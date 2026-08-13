@@ -15,6 +15,12 @@ dotnet test .\PathingPlus.Tests\PathingPlus.Tests.csproj
 cannot, copy `Directory.Build.props.example` to `Directory.Build.props` and set
 `Sts2Path`.
 
+Player-facing text is not in the code. The in-game help panel reads
+[`text/help.txt`](text/help.txt), embedded into the assembly at build time, and the
+Workshop page reads [`workshop/workshop-description.txt`](workshop/workshop-description.txt),
+which `package-workshop.ps1` copies into `workshop.json`. Edit either as prose and
+rebuild; no C# or JSON escaping involved.
+
 Building copies `PathingPlus.json`, `PathingPlus.dll`, and `PathingPlus.pdb` into
 `<game>/mods/PathingPlus/`. Pass `-p:SkipModInstall=true` to build without
 installing. Close the game first: the DLL is locked while it runs, and the install

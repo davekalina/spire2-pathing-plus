@@ -1,0 +1,28 @@
+# The in-game help panel, shown by the "?" badge on the map screen.
+#
+# This file is the text. Edit it freely and rebuild; nothing in the C# needs
+# touching. The title line above it ("Pathing Plus v0.0.0 by realtruegravy") is
+# generated from the manifest so the version cannot go stale, and is not here.
+#
+# Formatting:
+#   - A blank line starts a new paragraph.
+#   - Lines within a paragraph are joined, so wrap them however reads best here.
+#   - Lines starting with # are comments and are not shown.
+
+Pathing Plus is designed to help you draw better paths (and hopefully make
+better pathing decisions as a result).
+
+How it works: in Drawing Mode, Pathing Plus overrides the standard drawing
+controls to draw best-fit paths where you decide to draw. Use the eraser to
+remove unwanted paths, and Clear Drawings to clear all of them.
+
+In Auto Mode, click the nodes you most want to visit and the mod works out the
+path or paths that connect your nodes of choice. Double-click a node type in the
+legend to select every node of that type.
+
+Manual Mode is Auto Mode without the attempt to run every path on to the boss.
+
+Use the Zoom Out / Rotate button for different views of the map.
+
+This mod was also designed with FULL GAMEPAD SUPPORT in mind, because drawing
+lines on the map with a gamepad isn't really a thing.

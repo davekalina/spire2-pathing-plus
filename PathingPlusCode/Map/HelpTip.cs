@@ -167,25 +167,49 @@ internal sealed class HelpTip : IDisposable
             _root.MoveToFront();
     }
 
-    private static string Instructions =>
-        "Pathing Plus is designed to help you draw better paths (and hopefully make " +
-        "better pathing decisions as a result).\n" +
-        "\n" +
-        "How it works: in Drawing Mode, Pathing Plus overrides the standard drawing " +
-        "controls to draw best-fit paths where you decide to draw. Use the eraser to " +
-        "remove unwanted paths, and Clear Drawings to clear all of them.\n" +
-        "\n" +
-        "In Auto Mode, click the nodes you most want to visit and the mod works out " +
-        "the path or paths that connect your nodes of choice. Double-click a node " +
-        "type in the legend to select every node of that type.\n" +
-        "\n" +
-        "Manual Mode is Auto Mode without the attempt to run every path on to the " +
-        "boss.\n" +
-        "\n" +
-        "Use the Zoom Out / Rotate button for different views of the map.\n" +
-        "\n" +
-        "This mod was also designed with FULL GAMEPAD SUPPORT in mind, because " +
-        "drawing lines on the map with a gamepad isn't really a thing.";
+    /// <summary>
+    /// The panel's prose, from <c>text/help.txt</c> — human-facing text belongs in a
+    /// file a human edits, not in a string literal behind a rebuild of the code.
+    ///
+    /// Comment lines go, and the lines within a paragraph are joined so the file can
+    /// be hard-wrapped for editing without every one of those wraps turning into a
+    /// line break on screen.
+    /// </summary>
+    private static string Instructions => _instructions ??= Guard.Run("Reading the help text", () =>
+    {
+        using var stream = typeof(HelpTip).Assembly.GetManifestResourceStream("help.txt");
+        if (stream is null)
+            return MissingText;
+        using var reader = new StreamReader(stream);
+        var lines = reader.ReadToEnd()
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Where(line => !line.TrimStart().StartsWith('#'));
+
+        var paragraphs = new List<string>();
+        var current = new List<string>();
+        foreach (var line in lines)
+        {
+            if (line.Trim().Length > 0)
+            {
+                current.Add(line.Trim());
+                continue;
+            }
+            if (current.Count > 0)
+                paragraphs.Add(string.Join(' ', current));
+            current.Clear();
+        }
+        if (current.Count > 0)
+            paragraphs.Add(string.Join(' ', current));
+
+        return paragraphs.Count > 0 ? string.Join("\n\n", paragraphs) : MissingText;
+    }, MissingText);
+
+    private const string MissingText =
+        "The help text could not be read. See text/help.txt in the mod's source.";
+
+    private static string? _instructions;
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

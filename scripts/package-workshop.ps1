@@ -13,6 +13,9 @@
     The .pdb is deliberately excluded: it is a local debugging aid, not something
     subscribers need.
 
+    Also copies workshop/workshop-description.txt into workshop.json, so the page
+    text is edited as prose in a text file rather than escaped into JSON by hand.
+
     Nothing is uploaded. The command to run afterwards is printed at the end.
 
 .PARAMETER Configuration
@@ -75,6 +78,21 @@ if ($manifest.has_pck) {
     }
     Copy-Item -LiteralPath $pck -Destination $content
     Write-Host "  + $modId.pck"
+}
+
+# The Workshop page description lives in a text file a human edits; workshop.json
+# only carries it to the uploader. Copying it in here means the two can never drift,
+# and nobody has to hand-escape a page of prose into JSON.
+$descriptionPath = Join-Path $root 'workshop\workshop-description.txt'
+$workshopPath    = Join-Path $root 'workshop\workshop.json'
+if ((Test-Path -LiteralPath $descriptionPath) -and (Test-Path -LiteralPath $workshopPath)) {
+    $description = (Get-Content -LiteralPath $descriptionPath -Raw).TrimEnd()
+    $workshop = Get-Content -LiteralPath $workshopPath -Raw | ConvertFrom-Json
+    if ($workshop.description -ne $description) {
+        $workshop.description = $description
+        $workshop | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $workshopPath -Encoding utf8
+        Write-Host "  = workshop.json description updated from workshop-description.txt"
+    }
 }
 
 $image = Join-Path $root 'workshop\image.png'

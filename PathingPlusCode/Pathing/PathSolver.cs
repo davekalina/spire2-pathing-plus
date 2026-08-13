@@ -129,6 +129,50 @@ public static class PathSolver
     }
 
     /// <summary>
+    /// The plan as literal edges: one segment for every step of the map that joins two
+    /// selected nodes, less the ones the eraser has cut.
+    ///
+    /// There is no pathfinding here, and that is the whole point. Its predecessor,
+    /// <see cref="ConnectWaypoints" />, bridged selected nodes with shortest paths and
+    /// fell back to ever-earlier floors when a link was cut — but in a layered map
+    /// every route between two rows is the same length, so "shortest" chooses nothing
+    /// and a fallback returns *every* route from that floor at once. Erasing one step
+    /// could therefore summon a whole new sweep of line across the far side of the
+    /// map. Selecting two adjacent nodes draws the step between them; selecting two
+    /// that the map does not join draws nothing. Nothing appears that the player did
+    /// not point at.
+    /// </summary>
+    /// <param name="cut">
+    /// Steps the eraser has taken out, as (from, to) in row order. Kept apart from the
+    /// selection so rubbing out one link between two nodes leaves both nodes, and
+    /// every other link they have, alone.
+    /// </param>
+    public static IReadOnlyList<IReadOnlyList<string>> ConnectSelected(
+        SpireMapGraph graph, string origin, IReadOnlyCollection<string> selected,
+        IReadOnlyCollection<(string From, string To)>? cut = null)
+    {
+        var chosen = selected.Where(graph.Contains).ToHashSet();
+        // The player's own position is always part of the plan: the first step should
+        // appear without having to select where you already stand.
+        if (graph.Contains(origin))
+            chosen.Add(origin);
+        if (chosen.Count < 2)
+            return [];
+
+        var severed = cut as IReadOnlySet<(string From, string To)> ?? cut?.ToHashSet() ?? [];
+        var segments = new List<IReadOnlyList<string>>();
+        foreach (var from in chosen
+            .OrderBy(id => graph.Node(id).Row)
+            .ThenBy(id => id, StringComparer.Ordinal))
+        {
+            foreach (var to in graph.Successors(from))
+                if (chosen.Contains(to) && !severed.Contains((from, to)))
+                    segments.Add([from, to]);
+        }
+        return segments;
+    }
+
+    /// <summary>
     /// Stitch segments into the complete routes they describe. The segments are the
     /// links; a player looking at them sees whole paths, and the legend should count
     /// what those paths hold, not what each link holds. A plan that forks draws one
