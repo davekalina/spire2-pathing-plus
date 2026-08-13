@@ -60,6 +60,7 @@ internal sealed class AutoPathMenu : IDisposable
     private readonly Control _header;
     private readonly MegaLabel _headerLabel;
     private readonly TextureRect _face = null!;
+    private readonly List<Control> _options = [];
     private readonly Font? _font;
 
     public AutoPathMenu(Control screen, Control toolbar)
@@ -165,6 +166,15 @@ internal sealed class AutoPathMenu : IDisposable
         parchment.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _list.AddChild(parchment);
 
+        _list.GuiInput += inputEvent => Guard.Run("Closing Auto-Path", () =>
+        {
+            if (!inputEvent.IsActionPressed(MegaInput.cancel))
+                return;
+            SetOpen(false);
+            _list.AcceptEvent();
+            _header.CallDeferred(Control.MethodName.GrabFocus);
+        });
+
         for (var i = 0; i < goals.Length; i++)
         {
             var goal = goals[i];
@@ -197,6 +207,17 @@ internal sealed class AutoPathMenu : IDisposable
                 _header.CallDeferred(Control.MethodName.GrabFocus);
             });
             _list.AddChild(option);
+            _options.Add(option);
+        }
+
+        for (var i = 0; i < _options.Count; i++)
+        {
+            _options[i].FocusNeighborTop = i > 0
+                ? _options[i].GetPathTo(_options[i - 1])
+                : _options[i].GetPathTo(_header);
+            _options[i].FocusNeighborBottom = i < _options.Count - 1
+                ? _options[i].GetPathTo(_options[i + 1])
+                : new NodePath(".");
         }
 
         _root.AddChild(_list);
@@ -238,9 +259,7 @@ internal sealed class AutoPathMenu : IDisposable
         _root.MoveToFront();
         // A controller opening the list needs somewhere to be, or the d-pad would
         // still be walking the toolbar behind it.
-        if (_list.GetChildren().OfType<Control>().FirstOrDefault(c => c.FocusMode != Control.FocusModeEnum.None)
-            is { } first)
-            first.CallDeferred(Control.MethodName.GrabFocus);
+        _options.FirstOrDefault()?.CallDeferred(Control.MethodName.GrabFocus);
     }
 
     private void Emphasize(bool on)

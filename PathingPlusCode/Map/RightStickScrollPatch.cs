@@ -56,10 +56,10 @@ internal static class RightStickScrollPatch
             if (push == Vector2.Zero)
                 return;
 
-            // Push up to see further up the act: the stick's own sign already does
-            // that, since a smaller Y shows higher floors.
+            // Subtracted, not added: a *larger* _targetDragPos.Y slides the map down
+            // and shows earlier floors, so pushing the stick up has to lower it.
             TargetDragPosField.SetValue(
-                __instance, target with { Y = target.Y + push.Y * Speed * (float)__0 });
+                __instance, target with { Y = target.Y - push.Y * Speed * (float)__0 });
         });
 
     private static Vector2 Read()
@@ -68,6 +68,39 @@ internal static class RightStickScrollPatch
             Controller.rStickLeft, Controller.rStickRight, Controller.rStickUp, Controller.rStickDown);
         if (direction.Length() < DeadZone)
             direction = Input.GetVector(RawLeft, RawRight, RawUp, RawDown);
+        if (direction.Length() < DeadZone)
+            direction = FromJoypad();
         return direction.Length() >= DeadZone ? direction : Vector2.Zero;
+    }
+
+    /// <summary>
+    /// The stick as the event stream reports it.
+    ///
+    /// <c>Input.GetConnectedJoypads()</c> comes back **empty** under Steam Input even
+    /// while joypad motion events arrive perfectly well carrying <c>device=0</c>, so
+    /// enumerating devices finds nothing to ask and every per-device read is dead on
+    /// arrival. Keeping the axis values as they go past is the one route that does not
+    /// depend on the InputMap, on action bindings, or on the device list.
+    /// </summary>
+    private static Vector2 _fromEvents;
+
+    internal static void NoteJoypadMotion(InputEventJoypadMotion motion)
+    {
+        if (motion.Axis == JoyAxis.RightX)
+            _fromEvents.X = motion.AxisValue;
+        else if (motion.Axis == JoyAxis.RightY)
+            _fromEvents.Y = motion.AxisValue;
+    }
+
+    private static Vector2 FromJoypad()
+    {
+        if (_fromEvents.Length() >= DeadZone)
+            return _fromEvents;
+        // Device 0 explicitly: the connected-joypad list is empty under Steam Input
+        // even when that device is plainly sending events.
+        var axes = new Vector2(
+            Input.GetJoyAxis(0, JoyAxis.RightX),
+            Input.GetJoyAxis(0, JoyAxis.RightY));
+        return axes.Length() >= DeadZone ? axes : Vector2.Zero;
     }
 }

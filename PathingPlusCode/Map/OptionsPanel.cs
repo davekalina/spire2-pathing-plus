@@ -35,6 +35,13 @@ internal sealed class OptionsPanel : IDisposable
     /// <summary>Each row's way of re-reading its option, for the reset button.</summary>
     private readonly List<Action> _refreshers = [];
 
+    /// <summary>
+    /// Every row a d-pad can land on, in the order they read down the panel. Chained
+    /// on open and again whenever a section folds, since a hidden row must not be a
+    /// stop on the way past.
+    /// </summary>
+    private readonly List<Control> _focusables = [];
+
     /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
     public Control Focusable => _gear;
 
@@ -88,6 +95,16 @@ internal sealed class OptionsPanel : IDisposable
         };
         parchment.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _panel.AddChild(parchment);
+
+        // Unhandled input from a focused row bubbles up to here, which is the only
+        // way off this panel with a controller: without it an open panel is a trap.
+        _panel.GuiInput += inputEvent => Guard.Run("Closing the settings panel", () =>
+        {
+            if (!inputEvent.IsActionPressed(MegaInput.cancel))
+                return;
+            SetOpen(false);
+            _panel.AcceptEvent();
+        });
 
         _gear = new TextureRect
         {
@@ -166,12 +183,17 @@ internal sealed class OptionsPanel : IDisposable
         AddSpacer(_rows);
         var reset = MakeLabel(17, "Reset to defaults");
         reset.MouseFilter = Control.MouseFilterEnum.Stop;
+        reset.FocusMode = Control.FocusModeEnum.All;
         reset.Modulate = new Color(1f, 1f, 1f, 0.75f);
+        Emphasise(reset, new Color(1f, 1f, 1f, 0.75f));
+        _focusables.Add(reset);
         reset.GuiInput += inputEvent => Guard.Run("Resetting settings", () =>
         {
-            if (inputEvent is not InputEventMouseButton
-                { ButtonIndex: MouseButton.Left, Pressed: false })
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
+            reset.AcceptEvent();
             PathingOptions.ResetDefaults();
             foreach (var refresh in _refreshers)
                 refresh();
@@ -203,8 +225,48 @@ internal sealed class OptionsPanel : IDisposable
         _panel.Visible = open;
         _catcher.Visible = open;
         _gear.Modulate = open ? Colors.White : GearIdle;
-        if (open)
-            _root.MoveToFront();
+        if (!open)
+        {
+            // Back where it came from, or a controller is left with focus on a panel
+            // that is no longer on screen and nowhere to go from it.
+            if (_gear.GetViewport()?.GuiGetFocusOwner() is { } focused && _panel.IsAncestorOf(focused))
+                _gear.CallDeferred(Control.MethodName.GrabFocus);
+            return;
+        }
+        _root.MoveToFront();
+        WireFocus();
+        _focusables.FirstOrDefault(row => row.IsVisibleInTree())
+            ?.CallDeferred(Control.MethodName.GrabFocus);
+    }
+
+    /// <summary>
+    /// Chain the visible rows top to bottom, with the gear above the first. Only rows
+    /// actually on screen take part: a folded section's sliders would otherwise be
+    /// invisible stops the d-pad walks through one at a time.
+    /// </summary>
+    private void WireFocus()
+    {
+        var live = _focusables.Where(row => GodotObject.IsInstanceValid(row) && row.IsVisibleInTree()).ToList();
+        for (var i = 0; i < live.Count; i++)
+        {
+            live[i].FocusNeighborTop = i > 0
+                ? live[i].GetPathTo(live[i - 1])
+                : live[i].GetPathTo(_gear);
+            live[i].FocusNeighborBottom = i < live.Count - 1
+                ? live[i].GetPathTo(live[i + 1])
+                : new NodePath(".");
+        }
+    }
+
+    /// <summary>Focus has to be visible, and hovering already lights these rows.</summary>
+    private static void Emphasise(Control row, Color? idle = null)
+    {
+        var rest = idle ?? Colors.White;
+        row.FocusEntered += () => Guard.Run("Settings row focus", () => row.Modulate = Colors.White);
+        row.FocusExited += () => Guard.Run("Settings row unfocus", () => row.Modulate = rest);
+        row.MouseEntered += () => Guard.Run("Settings row hover", () => row.Modulate = Colors.White);
+        row.MouseExited += () => Guard.Run("Settings row unhover", () =>
+            row.Modulate = row.HasFocus() ? Colors.White : rest);
     }
 
     /// <summary>
@@ -226,6 +288,9 @@ internal sealed class OptionsPanel : IDisposable
     {
         var row = MakeLabel(20, Render(name, get()));
         row.MouseFilter = Control.MouseFilterEnum.Stop;
+        row.FocusMode = Control.FocusModeEnum.All;
+        Emphasise(row);
+        _focusables.Add(row);
         _refreshers.Add(() => row.Text = Render(name, get()));
         row.GuiInput += inputEvent => Guard.Run($"Toggling {name}", () =>
         {
@@ -236,6 +301,7 @@ internal sealed class OptionsPanel : IDisposable
             set(!get());
             row.Text = Render(name, get());
             PathingOptions.Notify();
+            row.AcceptEvent();
         });
         into.AddChild(row);
     }
@@ -254,15 +320,21 @@ internal sealed class OptionsPanel : IDisposable
 
         var header = MakeLabel(20, "");
         header.MouseFilter = Control.MouseFilterEnum.Stop;
+        header.FocusMode = Control.FocusModeEnum.All;
+        Emphasise(header);
+        _focusables.Add(header);
         void RenderHeader() => header.Text = $"{name}  {(body.Visible ? "▲" : "▼")}";
         header.GuiInput += inputEvent => Guard.Run($"Folding {name}", () =>
         {
-            if (inputEvent is not InputEventMouseButton
-                { ButtonIndex: MouseButton.Left, Pressed: false })
+            if (!inputEvent.IsActionPressed(MegaInput.select) &&
+                inputEvent is not InputEventMouseButton
+                    { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
             body.Visible = !body.Visible;
             RenderHeader();
             ResizePanel();
+            WireFocus();
+            header.AcceptEvent();
         });
         into.AddChild(header);
         into.AddChild(body);
@@ -292,7 +364,9 @@ internal sealed class OptionsPanel : IDisposable
             CustomMinimumSize = new Vector2(126f, 22f),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.All,
         };
+        _focusables.Add(slider);
         slider.ValueChanged += value => Guard.Run($"Adjusting {name}", () =>
         {
             set((float)value);

@@ -169,6 +169,12 @@ internal static class MapScreenPatches
                     pointed.OnPointerMoved(motion.GlobalPosition);
             }
 
+            // Every joypad axis, straight off the wire. This is how the right stick is
+            // read: the device list is empty under Steam Input, so nothing can be
+            // asked per-device, but the events themselves still arrive.
+            if (__0 is InputEventJoypadMotion motionEvent)
+                RightStickScrollPatch.NoteJoypadMotion(motionEvent);
+
             // The device may have just changed; a tool in hand has to change with it.
             // Deferred for the same reason the tool switch is: the tree cannot be
             // rearranged while input is being processed.
