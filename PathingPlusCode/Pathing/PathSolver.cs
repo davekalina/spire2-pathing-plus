@@ -58,72 +58,45 @@ public static class PathSolver
     }
 
     /// <summary>
-    /// Manual planning, drawn the way a player draws it: a line between each pinned
-    /// node and the next one along, for every pair that a path actually connects.
-    /// The player's current position counts as a waypoint too, so the first leg
-    /// appears without pinning where you already stand.
+    /// The plan as literal edges: one segment for every step of the map that joins two
+    /// selected nodes, less the ones the eraser has cut.
     ///
-    /// Walking forward from each waypoint and stopping at the first waypoint reached
-    /// gives exactly the segments between *adjacent* waypoints: a plan of A → B → C
-    /// draws A→B and B→C rather than also drawing the redundant A→C on top of them.
-    /// Where several ways connect one pair, all of them are returned — that is the
-    /// auto-pathing between placed nodes. Waypoints nothing connects simply
-    /// contribute no segment, which is what lets pins sit on rival branches.
+    /// There is no pathfinding here, and that is the whole point. Its predecessor,
+    /// <c>ConnectWaypoints</c>, bridged selected nodes with shortest paths and fell
+    /// back to ever-earlier floors when a link was cut. That is the trap worth
+    /// remembering: **in a layered map every route between two rows is the same
+    /// length**, one edge per row, so "shortest" chooses nothing and a fallback
+    /// returns *every* route from that floor at once — erasing one step could summon
+    /// a whole sweep of line across the far side of the map. Selecting two adjacent
+    /// nodes draws the step between them; selecting two that the map does not join
+    /// draws nothing. Nothing appears that the player did not point at.
     /// </summary>
-    /// <param name="blocked">
-    /// Nodes the eraser has struck. They are neither waypoints nor available to route
-    /// *through*, which is what makes rubbing out a step remove it: without this the
-    /// solver simply re-links the neighbouring floors straight back through the node
-    /// that was just erased, and the erase appears to do nothing.
+    /// <param name="cut">
+    /// Steps the eraser has taken out, as (from, to) in row order. Kept apart from the
+    /// selection so rubbing out one link between two nodes leaves both nodes, and
+    /// every other link they have, alone.
     /// </param>
-    public static IReadOnlyList<IReadOnlyList<string>> ConnectWaypoints(
-        SpireMapGraph graph, string origin, IReadOnlyCollection<string> pins,
-        IReadOnlyCollection<string>? blocked = null)
+    public static IReadOnlyList<IReadOnlyList<string>> ConnectSelected(
+        SpireMapGraph graph, string origin, IReadOnlyCollection<string> selected,
+        IReadOnlyCollection<(string From, string To)>? cut = null)
     {
-        var barred = blocked as IReadOnlySet<string> ?? blocked?.ToHashSet() ?? [];
-        var waypoints = pins.Where(id => graph.Contains(id) && !barred.Contains(id)).ToHashSet();
-        // The origin is where the player stands; erasing it would be meaningless.
+        var chosen = selected.Where(graph.Contains).ToHashSet();
+        // The player's own position is always part of the plan: the first step should
+        // appear without having to select where you already stand.
         if (graph.Contains(origin))
-            waypoints.Add(origin);
-        if (waypoints.Count < 2)
+            chosen.Add(origin);
+        if (chosen.Count < 2)
             return [];
 
-        // Waypoints grouped by floor, floors in order. Connecting only *consecutive*
-        // occupied floors is what keeps the drawing to the plan: a route that dodges
-        // every pin in between — up an edge column and back — links two floors that
-        // are not neighbours in the plan, so it is never a candidate. Judging by
-        // "first waypoint reached" instead let those detours in, because they are the
-        // only way to reach a far pin without crossing a nearer one, leaving nothing
-        // shorter to compare them against.
-        var floors = waypoints
-            .GroupBy(id => graph.Node(id).Row)
-            .OrderBy(floor => floor.Key)
-            .Select(floor => floor.OrderBy(id => id, StringComparer.Ordinal).ToList())
-            .ToList();
-
+        var severed = cut as IReadOnlySet<(string From, string To)> ?? cut?.ToHashSet() ?? [];
         var segments = new List<IReadOnlyList<string>>();
-        for (var i = 1; i < floors.Count && segments.Count < MaxPaths; i++)
+        foreach (var from in chosen
+            .OrderBy(id => graph.Node(id).Row)
+            .ThenBy(id => id, StringComparer.Ordinal))
         {
-            foreach (var to in floors[i])
-            {
-                // Normally the floor just below, but a pin on a branch that one
-                // cannot reach falls back to the nearest earlier floor that can —
-                // better a longer link than a pin left dangling.
-                for (var j = i - 1; j >= 0; j--)
-                {
-                    var linked = false;
-                    foreach (var from in floors[j])
-                    {
-                        var shortest = ShortestPaths(graph, from, to, barred);
-                        if (shortest.Count == 0)
-                            continue;
-                        segments.AddRange(shortest);
-                        linked = true;
-                    }
-                    if (linked)
-                        break;
-                }
-            }
+            foreach (var to in graph.Successors(from))
+                if (chosen.Contains(to) && !severed.Contains((from, to)))
+                    segments.Add([from, to]);
         }
         return segments;
     }
@@ -177,59 +150,6 @@ public static class PathSolver
                 walked.AddRange(segment.Skip(1));
                 Walk(segment[^1]);
                 walked.RemoveRange(before, walked.Count - before);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Every shortest path from one node to another, or none if it cannot be reached.
-    /// Ties are all returned: two equally short ways are a real choice, not clutter.
-    /// </summary>
-    private static List<IReadOnlyList<string>> ShortestPaths(
-        SpireMapGraph graph, string from, string to, IReadOnlySet<string>? barred = null)
-    {
-        if (barred is not null && (barred.Contains(from) || barred.Contains(to)))
-            return [];
-
-        var distance = new Dictionary<string, int> { [from] = 0 };
-        var queue = new Queue<string>();
-        queue.Enqueue(from);
-        while (queue.Count > 0)
-        {
-            var id = queue.Dequeue();
-            foreach (var next in graph.Successors(id))
-            {
-                if (distance.ContainsKey(next) || barred?.Contains(next) == true)
-                    continue;
-                distance[next] = distance[id] + 1;
-                queue.Enqueue(next);
-            }
-        }
-        if (!distance.TryGetValue(to, out var hops))
-            return [];
-
-        var paths = new List<IReadOnlyList<string>>();
-        var stack = new List<string> { from };
-        Walk(from);
-        return paths;
-
-        // Only successors whose distance is one deeper stay on a shortest path.
-        void Walk(string id)
-        {
-            if (id == to)
-            {
-                paths.Add(stack.ToArray());
-                return;
-            }
-            if (stack.Count > hops)
-                return;
-            foreach (var next in graph.Successors(id))
-            {
-                if (!distance.TryGetValue(next, out var d) || d != stack.Count)
-                    continue;
-                stack.Add(next);
-                Walk(next);
-                stack.RemoveAt(stack.Count - 1);
             }
         }
     }

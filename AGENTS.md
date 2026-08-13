@@ -81,9 +81,15 @@ Everything but those two lives under a collapsible **Advanced** heading.
 (`map_circle_4`) with a "?" over it, showing a parchment panel of instructions on
 hover, pinned open by a click. It exists because the mod repurposes controls the game
 already taught — the quill, the eraser, Clear Drawings — so nothing on screen would
-otherwise say they now mean something different. The prose lives in one string,
-`HelpTip.Instructions`; `\n\n` starts a paragraph and wrapping is automatic, so the
-copy can be edited without touching the layout.
+otherwise say they now mean something different. **Its prose lives in
+`text/help.txt`, not in the C#** — player-facing text is David's to edit, and should
+never need a code change or a JSON escape to reword. It is an `EmbeddedResource`, so
+there is no loose file to package and no way for the two to disagree; `#` lines are
+comments and the lines within a paragraph are joined, so the file can be hard-wrapped
+for editing without every wrap becoming a line break on screen. The title above it
+(name, version, author) stays generated from the manifest — a version typed into a
+text file goes stale. The same rule covers `workshop/workshop-description.txt`, which
+`package-workshop.ps1` copies into `workshop.json`.
 
 Two things about that panel are load-bearing. Its text is laid out **absolutely, not
 in a container**: an autowrapping `Label` reports a near-zero minimum width, so inside
@@ -101,32 +107,24 @@ same drawing rule and differ only in how pins are placed — *Drawing* prefixes
 `NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
 passes through for both mouse and controller, suppresses the native line, and pins
 the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
-itself). Erasing there is the inverse, and it is **sticky**: the node under the cursor
-— or the nearer end of the crossed step — goes onto a `_blocked` set that
-`ConnectWaypoints` keeps out of both the waypoints and the routing. Without the second
-half the erase appears to do nothing: the solver simply re-links the neighbouring
-floors through the node just rubbed out, since that is the shortest way. Erasing used
-to lift the pin a link *led to*, which on a sparse plan is the anchor for everything
-between two waypoints — so rubbing out one step took a whole branch with it. Drawing
-over a blocked node unblocks it; the quill has to be able to undo the eraser. Blocked
-nodes persist beside the pins and are dropped once they fall behind the marker.
+itself). **The eraser works on steps, not nodes**: over the middle of a run it puts
+that one (from, to) into `_cut`, and over a node (judged by the node's own rect) it
+deselects the node and forgets every cut touching it. That is the whole reason the
+plan is kept as edges — rubbing out one link between two nodes has to leave both
+nodes, and their other links, exactly as they were. Drawing from one node onto the
+next restores a cut step between *that pair only*; `_lastDrawn` tracks it and is
+cleared when the stroke ends (`MapDrawingStopPatch`), or a later stroke starting
+elsewhere would restore a link nobody drew over.
 
-**A click always beats a block.** Clicking a node clears it from `_blocked` before
-toggling the pin — the same right the quill has. Without it, clicking a node the
-eraser had struck did nothing whatsoever: the pin went on, the block kept it out of
-the plan, and the orphan sweep took it straight back off, so a reachable node was
-simply unselectable with no indication why.
-
-**The erase cascades to orphans.** A block can cut the only way to a node pinned
-further on — erase `c0r8` and a pin on `c0r9` has no legal approach left — which drew
-a ring with nothing attached and no way to see why, since blocks are invisible. Any
-pin appearing in no link is therefore dropped and the links recomputed once. The
-cascade goes exactly as far as it must and never leaves an orphan to puzzle at.
+**A cut lives only while both its ends are selected.** Deselecting either end forgets
+it, and selecting a node clears every cut at that node. A cut outliving its context is
+invisible state of exactly the kind the old node blocks were — two adjacent nodes
+selected, no line between them, nothing on screen to say why — and it is the one way
+this model can still surprise. Keep the invariant.
 
 **A plan one floor short of the end is finished for the player.** `WithLastStep` adds
-the act's end nodes as waypoints once the topmost pin sits on the floor below them.
-Unreachable ends contribute nothing, so adding them all is safe. They stay out of
-`_pins`, so they are never persisted and the eraser has nothing of its own to lift.
+an act end node once some selected node is a direct predecessor of it. They stay out
+of `_pins`, so they are never persisted and the eraser has nothing of its own to lift.
 
 Suppressing that funnel is **not enough on its own** to keep native ink off the map.
 `BeginLine` creates the `Line2D` and seeds it with two points half a pixel apart,
@@ -158,12 +156,22 @@ matrix with `AffineInverse()` to recover the true global point, then map-local v
 `TheMap.GetGlobalTransform().AffineInverse()`. `Control.GetLocalMousePosition()` is
 no use either: it is a plain translation that ignores rotation and scale.
 
-In both, `PathSolver.ConnectWaypoints` replaces route enumeration entirely: the pins plus the player's current position are waypoints,
-grouped by floor, and only **consecutive occupied floors** are linked, by the
-*shortest* paths between them (ties kept — two equally short ways are a real
-choice). A pin no earlier floor can reach falls back to the nearest floor that can,
-rather than dangling. Several waypoints may share a floor, which is what lets pins
-sit on rival branches. `AssembleRoutes` then stitches those links back into whole
+In both, `PathSolver.ConnectSelected` replaces route enumeration entirely, and it does
+**no pathfinding at all**: the plan is one segment per map step whose two ends are
+both selected, less anything in `_cut`. The player's own position counts as selected,
+so the first step needs no selecting. Selecting two nodes the map does not join draws
+nothing, and a gap in the selection stays a gap.
+
+Its predecessor, `ConnectWaypoints`, bridged selected nodes with *shortest* paths and
+fell back to ever-earlier floors when a link was cut. That is the trap to remember:
+**in a layered map every route between two rows is the same length**, one edge per
+row, so "shortest" discriminates nothing and asking for the shortest paths between two
+floors returns *every* path between them. A fallback from a distant floor therefore
+drew a whole fan of line at once, and erasing one step could summon a sweep of route
+across the far side of the map. `ConnectWaypoints` and `ShortestPaths` are gone; do
+not reintroduce shortest-path bridging here.
+
+`AssembleRoutes` then stitches those steps back into whole
 routes, because the legend counts what a **path** holds, not what each link holds —
 a plan that forks yields one route per branch. **Every assembled route is drawn**; the
 legend's five are ranked by elites, then fires, then shops, and only those get a

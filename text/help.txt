@@ -1,0 +1,25 @@
+# The in-game help panel, shown by the "?" badge on the map screen.
+#
+# This file is the text. Edit it freely and rebuild; nothing in the C# needs
+# touching. The title line above it ("Pathing Plus v0.0.0 by realtruegravy") is
+# generated from the manifest so the version cannot go stale, and is not here.
+#
+# Formatting:
+#   - A blank line starts a new paragraph.
+#   - A line starting with "- " is a bullet and keeps its own line.
+#   - Any other line continues the line above it, so prose can be wrapped
+#     however reads best here without the wraps showing up in game.
+#   - Lines starting with # are comments and are not shown.
+
+How to use Pathing Plus:
+
+- Use the Drawing and Eraser tools to draw paths on the map.
+- Alternatively, click on individual nodes that you want to visit.
+- Double-click on node types to select all nodes of that type.
+- When paths have been completed, the Legend will show node type counts.
+- Use the Legend to pin down a desired path.
+- Use the Zoom Out / Rotate button for alternate views of the map.
+
+This mod was also designed with FULL GAMEPAD SUPPORT in mind, specifically:
+- In zoomed out modes, you can use the d-pad to move a cursor around the map and select nodes.
+- In drawing mode, you can switch between draw and eraser with the left analog stick button.

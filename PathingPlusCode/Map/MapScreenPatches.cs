@@ -306,6 +306,18 @@ internal static class MapScreenPatches
         }
     }
 
+    internal static void RouteStrokeEnded(NMapDrawings drawings)
+    {
+        foreach (var (screen, view) in Views)
+        {
+            if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
+            {
+                view.OnStrokeEnded();
+                return;
+            }
+        }
+    }
+
     internal static void RouteClearDrawings(NMapDrawings drawings)
     {
         foreach (var (screen, view) in Views)
@@ -385,6 +397,19 @@ internal static class MapDrawingBeginPatch
 
     [HarmonyFinalizer]
     private static void AfterBeginLine() => Hiding = false;
+}
+
+/// <summary>
+/// The stroke ended. The mod tracks the node a stroke last touched so that drawing
+/// from one node onto the next can restore a cut step between them; carrying that
+/// across the gap between two strokes would restore a link the player never drew.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.StopLineLocal))]
+internal static class MapDrawingStopPatch
+{
+    [HarmonyPostfix]
+    private static void AfterStopLine(NMapDrawings __instance) =>
+        Guard.Run("Ending a stroke", () => MapScreenPatches.RouteStrokeEnded(__instance));
 }
 
 /// <summary>Hides the line <see cref="MapDrawingBeginPatch" /> is standing over.</summary>

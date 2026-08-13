@@ -22,6 +22,10 @@
     <!-- <PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All" /> -->
     <Compile Remove="$(MSBuildProjectName).Tests/**" />
     <None Include="$(MSBuildProjectName).json" />
+    <!-- Human-facing text, kept out of the C# so it can be edited without touching
+         code. Embedded rather than shipped beside the DLL: there is then no second
+         file to package, and no way for the two to disagree. -->
+    <EmbeddedResource Include="text\help.txt" LogicalName="help.txt" />
   </ItemGroup>
 
   <Target Name="CheckDependencyPaths">

@@ -16,11 +16,23 @@ namespace PathingPlus.PathingPlusCode.Map;
 internal static class PinStore
 {
     /// <param name="Blocked">
-    /// Nodes the eraser struck. Nullable so a file written before erasing was sticky
-    /// still loads, as an empty set.
+    /// Nodes the eraser struck, from when erasing worked on nodes. Kept only so an
+    /// older file still loads; nothing reads it now.
+    /// </param>
+    /// <param name="Cut">
+    /// Steps the eraser has taken out, as "from&gt;to". Nullable so a file written
+    /// before the plan was made of edges still loads, as an empty set.
     /// </param>
     internal sealed record Saved(
-        string MapKey, string[] Pins, string[]? LockedRoute, string[]? Blocked = null);
+        string MapKey, string[] Pins, string[]? LockedRoute,
+        string[]? Blocked = null, string[]? Cut = null);
+
+    public static string FormatEdge((string From, string To) edge) => $"{edge.From}>{edge.To}";
+
+    public static (string From, string To)? ParseEdge(string text) =>
+        text.Split('>') is [var from, var to] && from.Length > 0 && to.Length > 0
+            ? (from, to)
+            : null;
 
     private static string FilePath =>
         Path.Combine(OS.GetUserDataDir(), "PathingPlus.pins.json");

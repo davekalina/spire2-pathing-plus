@@ -48,11 +48,18 @@ internal sealed class PathingView : IDisposable
     private HashSet<string> _pinnable = [];
 
     /// <summary>
-    /// Nodes the eraser struck. Kept out of the plan *and* out of the solver's
-    /// routing, so rubbing out a step removes that step instead of the solver
-    /// re-linking its neighbours straight back through it.
+    /// Steps the eraser has cut, as (from, to) in row order. Edges rather than nodes,
+    /// so rubbing out one link between two nodes leaves both of them — and every other
+    /// link they have — exactly as they were.
     /// </summary>
-    private HashSet<string> _blocked = [];
+    private HashSet<(string From, string To)> _cut = [];
+
+    /// <summary>
+    /// The node the current stroke last touched, so drawing across a cut step can put
+    /// it back. Cleared when the stroke ends, or a later stroke starting elsewhere
+    /// would restore a link the player never drew over.
+    /// </summary>
+    private string? _lastDrawn;
 
     /// <summary>The pin set as last drawn, so a redraw can tell a change from a repeat.</summary>
     private string _pinSignature = PinsChangedSentinel;
@@ -76,6 +83,13 @@ internal sealed class PathingView : IDisposable
     /// routes impossible to tell apart.
     /// </summary>
     private const float HoverRadius = 14f;
+
+    /// <summary>
+    /// How near the eraser must pass a drawn step to cut it. Wider than the mouse's
+    /// hover radius, because this one is dragged rather than aimed, but still narrow
+    /// enough that rubbing one line out leaves the line beside it standing.
+    /// </summary>
+    private const float EraseRadius = 26f;
 
     public PathingView(NMapScreen screen)
     {
@@ -184,6 +198,9 @@ internal sealed class PathingView : IDisposable
     }
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
+
+    /// <summary>A stroke finished, so the next one starts with no node behind it.</summary>
+    public void OnStrokeEnded() => _lastDrawn = null;
 
     /// <summary>The mouse took over; the controller's focus ring is no longer the cursor.</summary>
     public void OnPointerUsed() => _overlay.HideCursor();
@@ -340,7 +357,8 @@ internal sealed class PathingView : IDisposable
     public void ClearPins()
     {
         _pins.Clear();
-        _blocked.Clear();
+        _cut.Clear();
+        _lastDrawn = null;
         _hotRoute = -1;
         _lockedRoute = -1;
         if (_screen.IsOpen)
@@ -353,7 +371,8 @@ internal sealed class PathingView : IDisposable
         _iconBaseRotations.Clear();
         _adapter = null;
         _pins.Clear();
-        _blocked.Clear();
+        _cut.Clear();
+        _lastDrawn = null;
         if (_screen.IsOpen)
             Refresh();
     }
@@ -371,11 +390,10 @@ internal sealed class PathingView : IDisposable
         if (!_pinnable.Contains(id))
             return;
 
-        // A click is the plainest statement of intent there is, so it always wins over
-        // an earlier erase. Without this, clicking a node the eraser had struck did
-        // nothing visible at all: the pin went on, the block kept it out of the plan,
-        // and the orphan sweep took it straight back off again.
-        _blocked.Remove(id);
+        // Selecting a node says it belongs in the plan, so it takes with it any step
+        // the eraser had cut at it — the same right the quill has when drawn across.
+        if (!_pins.IsSelected(id))
+            _cut.RemoveWhere(edge => edge.From == id || edge.To == id);
         _pins.Toggle(id);
         Refresh();
     }
@@ -409,8 +427,6 @@ internal sealed class PathingView : IDisposable
 
         foreach (var target in targets)
         {
-            if (!unpinAll)
-                _blocked.Remove(target);
             if (_pins.IsSelected(target) == !unpinAll)
                 continue;
             _pins.Toggle(target);
@@ -445,12 +461,17 @@ internal sealed class PathingView : IDisposable
 
         if (!erasing)
         {
-            // Drawing over an erased node takes it off the blocked list: the quill is
-            // how you say "yes, this one" and it has to be able to undo the eraser.
             if (nearest is null)
                 return;
-            var unblocked = _blocked.Remove(nearest);
-            if (!unblocked && _pins.IsSelected(nearest))
+
+            // Drawing from one node onto the next puts back the step between them if
+            // the eraser had cut it: the quill says "yes, this one", and it has to be
+            // able to undo the eraser. Only that one pair — every other cut stands.
+            var restored = _lastDrawn is { } previous
+                && (_cut.Remove((previous, nearest)) | _cut.Remove((nearest, previous)));
+            _lastDrawn = nearest;
+
+            if (!restored && _pins.IsSelected(nearest))
                 return;
             if (!_pins.IsSelected(nearest))
                 _pins.Toggle(nearest);
@@ -461,15 +482,23 @@ internal sealed class PathingView : IDisposable
         // The eraser takes off one node — the one under it, or the nearer end of the
         // link being rubbed out. It used to remove the pin a link *led to*, which on a
         // sparse plan is the anchor for everything between two waypoints, so rubbing
-        // one step took out a whole branch.
-        var target = nearest is not null && OnPlan(nearest)
-            ? nearest
-            : NodeOfLinkNear(cursor);
-        if (target is null)
+        // On a node, the node goes and its links with it. Between two nodes, only that
+        // one step is cut — which is the whole reason the plan is kept as edges. The
+        // node test uses the node's own rect, so the middle of a run is unambiguously
+        // "between".
+        if (SelectedNodeAt(cursor) is { } node)
+        {
+            _pins.Remove(node);
+            _cut.RemoveWhere(edge => edge.From == node || edge.To == node);
+        }
+        else if (EdgeNear(cursor) is { } edge)
+        {
+            _cut.Add(edge);
+        }
+        else
+        {
             return;
-
-        _pins.Remove(target);
-        _blocked.Add(target);
+        }
         Refresh();
 
         // Getting back to map space is subtler than it looks. The game hands us
@@ -490,9 +519,6 @@ internal sealed class PathingView : IDisposable
             return theMap.GetGlobalTransform().AffineInverse() * global;
         }
     }
-
-    /// <summary>Whether this node is part of the plan as currently drawn.</summary>
-    private bool OnPlan(string id) => _links.Any(link => link.Contains(id));
 
     /// <summary>
     /// The pins, plus the act's end nodes once the plan already reaches the floor
@@ -515,41 +541,51 @@ internal sealed class PathingView : IDisposable
         if (planTop != endFloor - 1)
             return _pins.Ids;
 
-        // Unreachable ends contribute nothing, so adding them all is safe: only the
-        // one the drawn plan can actually get to produces a link.
+        // Only an end the plan actually steps onto is added: with no pathfinding
+        // left, an end nothing selected reaches would just sit there unattached.
         var reaching = _pins.Ids.ToHashSet();
-        foreach (var id in terminals.Where(id => !_blocked.Contains(id)))
-            reaching.Add(id);
+        foreach (var id in terminals)
+        {
+            if (_pins.Ids.Any(pin => _adapter.Graph.Successors(pin).Contains(id)))
+                reaching.Add(id);
+        }
         return reaching;
     }
 
-    /// <summary>
-    /// The node to lift when the eraser is on a link rather than on a node: whichever
-    /// end of the crossed step is nearer the cursor. Erasing a step should cost that
-    /// step, and the nearer end is the one the player is pointing at.
-    /// </summary>
-    private string? NodeOfLinkNear(Vector2 point)
+    /// <summary>A selected node under the point, sized from its own rect.</summary>
+    private string? SelectedNodeAt(Vector2 point)
     {
-        var best = (Id: (string?)null, Distance: float.MaxValue);
+        if (_adapter is null || _nodesByCoord is null)
+            return null;
+        foreach (var id in _pins.Ids)
+        {
+            if (!_adapter.TryGetPoint(id, out var mapPoint)
+                || !_nodesByCoord.TryGetValue(mapPoint.coord, out var node)
+                || !GodotObject.IsInstanceValid(node))
+                continue;
+            var center = node.Position + node.Size * 0.5f;
+            if (center.DistanceTo(point) <= Math.Max(node.Size.X, node.Size.Y) * 0.5f)
+                return id;
+        }
+        return null;
+    }
+
+    /// <summary>The drawn step nearest the point, for the eraser to cut.</summary>
+    private (string From, string To)? EdgeNear(Vector2 point)
+    {
+        var best = (Edge: ((string, string)?)null, Distance: float.MaxValue);
         foreach (var link in _links)
         {
             for (var i = 1; i < link.Count; i++)
             {
                 if (EndpointOf(link[i - 1]) is not { } from || EndpointOf(link[i]) is not { } to)
                     continue;
-                if (DistanceToSegment(point, from, to) > SnapRadius)
-                    continue;
-
-                // Never the origin: the player is standing on it.
-                var (nearId, nearPoint) = point.DistanceTo(from) <= point.DistanceTo(to)
-                    ? (link[i - 1], from)
-                    : (link[i], to);
-                var distance = point.DistanceTo(nearPoint);
-                if (_pinnable.Contains(nearId) && distance < best.Distance)
-                    best = (nearId, distance);
+                var distance = DistanceToSegment(point, from, to);
+                if (distance <= EraseRadius && distance < best.Distance)
+                    best = ((link[i - 1], link[i]), distance);
             }
         }
-        return best.Id;
+        return best.Edge;
     }
 
     private static float DistanceToSegment(Vector2 point, Vector2 from, Vector2 to)
@@ -584,14 +620,15 @@ internal sealed class PathingView : IDisposable
             _adapter = MapGraphAdapter.Build(map);
             _mapKey = PinStore.KeyFor(_adapter.Graph);
             _pins.Clear();
-            _blocked.Clear();
+            _cut.Clear();
+            _lastDrawn = null;
             _lockedRouteIds = null;
             // Same map as a previous session: the pins belong to it, bring them back.
             if (PinStore.Load() is { } saved && saved.MapKey == _mapKey)
             {
                 foreach (var id in saved.Pins)
                     _pins.Toggle(id);
-                _blocked = [.. saved.Blocked ?? []];
+                _cut = [.. (saved.Cut ?? []).Select(PinStore.ParseEdge).OfType<(string, string)>()];
                 _lockedRouteIds = saved.LockedRoute;
             }
         }
@@ -616,9 +653,13 @@ internal sealed class PathingView : IDisposable
         // every node ahead even when it draws only as far as the plan goes.
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);
-        // A node behind the marker cannot be planned around any more, so keeping it
-        // blocked would only narrow future routes for no reason.
-        _blocked.RemoveWhere(id => !_pinnable.Contains(id));
+        // A cut only means anything while both its ends are in the plan. Letting one
+        // outlive a deselected end is invisible state of exactly the kind the node
+        // blocks used to be: two adjacent nodes selected, no line between them, and
+        // nothing on screen to say why. Deselecting either end forgets the cut, so
+        // selecting them again draws the step.
+        _cut.RemoveWhere(edge =>
+            !(edge.From == startId || _pins.IsSelected(edge.From)) || !_pins.IsSelected(edge.To));
 
         if (!PathingOptions.AutoPath)
         {
@@ -628,27 +669,12 @@ internal sealed class PathingView : IDisposable
             bool Complete(IReadOnlyList<string> route) =>
                 route.Count > 1 && terminals.Contains(route[^1]);
 
-            // Manual planning draws the player's own line: links between consecutive
-            // pinned floors, stitched back into whole routes so the legend counts
-            // paths rather than the links they are made of.
-            _links = PathSolver.ConnectWaypoints(
-                _adapter.Graph, startId, WithLastStep(terminals), _blocked);
-
-            // A block can cut the only way to a pinned node, leaving a ring with
-            // nothing attached and no way to see why. Erasing the node that fed a pin
-            // takes the pin too: the cascade goes exactly as far as it must, and there
-            // is never an orphan left over to puzzle at.
-            var orphans = _pins.Ids
-                .Where(id => !_links.Any(link => link.Contains(id)))
-                .ToList();
-            if (orphans.Count > 0)
-            {
-                foreach (var id in orphans)
-                    _pins.Remove(id);
-                _links = PathSolver.ConnectWaypoints(
-                    _adapter.Graph, startId, WithLastStep(terminals), _blocked);
-            }
-
+            // The plan is exactly the steps between selected neighbours — no
+            // pathfinding, so nothing is ever drawn that the player did not point at.
+            // No orphan sweep either: a selection nothing joins is simply a selection
+            // nothing joins, and it says so by sitting there with no line on it.
+            _links = PathSolver.ConnectSelected(
+                _adapter.Graph, startId, WithLastStep(terminals), _cut);
             var assembled = PathSolver.AssembleRoutes(_links);
 
             // Everything the plan allows is still drawn; the legend's worth of best
@@ -760,7 +786,8 @@ internal sealed class PathingView : IDisposable
             _mapKey,
             _pins.Ids.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
             _lockedRouteIds?.ToArray(),
-            _blocked.OrderBy(id => id, StringComparer.Ordinal).ToArray()));
+            null,
+            _cut.Select(PinStore.FormatEdge).OrderBy(e => e, StringComparer.Ordinal).ToArray()));
     }
 
     /// <summary>
