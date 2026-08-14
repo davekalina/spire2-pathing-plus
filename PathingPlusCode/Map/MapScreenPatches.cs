@@ -80,12 +80,15 @@ internal static class MapScreenPatches
         {
             if (!ZoomActive(__instance))
                 return true;
-            return PathingOptions.OverrideDrawing &&
-                __0 is InputEventMouseButton
-                {
-                    Pressed: true,
-                    ButtonIndex: MouseButton.Right or MouseButton.Middle,
-                };
+            // The drawing press always goes through, override or not: this freeze is
+            // here to stop native *scrolling* while the whole act is on screen, and
+            // gating it on the override left the zoomed views unable to draw at all
+            // for anyone who had turned the override off.
+            return __0 is InputEventMouseButton
+            {
+                Pressed: true,
+                ButtonIndex: MouseButton.Right or MouseButton.Middle,
+            };
         }, true);
 
     /// <summary>Whether the whole-act view is up, where scrolling is suspended.</summary>
@@ -362,6 +365,26 @@ internal static class MapScreenPatches
         }
     }
 
+    /// <summary>
+    /// The drawing point the game *should* have computed.
+    ///
+    /// Every caller hands <c>NMapDrawings</c> a position worked out as
+    /// <c>drawings.GetGlobalTransform().Inverse() * globalPoint</c>, and Godot only
+    /// defines <c>Transform2D.Inverse()</c> for an **orthonormal** basis — rotation is
+    /// fine, scale is not. Vanilla never scales the map so the shortcut holds there;
+    /// the mod's zoomed views do scale it, and the point stops meaning what it says.
+    /// Undoing their exact matrix with a true inverse recovers the real global point,
+    /// which converts back properly.
+    ///
+    /// A no-op when the map is unscaled, so it can simply always be applied.
+    /// </summary>
+    internal static Vector2 CorrectDrawingPoint(NMapDrawings drawings, Vector2 point)
+    {
+        var transform = drawings.GetGlobalTransform();
+        var global = transform.Inverse().AffineInverse() * point;
+        return transform.AffineInverse() * global;
+    }
+
     internal static void RouteStrokeEnded(NMapDrawings drawings)
     {
         foreach (var (screen, view) in Views)
@@ -397,12 +420,20 @@ internal static class MapScreenPatches
 [HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.UpdateCurrentLinePositionLocal))]
 internal static class MapDrawingSnapPatch
 {
+
     [HarmonyPrefix]
-    private static bool BeforeUpdateLine(NMapDrawings __instance, Vector2 __0)
+    private static bool BeforeUpdateLine(NMapDrawings __instance, ref Vector2 __0)
     {
         if (!PathingOptions.OverrideDrawing)
+        {
+            // Standing aside, but the point still has to be right: the zoomed views
+            // scale the map and the game's own conversion cannot survive that.
+            __0 = MapScreenPatches.CorrectDrawingPoint(__instance, __0);
             return true;
+        }
 
+        // Copied out first: a ref parameter cannot be captured by the guarded lambda.
+        var point = __0;
         Guard.Run("Snapping a drawn stroke to the map", () =>
         {
             var drawing = __instance.GetLocalDrawingMode();
@@ -412,7 +443,7 @@ internal static class MapDrawingSnapPatch
             // the cursor for a controller as much as the mouse for a pointer — so it,
             // not the mouse, is what the stroke follows.
             MapScreenPatches.RouteDrawingPoint(
-                __instance, __0, drawing == DrawingMode.Erasing);
+                __instance, point, drawing == DrawingMode.Erasing);
         });
 
         // Never the original, whatever happened above. The line exists — it has to,
@@ -449,7 +480,12 @@ internal static class MapDrawingBeginPatch
     internal static bool Hiding;
 
     [HarmonyPrefix]
-    private static void BeforeBeginLine() => Hiding = PathingOptions.OverrideDrawing;
+    private static void BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0)
+    {
+        Hiding = PathingOptions.OverrideDrawing;
+        if (!Hiding)
+            __0 = MapScreenPatches.CorrectDrawingPoint(__instance, __0);
+    }
 
     [HarmonyFinalizer]
     private static void AfterBeginLine() => Hiding = false;

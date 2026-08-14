@@ -23,3 +23,4 @@ How to use Pathing Plus:
 This mod was also designed with FULL GAMEPAD SUPPORT in mind, specifically:
 - In zoomed out modes, you can use the d-pad to move a cursor around the map and select nodes.
 - In drawing mode, you can switch between draw and eraser with the left analog stick button.
+- Optional:  Disable Steam Input and scroll the map while the legend is selected (like Spire 1)

@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Pathing Plus is designed to help you draw better paths (and hopefully make\nbetter pathing decisions as a result).\n\nFeatures include:\n\n- Use the draw and eraser tools to map out your path - straight lines snap to the path you draw.\n- Alternate map views - fit the entire map on screen vertically or horizontally.\n- Automatic route analysis: how many elites / fires / events are there on each path?\n- Improved gamepad support for the map features (left analog button to switch between draw and eraser tools, right trigger to switch between map views)\n\nFeedback and feature requests always welcome!\n\nSource code and issue tracker:\nhttps://github.com/davekalina/spire2-pathing-plus",
   "visibility": "unlisted",
-  "changeNote": "- The right stick scrolls the map in the normal view, as it did in the first game. Needs Steam Input disabled for Slay the Spire 2, or the right stick bound to Joystick Move - with Steam Input on, the stick's axes never reach the game at all.\n- The settings menu can be driven with a gamepad: rows chain top to bottom, the sliders take the d-pad, and B closes it.",
+  "changeNote": "v1.0.0 - First public release.\n\nDraw a rough path on the map and it snaps to the real routes, counts what each one holds, and lets you compare them side by side. Auto-Path picks the routes with the most elites, fires, shops, events or combats. Three map views, and full gamepad support throughout.\n\nNote for controller players: the right stick scrolling the map needs Steam Input disabled for Slay the Spire 2, or the right stick bound to Joystick Move. Everything else works either way.",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []

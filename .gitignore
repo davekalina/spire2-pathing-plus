@@ -25,3 +25,6 @@ workshop/content/
 .env
 .env.*
 !.env.example
+
+# Screenshot masters kept out of the shipped set on purpose.
+images/raw-do-not-ship/
