@@ -85,13 +85,24 @@ if ($manifest.has_pck) {
 # and nobody has to hand-escape a page of prose into JSON.
 $descriptionPath = Join-Path $root 'workshop\workshop-description.txt'
 $workshopPath    = Join-Path $root 'workshop\workshop.json'
+# Wrapped because this runs *after* workshop/content has been wiped and re-staged:
+# an unguarded throw here (hand-edited JSON that no longer parses, say) would abort
+# packaging with nothing staged and the upload command never printed. A stale page
+# description is the lesser problem, so it warns and carries on.
 if ((Test-Path -LiteralPath $descriptionPath) -and (Test-Path -LiteralPath $workshopPath)) {
-    $description = (Get-Content -LiteralPath $descriptionPath -Raw).TrimEnd()
-    $workshop = Get-Content -LiteralPath $workshopPath -Raw | ConvertFrom-Json
-    if ($workshop.description -ne $description) {
-        $workshop.description = $description
-        $workshop | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $workshopPath -Encoding utf8
-        Write-Host "  = workshop.json description updated from workshop-description.txt"
+    try {
+        $description = (Get-Content -LiteralPath $descriptionPath -Raw).TrimEnd()
+        $workshop = Get-Content -LiteralPath $workshopPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        if ($workshop.PSObject.Properties.Name -notcontains 'description') {
+            $workshop | Add-Member -NotePropertyName description -NotePropertyValue ''
+        }
+        if ($workshop.description -ne $description) {
+            $workshop.description = $description
+            $workshop | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $workshopPath -Encoding utf8
+            Write-Host "  = workshop.json description updated from workshop-description.txt"
+        }
+    } catch {
+        Write-Warning "Could not sync workshop.json description: $($_.Exception.Message)"
     }
 }
 

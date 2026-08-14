@@ -427,8 +427,12 @@ internal static class MapDrawingSnapPatch
         if (!PathingOptions.OverrideDrawing)
         {
             // Standing aside, but the point still has to be right: the zoomed views
-            // scale the map and the game's own conversion cannot survive that.
-            __0 = MapScreenPatches.CorrectDrawingPoint(__instance, __0);
+            // scale the map and the game's own conversion cannot survive that. Guarded
+            // like every other boundary — a bad matrix costs the correction, not the
+            // player's stroke.
+            var given = __0;
+            __0 = Guard.Run("Correcting a drawn point",
+                () => MapScreenPatches.CorrectDrawingPoint(__instance, given), given);
             return true;
         }
 
@@ -483,8 +487,11 @@ internal static class MapDrawingBeginPatch
     private static void BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0)
     {
         Hiding = PathingOptions.OverrideDrawing;
-        if (!Hiding)
-            __0 = MapScreenPatches.CorrectDrawingPoint(__instance, __0);
+        if (Hiding)
+            return;
+        var given = __0;
+        __0 = Guard.Run("Correcting the first point of a stroke",
+            () => MapScreenPatches.CorrectDrawingPoint(__instance, given), given);
     }
 
     [HarmonyFinalizer]
@@ -560,7 +567,10 @@ internal static class MapPointPinPatch
     private static ulong _lastSelectMs;
 
     [HarmonyPrefix]
-    private static void BeforeGuiInput(NClickableControl __instance, InputEvent __0)
+    private static void BeforeGuiInput(NClickableControl __instance, InputEvent __0) =>
+        Guard.Run("Reading a press on a map node", () => ReadPress(__instance, __0));
+
+    private static void ReadPress(NClickableControl __instance, InputEvent __0)
     {
         if (__instance is not NMapPoint point)
             return;

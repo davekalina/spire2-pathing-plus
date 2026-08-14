@@ -36,6 +36,12 @@ $description = (Get-Content -LiteralPath $textPath |
 if ([string]::IsNullOrWhiteSpace($description)) { return }
 
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+# `description` is optional in the manifest, and assigning to a property that is not
+# there throws -- which the build target's ContinueOnError would swallow, leaving the
+# mod list blank with nothing to say why.
+if ($manifest.PSObject.Properties.Name -notcontains 'description') {
+    $manifest | Add-Member -NotePropertyName description -NotePropertyValue ''
+}
 if ($manifest.description -eq $description) { return }
 
 $manifest.description = $description

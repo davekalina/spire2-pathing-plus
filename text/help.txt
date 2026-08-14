@@ -2,7 +2,7 @@
 #
 # This file is the text. Edit it freely and rebuild; nothing in the C# needs
 # touching. The title line above it ("Pathing Plus v0.0.0 by realtruegravy") is
-# generated from the manifest so the version cannot go stale, and is not here.
+# built from MainFile's ModName/Version/Author constants, and is not here.
 #
 # Formatting:
 #   - A blank line starts a new paragraph.
