@@ -210,6 +210,14 @@ internal sealed class AutoPathMenu : IDisposable
             _options.Add(option);
         }
 
+        _root.AddChild(_list);
+        screen.AddChild(_root);
+
+        // Only now, with both subtrees in the tree. GetPathTo needs a common parent,
+        // and until _root is under the screen the options and the header — which went
+        // into the toolbar above — are in two disjoint trees. Godot answers that with
+        // "Parameter "common_parent" is null" and an empty path, so the first option's
+        // way back up to the header silently went nowhere.
         for (var i = 0; i < _options.Count; i++)
         {
             _options[i].FocusNeighborTop = i > 0
@@ -219,9 +227,6 @@ internal sealed class AutoPathMenu : IDisposable
                 ? _options[i].GetPathTo(_options[i + 1])
                 : new NodePath(".");
         }
-
-        _root.AddChild(_list);
-        screen.AddChild(_root);
     }
 
     /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
