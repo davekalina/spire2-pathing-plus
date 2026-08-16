@@ -287,6 +287,23 @@ every one after. `_iconTweens` keeps the handle per icon so it can be killed fir
 `MapZoom.AnimateTo` already did the same for the map's own tween, which is why the map
 looked right while its icons did not.
 
+**Map nodes only pulse and hover while no drawing tool is out.** That is
+`NMapPoint.IsInputAllowed`, and it gates the "you can go here" pulse in `_Process`,
+the controller reticle, and the history hover tip — every caller is a visual, none is
+on the click path. Vanilla only holds a tool while you scribble, so the rule reads as
+"don't fight the pen"; this mod holds one permanently, which silently cost every node
+its invitation to be clicked. `MapPointHoverPatch` turns that false back to true, and
+only for the reason the mod created.
+
+**Travel works in every view.** `BeforeMapPointSelected` lets a node through when
+`IsEnabled` — the game offering it as a move — and only plans with the rest. It used to
+swallow travel outright while zoomed, on the reasoning that the zoomed views were a
+look at the act rather than somewhere to play from; once **Start in Wide View** could
+make one of them the default, that turned into "zoom in first" on every single turn.
+Hit testing goes through `Polyline`, so what can be hovered is exactly what is
+drawn. Leaving the first leg *undrawn* while travel is live was tried and reverted:
+it read as the plan having a hole in it rather than as an invitation to click.
+
 `Reset` stays **tweened** at all four callers. Snapping the map upright on close was
 tried and is worse than watching it turn — more jarring, not less. Only the initial
 view snaps. `Reset` still returns to Normal

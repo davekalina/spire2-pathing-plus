@@ -347,6 +347,13 @@ internal sealed class PathingView : IDisposable
         return -1;
     }
 
+    /// <summary>
+    /// A route as drawn, whole — including the leg out of the node the player stands
+    /// on. That leg was briefly left off while travel was live, to keep the mod from
+    /// drawing over the game's own "you may move here" marker; it read as the plan
+    /// having a hole in it, so it is back. Hit testing goes through here too, so what
+    /// can be hovered is exactly what is on screen.
+    /// </summary>
     private List<Vector2> Polyline(IReadOnlyList<string> route) =>
         route.Select(EndpointOf).OfType<Vector2>().ToList();
 
@@ -906,9 +913,7 @@ internal sealed class PathingView : IDisposable
         }
         else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
         {
-            var polylines = _shownRoutes
-                .Select(route => route.Select(EndpointOf).OfType<Vector2>().ToArray())
-                .ToList();
+            var polylines = _shownRoutes.Select(route => Polyline(route).ToArray()).ToList();
             _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes));
         }
         else

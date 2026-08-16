@@ -113,8 +113,13 @@ internal static class MapScreenPatches
         }, true);
 
     /// <summary>
-    /// Zoomed out is planning, not moving: selecting any node — travelable included —
-    /// toggles its pin, and travel never fires. Zoom back in to actually move.
+    /// Zoomed out, selecting a node plans with it rather than moving to it — **unless
+    /// it is a node you could actually travel to**, which is always a move.
+    ///
+    /// This used to swallow travel in the zoomed views outright, on the reasoning that
+    /// they were a look at the act rather than a place to play from. Once the wide view
+    /// could be the *default* that stopped being true: it made zooming in a required
+    /// step on every single turn, to press the one node the game was already offering.
     /// Falling back to true keeps travel native if anything here breaks.
     /// </summary>
     [HarmonyPrefix]
@@ -123,6 +128,9 @@ internal static class MapScreenPatches
         Guard.Run("Pinning instead of traveling while zoomed", () =>
         {
             if (!Views.TryGetValue(__instance, out var view) || !view.ZoomActive)
+                return true;
+            // Enabled means the game is offering this node as a move; let it have it.
+            if (GodotObject.IsInstanceValid(__0) && __0.IsEnabled)
                 return true;
             view.OnMapPointClicked(__0);
             return false;
@@ -177,6 +185,7 @@ internal static class MapScreenPatches
             // asked per-device, but the events themselves still arrive.
             if (__0 is InputEventJoypadMotion motionEvent)
                 RightStickScrollPatch.NoteJoypadMotion(motionEvent);
+
 
             // The device may have just changed; a tool in hand has to change with it.
             // Deferred for the same reason the tool switch is: the tree cannot be
