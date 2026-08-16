@@ -35,6 +35,14 @@ internal sealed class PathingView : IDisposable
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
     private readonly Dictionary<NMapPoint, float> _iconBaseRotations = [];
+
+    /// <summary>
+    /// The counter-rotation tween in flight per icon, so the next change can kill it.
+    /// Without a handle an old tween keeps writing `rotation_degrees` after a later
+    /// snap has set it, and wins — which left every icon a quarter-turn out on the
+    /// second and every subsequent map open, since closing the map starts one.
+    /// </summary>
+    private readonly Dictionary<NMapPoint, Tween> _iconTweens = [];
     private Control? _nativeLegend;
 
     private MapGraphAdapter? _adapter;
@@ -109,13 +117,13 @@ internal sealed class PathingView : IDisposable
         // frozen, and the d-pad walks the node grid with a gold cursor ring. The
         // rotated view re-wires the grid so right means bossward, and the node icons
         // counter-spin so they stay upright while the map turns under them.
-        _zoom.Toggled += () => Guard.Run("Syncing map navigation", () =>
+        _zoom.Toggled += instant => Guard.Run("Syncing map navigation", () =>
         {
             _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
             _navigator.SetActive(_zoom.Zoomed, takeFocus: !ToolbarHasFocus());
             if (!_zoom.Zoomed)
                 _overlay.HideCursor();
-            SyncIconRotation();
+            SyncIconRotation(instant);
             // After the deferred focus grab, so the tip that grab conjures dies too.
             Callable.From(() => Guard.Run("Hiding stale map hover tips", HideNodeHoverTips))
                 .CallDeferred();
@@ -178,7 +186,7 @@ internal sealed class PathingView : IDisposable
     /// first time a node is seen — always outside the rotated state, so never
     /// mid-animation — and restored on the way back.
     /// </summary>
-    private void SyncIconRotation()
+    private void SyncIconRotation(bool instant = false)
     {
         if (_nodesByCoord is null)
             return;
@@ -189,9 +197,18 @@ internal sealed class PathingView : IDisposable
             if (!_iconBaseRotations.TryGetValue(node, out var baseRotation))
                 _iconBaseRotations[node] = baseRotation = node.RotationDegrees;
             var target = _zoom.Rotated ? baseRotation - 90f : baseRotation;
-            node.CreateTween()
-                .TweenProperty(node, "rotation_degrees", target, MapZoom.TweenDuration)
+            if (_iconTweens.TryGetValue(node, out var running) && running.IsValid())
+                running.Kill();
+            _iconTweens.Remove(node);
+            if (instant)
+            {
+                node.RotationDegrees = target;
+                continue;
+            }
+            var tween = node.CreateTween();
+            tween.TweenProperty(node, "rotation_degrees", target, MapZoom.TweenDuration)
                 .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);
+            _iconTweens[node] = tween;
         }
     }
 
@@ -377,6 +394,10 @@ internal sealed class PathingView : IDisposable
         _help.SetShellVisible(true);
         _autoPath.SetShellVisible(true);
         Refresh();
+        // Deferred: the node rects this frames against are only final after a layout
+        // pass, and framing on pre-layout positions puts the whole act off screen.
+        Callable.From(() => Guard.Run("Opening the map in its usual view", _zoom.ShowInitialView))
+            .CallDeferred();
     }
 
     /// <summary>
@@ -410,6 +431,7 @@ internal sealed class PathingView : IDisposable
     {
         _zoom.Reset();
         _iconBaseRotations.Clear();
+        _iconTweens.Clear();
         _adapter = null;
         _pins.Clear();
         _cut.Clear();

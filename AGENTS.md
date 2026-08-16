@@ -268,6 +268,30 @@ whole tier at a time while they fit the legend. Legend rows carry the score
 ("Route 1 — 6/7"). Same-floor pins are meaningful and allowed. The native Clear
 drawings button clears the pins too.
 
+**Start in Wide View** (`PathingOptions.StartWide`, off by default) opens the map
+already rotated. `MapZoom.ShowInitialView` must run **after** the first `Refresh` and
+never in place of `Reset`: `Apply` drops back to the normal view when `_nodeCenters()`
+is empty, and it is empty until a refresh has read the point dictionary. It is
+deferred a frame on top of that, because the node rects it frames against are only
+final after a layout pass. It snaps rather than tweens — animating on open shows the
+normal map and then flips it, which reads as a glitch. `Toggled` therefore carries an
+**instant** flag: the node icons counter-rotate in step with the map, and snapping the
+map while they tween leaves every icon visibly spinning into place on a map that has
+already arrived. Anything else that follows the view must honour that flag too.
+
+**A snap must kill the tween it is overriding.** Closing the map resets the view,
+which starts a 0.55s tween pulling every icon back to its base rotation; the next open
+snapped them a frame later and the surviving tween simply carried on writing
+`rotation_degrees` and won. Symptom: correct on the first open, a quarter-turn out on
+every one after. `_iconTweens` keeps the handle per icon so it can be killed first —
+`MapZoom.AnimateTo` already did the same for the map's own tween, which is why the map
+looked right while its icons did not.
+
+`Reset` stays **tweened** at all four callers. Snapping the map upright on close was
+tried and is worse than watching it turn — more jarring, not less. Only the initial
+view snaps. `Reset` still returns to Normal
+on close and dispose, or the game keeps a scaled, rotated map after the mod is gone.
+
 **The Zoom button cycles three views** (Right Trigger or the button; every map open
 starts Normal): Normal → Zoomed (whole act on screen) → Rotated (whole act on its
 side, start left / boss right, a quarter-turn of `TheMap`). Transitions animate:

@@ -62,7 +62,12 @@ internal sealed class MapZoom : IDisposable
     public bool Rotated => Mode == MapViewMode.Rotated;
 
     /// <summary>Raised after the state changes, either direction, any cause.</summary>
-    public event Action? Toggled;
+    /// <param name="instant">
+    /// True when the view changed without a tween, so whatever else follows the map —
+    /// the node icons counter-rotating, above all — snaps with it instead of animating
+    /// against a map that has already arrived.
+    /// </param>
+    public event Action<bool>? Toggled;
 
     /// <summary>The button, hidden while the map screen itself is closed.</summary>
     /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
@@ -197,7 +202,25 @@ internal sealed class MapZoom : IDisposable
             _ => MapViewMode.Normal,
         };
         Apply();
-        Toggled?.Invoke();
+        Toggled?.Invoke(false);
+    }
+
+    /// <summary>
+    /// The view a freshly opened map should start in. Applied **after** the first
+    /// refresh, never with <see cref="Reset" />: framing needs the node centres, and
+    /// <see cref="Apply" /> drops back to the normal view when there are none yet.
+    ///
+    /// Snapped rather than tweened — on open, animating would show the normal map for
+    /// half a second and then flip it, which reads as a glitch rather than a setting.
+    /// </summary>
+    public void ShowInitialView()
+    {
+        var wanted = PathingOptions.StartWide ? MapViewMode.Rotated : MapViewMode.Normal;
+        if (Mode == wanted)
+            return;
+        Mode = wanted;
+        Apply(instant: true);
+        Toggled?.Invoke(true);
     }
 
     /// <summary>Re-fit the current view after a framing setting changed.</summary>
@@ -207,14 +230,20 @@ internal sealed class MapZoom : IDisposable
             Apply();
     }
 
-    /// <summary>Back to the normal view — on map change, map close, and map open.</summary>
+    /// <summary>
+    /// Back to the normal view — on map change, map close, and map open. The map must
+    /// not be left scaled and rotated once the mod stops drawing it.
+    ///
+    /// Tweened, including on close: snapping it upright is more jarring than watching
+    /// it turn, even though the screen is on its way out. Tried instant, reverted.
+    /// </summary>
     public void Reset()
     {
         if (Mode == MapViewMode.Normal)
             return;
         Mode = MapViewMode.Normal;
         Apply();
-        Toggled?.Invoke();
+        Toggled?.Invoke(false);
     }
 
     public void Dispose()
@@ -235,7 +264,7 @@ internal sealed class MapZoom : IDisposable
         _ => "Zoom In",
     };
 
-    private void Apply()
+    private void Apply(bool instant = false)
     {
         UpdateLabel();
 
@@ -251,7 +280,7 @@ internal sealed class MapZoom : IDisposable
         {
             var row = RunManager.Instance?.DebugOnlyGetState()?.CurrentMapCoord?.row ?? 0;
             var distY = DistYField?.GetValue(_screen) as float? ?? 155f;
-            AnimateTo(1f, 0f, new Vector2(0f, Mathf.Clamp(-600f + row * distY, -600f, 1800f)));
+            AnimateTo(1f, 0f, new Vector2(0f, Mathf.Clamp(-600f + row * distY, -600f, 1800f)), instant);
             return;
         }
 
@@ -283,16 +312,24 @@ internal sealed class MapZoom : IDisposable
         // serves both zoomed states and the tween cannot lurch.
         _theMap.PivotOffset = center;
         AnimateTo(scale, rotated ? 90f : 0f,
-            new Vector2(frameWidth * 0.5f, _screen.Size.Y * 0.5f) + nudge - center);
+            new Vector2(frameWidth * 0.5f, _screen.Size.Y * 0.5f) + nudge - center, instant);
     }
 
-    private void AnimateTo(float scale, float rotationDegrees, Vector2 dragTarget)
+    private void AnimateTo(
+        float scale, float rotationDegrees, Vector2 dragTarget, bool instant = false)
     {
         // Position: write the drag target and let UpdateScrollPosition's own lerp
         // chase it — tweening Position ourselves would fight that per-frame lerp.
         TargetDragPosField?.SetValue(_screen, dragTarget);
 
         _tween?.Kill();
+        if (instant)
+        {
+            _theMap.Scale = Vector2.One * scale;
+            _theMap.RotationDegrees = rotationDegrees;
+            return;
+        }
+
         _tween = _theMap.CreateTween().SetParallel();
         _tween.TweenProperty(_theMap, "scale", Vector2.One * scale, TweenDuration)
             .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.InOut);

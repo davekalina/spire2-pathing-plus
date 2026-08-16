@@ -3,7 +3,7 @@
   "name": "Pathing Plus",
   "author": "realtruegravy",
   "description": "Improved pathing support with straight line paths, path analysis, and alternate map views.",
-  "version": "v1.0.2",
+  "version": "v1.1.2",
   "min_game_version": "0.111.0",
   "has_pck": false,
   "has_dll": true,

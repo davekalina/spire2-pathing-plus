@@ -18,6 +18,12 @@ internal static class PathingOptions
     /// </summary>
     public static bool OverrideDrawing { get; set; } = true;
 
+    /// <summary>
+    /// Open the map already in the wide view — the whole act on its side, start at
+    /// the left and boss at the right — rather than the game's normal view.
+    /// </summary>
+    public static bool StartWide { get; set; }
+
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
 
@@ -52,6 +58,7 @@ internal static class PathingOptions
     public static void ResetDefaults()
     {
         OverrideDrawing = true;
+        StartWide = false;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -84,6 +91,7 @@ internal static class PathingOptions
         public string? Mode { get; set; }
 
         public bool? OverrideDrawing { get; set; }
+        public bool? StartWide { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -105,6 +113,7 @@ internal static class PathingOptions
         if (JsonSerializer.Deserialize<Saved>(File.ReadAllText(FilePath)) is not { } saved)
             return;
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
+        StartWide = saved.StartWide ?? StartWide;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -120,6 +129,7 @@ internal static class PathingOptions
         File.WriteAllText(FilePath, JsonSerializer.Serialize(new Saved
         {
             OverrideDrawing = OverrideDrawing,
+            StartWide = StartWide,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,
