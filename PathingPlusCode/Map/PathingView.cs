@@ -4,6 +4,7 @@ using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using MegaCrit.Sts2.Core.Runs;
 using PathingPlus.PathingPlusCode.Pathing;
 using System.Reflection;
@@ -455,10 +456,38 @@ internal sealed class PathingView : IDisposable
 
     public void ToggleZoom() => _zoom.Toggle();
 
+    /// <summary>
+    /// The path tool's keyboard shortcut, live only while the map is. The manager keys
+    /// bindings by action and runs the most recent one, so it is pushed on the way in
+    /// and taken off on the way out rather than held for the screen's whole lifetime —
+    /// the map screen's root stays in the tree after the map closes, and a shortcut that
+    /// outlived the map would fire over combat.
+    /// </summary>
+    private void OnPathToolHotkey() => Guard.Run("The path tool shortcut", () =>
+    {
+        // The manager's own blocking-screen mechanism only covers the game's actions,
+        // so a mod action would still reach here from under a pause menu. Asking whether
+        // the map is the screen being played is the same test the mod's other hotkeys use.
+        if (!_screen.IsOpen || !ActiveScreenContext.Instance.IsCurrent(_screen))
+            return;
+        MapScreenPatches.SelectPathTool(_screen);
+    });
+
+    private void ListenForHotkey(bool listening) => Guard.Run("Listening for the path tool shortcut", () =>
+    {
+        if (NHotkeyManager.Instance is not { } hotkeys)
+            return;
+        if (listening)
+            hotkeys.PushHotkeyReleasedBinding(PathToolHotkey.Action, OnPathToolHotkey);
+        else
+            hotkeys.RemoveHotkeyReleasedBinding(PathToolHotkey.Action, OnPathToolHotkey);
+    });
+
     /// <summary>Every map open starts in the normal view, never zoomed out.</summary>
     public void OnOpened()
     {
         _zoom.Reset();
+        ListenForHotkey(true);
         _toolbar.SetVisible(true);
         _zoom.SetButtonVisible(true);
         _legend.SetShellVisible(true);
@@ -929,6 +958,7 @@ internal sealed class PathingView : IDisposable
     public void Dispose()
     {
         PathingOptions.Changed -= OnOptionsChanged;
+        ListenForHotkey(false);
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
         _autoPath.Dispose();
@@ -956,6 +986,7 @@ internal sealed class PathingView : IDisposable
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
         _zoom.Reset();
+        ListenForHotkey(false);
         _hotRoute = -1;
         // The screen root stays in the tree when the map closes — the game only hides
         // its own contents — so panels parented to it must hide themselves, or they

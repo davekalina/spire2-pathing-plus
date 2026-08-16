@@ -30,6 +30,9 @@ public partial class MainFile : Node
     {
         new Harmony(ModId).PatchAll();
         PathingPlusCode.Map.PathingOptions.Load();
+        // Guarded on its own: a shortcut that will not register is worth losing by
+        // itself rather than taking the rest of the mod down with it.
+        Guard.Run("Registering the path tool shortcut", PathingPlusCode.Map.PathToolHotkey.Install);
 
         Logger.Info($"{ModName} {Version} initialized.");
     }

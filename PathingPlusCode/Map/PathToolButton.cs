@@ -1,5 +1,8 @@
 using Godot;
 using MegaCrit.Sts2.Core.ControllerInput;
+using MegaCrit.Sts2.Core.HoverTips;
+using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.Nodes.HoverTips;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -29,6 +32,21 @@ internal sealed class PathToolButton : IDisposable
     /// <summary>The native buttons' own tints, from <c>NMapDrawButton</c>.</summary>
     private static readonly Color Live = new("57C4FFFF");
     private static readonly Color Idle = new("FFFFFF80");
+
+    /// <summary>
+    /// Where the tray's hover tips appear, from <c>NMapDrawButton</c>: offset from the
+    /// button row, not from the button. All four share the row, so the tip shows in the
+    /// same place whichever one is under the pointer — which is the game's behaviour and
+    /// is what stops it jumping about as the pointer crosses the tray.
+    /// </summary>
+    private static readonly Vector2 TipOffset = new(10f, -132f);
+
+    /// <summary>The tip's own text. David's words; see the loc keys in <see cref="Tip" />.</summary>
+    private const string TipTitle = "Pathing Plus";
+    private const string TipDescription = "Draw straight line paths between nodes on the map.";
+    private const string TipTable = "map";
+    private const string TipTitleKey = "PATHING_PLUS_TOOL.title";
+    private const string TipDescriptionKey = "PATHING_PLUS_TOOL.description";
 
     private readonly Control? _tray;
     private readonly Control? _row;
@@ -137,6 +155,9 @@ internal sealed class PathToolButton : IDisposable
     public void Dispose()
     {
         _tween?.Kill();
+        // Only if it is ours: the tip is keyed on the row the whole tray shares.
+        if (_hovered || _focused)
+            Guard.Run("Taking down the path tool's hover tip", () => ShowTip(false));
         if (_button is { } button && GodotObject.IsInstanceValid(button))
             button.QueueFree();
         if (_widened)
@@ -165,13 +186,59 @@ internal sealed class PathToolButton : IDisposable
     private void SetHovered(bool hovered)
     {
         _hovered = hovered;
-        Animate();
+        Lift();
     }
 
     private void SetFocused(bool focused)
     {
         _focused = focused;
+        Lift();
+    }
+
+    /// <summary>
+    /// Hover and controller focus are one state to these buttons, and this is that state
+    /// changing. Only this drives the tip — selection must not, because the tip is keyed
+    /// on the shared row, and taking it down on selection would take down whichever
+    /// neighbour's tip happened to be up when a hotkey selected this one.
+    /// </summary>
+    private void Lift()
+    {
+        Guard.Run("The path tool's hover tip", () => ShowTip(_hovered || _focused));
         Animate();
+    }
+
+    /// <summary>
+    /// The tray's hover tip, shown and hidden exactly as the game's three do it: keyed
+    /// on the shared row, so showing this one replaces whichever was up.
+    /// </summary>
+    private void ShowTip(bool shown)
+    {
+        if (_row is null || !GodotObject.IsInstanceValid(_row))
+            return;
+        if (!shown)
+        {
+            NHoverTipSet.Remove(_row);
+            return;
+        }
+        if (Tip() is not { } tip)
+            return;
+        NHoverTipSet.CreateAndShow(_row, tip)?.SetGlobalPosition(_row.GlobalPosition + TipOffset);
+    }
+
+    /// <summary>
+    /// Built fresh each time rather than cached, because the text is resolved through
+    /// the game's own loc tables and those are replaced wholesale when the language
+    /// changes — see <see cref="ModStrings" />. Both entries have to be in place before
+    /// the <c>LocString</c>s are read, or reading them throws.
+    /// </summary>
+    private static HoverTip? Tip()
+    {
+        if (!ModStrings.Ensure(TipTable, TipTitleKey, TipTitle) ||
+            !ModStrings.Ensure(TipTable, TipDescriptionKey, TipDescription))
+            return null;
+        return new HoverTip(
+            new LocString(TipTable, TipTitleKey),
+            new LocString(TipTable, TipDescriptionKey));
     }
 
     /// <summary>

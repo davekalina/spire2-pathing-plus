@@ -154,6 +154,40 @@ tool collects (`ArmPathStroke` / `TakeArmedPen`) rather than lighting a toolbar 
 an empty hand. And `SyncToolToInput` **re-reads the flag before rebuilding**, because
 a change of device is not a change of pen.
 
+**The path tool has a rebindable key, default Q.** `PathToolHotkey` joins the game's
+own input system rather than watching for a key itself: the game drives shortcuts
+through `NInputManager`'s action → key dictionaries, not Godot's input map, and
+Settings → Input is built from lists of remappable actions that edit those same
+dictionaries. So the action is registered with Godot carrying no key event of its own,
+its default is written into `DefaultHotkeyInputMap` (the base every saved mapping is
+layered onto, and exactly what Reset to Default restores), and it is added to
+`remappableMKbInputs` — the list the settings screen builds rows from — and
+`remappableKbOnlyInputs`.
+
+Three things about that are load-bearing. **The default is mouse-and-keyboard only**:
+keyboard-only mode is a separate map where Q is already the deck, and a default there
+would open two things at once. **It is deliberately absent from
+`remappableControllerInputs`**, because rebinding a controller button hands the button's
+previous owner the button the rebound action used to have, and an action that starts
+with none has nothing to hand over — controller players already reach the tool with the
+left stick. And **a row must be able to name itself before it tries to**:
+`NInputSettingsEntry._Ready` reads its title through `commandToLocTitle` into the
+`settings_ui` loc table with no tolerance for a missing key, and a row that dies partway
+through `_Ready` leaves signals it never connected to be disconnected on the way out —
+a broken Settings panel for the game's own bindings, not merely a missing row.
+
+`ModStrings` is what makes that possible: **`LocTable.MergeWith` is public**, so a mod
+can add loc entries and then use any native widget that takes a `LocString` — the
+settings row title and the toolbar hover tip both do. Entries do **not** survive a
+language change (`LocManager` replaces its whole table dictionary), so every caller
+re-asserts them at the point of use — a prefix on `NInputSettingsEntry._Ready` for the
+row, and per-show for the tip — rather than once at startup.
+
+The shortcut is live only while the map is (`ListenForHotkey` on open and close).
+`NHotkeyManager`'s blocking-screen mechanism only covers `MegaInput.AllInputs`, so a mod
+action would still arrive from under a pause menu; the handler asks
+`ActiveScreenContext.IsCurrent` for the same reason the mod's other hotkeys do.
+
 **The quill is the game's quill and the eraser belongs to both.** Once planning has
 its own tool the quill goes back to ink, so the
 `UpdateCurrentLinePositionLocal` prefix stands aside for it. The eraser does not:
@@ -419,9 +453,24 @@ Game coupling that a game update can move (verify after every update):
 
 - Harmony targets: `NMapScreen.Open` / `SetMap` / `_Input` /
   `OnMapPointSelectedLocally` / `RecalculateTravelability` /
-  `ProcessControllerEvent` / `OnLegendHotkeyPressed` (the last three private,
-  patched by string name), `NClickableControl._GuiInput`, and
-  `NMapDrawings.ClearDrawnLinesLocal`.
+  `ProcessControllerEvent` / `OnLegendHotkeyPressed` /
+  `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed` /
+  `UpdateDrawingButtonStates` (the private ones patched by string name),
+  `NClickableControl._GuiInput`, `NMapDrawings.ClearDrawnLinesLocal` /
+  `UpdateCurrentLinePositionLocal` / `BeginLineLocal` / `StopLineLocal` /
+  `CreateLineForPlayer` / `SetDrawingModeLocal`, `NMapPoint.IsInputAllowed`,
+  `NControllerManager.GetLeftAnalogStickDirection`,
+  `NControllerMapDrawingInput._Process`, and — for the shortcut —
+  `NInputManager.DefaultHotkeyInputMap` (a property getter) and
+  `NInputSettingsEntry._Ready`.
+- Loc tables: `settings_ui` (`INPUT_SETTINGS.INPUT_TITLE.pathing_plus_path_tool`) and
+  `map` (`PATHING_PLUS_TOOL.title` / `.description`), both added through
+  `LocTable.MergeWith` at the point of use. See `ModStrings`.
+- Input registration: the action name `pathing_plus_path_tool`, `Key.Q`,
+  `NInputSettingsEntry.commandToLocTitle`, and the three
+  `NInputManager.remappable*Inputs` lists being **mutable `List<StringName>` behind an
+  `IReadOnlyList`** — if that ever becomes a genuinely immutable collection the row
+  cannot be added, and the mod says so in the log rather than failing.
 - Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and
   `NMapScreen._distY` (zoom-out restore).
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
@@ -526,8 +575,15 @@ Game coupling that a game update can move (verify after every update):
   wholesale kills drawing in both zoomed views.
 - The drawing tray with its fourth button: the tray's width and the hotkey glyph's
   place in it, the icon's idle / hover / focus / selected states, exactly one lit icon
-  at a time, the focus chain on from Clear, and the tray restored to its own width when
-  the view is disposed.
+  at a time, the focus chain on from Clear, its hover tip appearing where the other
+  three do (and not taking theirs down with it), and the tray restored to its own width
+  when the view is disposed.
+- The shortcut: Q by default, its row in Settings → Input reading "Pathing Plus: Path
+  Tool" with a binding in the mouse-and-keyboard column, a dash in the keyboard-only
+  column and no controller binding, rebinding it, Reset to Default returning it to Q,
+  the binding surviving a restart, and the key doing nothing while the map is closed or
+  covered by the pause menu. Open Settings → Input **after** switching language too:
+  that is the case the loc entry is re-asserted for.
 - The path tool in all three views: stroke snapping, no native ink left behind, press
   again to put it down, and neither disturbing pan/zoom.
 - The eraser doing both jobs: lifting pins and cutting steps, and rubbing out the
