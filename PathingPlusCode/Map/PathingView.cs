@@ -585,7 +585,10 @@ internal sealed class PathingView : IDisposable
         if (MapPoint() is not { } cursor)
             return;
 
-        var nearest = _pinnable
+        // The node the player is standing on is a candidate too, even though it can
+        // never be pinned. It is one end of the first step, and a stroke has to be able
+        // to name it — see below.
+        var nearest = _pinnable.Append(_startId)
             .Select(id => (Id: id, Center: EndpointOf(id)))
             .Where(candidate => candidate.Center is not null)
             .Select(candidate => (candidate.Id, Distance: candidate.Center!.Value.DistanceTo(cursor)))
@@ -605,6 +608,18 @@ internal sealed class PathingView : IDisposable
             var restored = _lastDrawn is { } previous
                 && (_cut.Remove((previous, nearest)) | _cut.Remove((nearest, previous)));
             _lastDrawn = nearest;
+
+            // Standing on it counts as selecting it, so the first step needs no pin —
+            // but it does need the stroke to have passed through here, or `_lastDrawn`
+            // is still null when the stroke reaches the node above and the first step
+            // is the one step the quill can never put back. That left an erased first
+            // leg only recoverable by deselecting the node above it and starting again.
+            if (nearest == _startId)
+            {
+                if (restored)
+                    Refresh();
+                return;
+            }
 
             if (!restored && _pins.IsSelected(nearest))
                 return;
