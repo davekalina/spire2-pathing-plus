@@ -6,7 +6,7 @@ Features include:
 - Use the draw and eraser tools to map out your path - straight lines snap to the path you draw.
 - Alternate map views - fit the entire map on screen vertically or horizontally.
 - Automatic route analysis: how many elites / fires / events are there on each path?
-- Improved gamepad support for the map features (left analog button to switch between draw and eraser tools, right trigger to switch between map views)
+- Improved gamepad support for the map features (left analog button to switch between draw and eraser tools, right trigger to switch between map views, scroll the map with the right analog stick (only if Steam Input is disabled))
 
 Feedback and feature requests always welcome!
 
