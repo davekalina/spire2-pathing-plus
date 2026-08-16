@@ -152,7 +152,7 @@ internal sealed class OptionsPanel : IDisposable
         _rows.AddThemeConstantOverride("separation", 4);
         margin.AddChild(_rows);
 
-        AddToggle(_rows, "Override Drawing Controls",
+        AddToggle(_rows, "Right-Drag Draws Paths",
             () => PathingOptions.OverrideDrawing, v => PathingOptions.OverrideDrawing = v);
         AddToggle(_rows, "Start in Wide View",
             () => PathingOptions.StartWide, v => PathingOptions.StartWide = v);

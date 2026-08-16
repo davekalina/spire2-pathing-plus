@@ -31,6 +31,7 @@ internal sealed class PathingView : IDisposable
     private readonly OptionsPanel _options;
     private readonly HelpTip _help;
     private readonly AutoPathMenu _autoPath;
+    private readonly PathToolButton _pathTool;
     private readonly NodeNavigator _navigator;
     private readonly MapZoom _zoom;
     private readonly WaypointSelection _pins = new();
@@ -163,6 +164,16 @@ internal sealed class PathingView : IDisposable
         _help = new HelpTip(screen, _toolbar.Root);
         _autoPath = new AutoPathMenu(screen, _toolbar.Root);
         _autoPath.GoalChosen += goal => Guard.Run("Auto-pathing", () => ApplyAutoPath(goal));
+
+        // The fourth tool in the game's own drawing tray. Deferred for the same reason
+        // the stick's tool switch is: taking a tool up frees one input node and adds
+        // another, and the tree cannot be rearranged while input is being processed —
+        // a node added there is created but never entered.
+        _pathTool = new PathToolButton(screen);
+        _pathTool.Pressed += () =>
+            Callable.From(() => Guard.Run("Taking up the path tool",
+                () => MapScreenPatches.SelectPathTool(_screen))).CallDeferred();
+
         WireToolbarFocus();
         PathingOptions.Changed += OnOptionsChanged;
         _screen.Closed += OnScreenClosed;
@@ -223,6 +234,60 @@ internal sealed class PathingView : IDisposable
     }
 
     public bool Owns(NMapPoint point) => _screen.IsAncestorOf(point);
+
+    /// <summary>
+    /// Whether the pen in hand is the mod's. It is the game's own Drawing mode
+    /// underneath — the cursor, the stroke plumbing and the input drivers are all
+    /// native, and only what happens to each point differs — so this flag is the whole
+    /// difference between planning a route and drawing on the map.
+    /// </summary>
+    public bool PathMode { get; private set; }
+
+    public void SetPathMode(bool on)
+    {
+        if (PathMode == on)
+            return;
+        PathMode = on;
+        SyncToolButtons();
+    }
+
+    /// <summary>
+    /// Which pen the next mouse stroke picks up, decided at the press — before the tool
+    /// it applies to exists.
+    ///
+    /// It is armed rather than set because the press does not always become a stroke:
+    /// the game refuses to start one while input is disabled or the act animation is
+    /// running, and lighting the toolbar there would show a tool in a hand that is
+    /// empty. So the press only leaves a note, and the tool collects it.
+    /// </summary>
+    private bool _armedPath;
+
+    public void ArmPathStroke(bool path) => _armedPath = path;
+
+    /// <summary>
+    /// A tool has just taken a drawing mode, so it takes the armed pen with it — and
+    /// the note is spent either way, so a press that never became a stroke cannot be
+    /// collected by some later tool that had nothing to do with it.
+    /// </summary>
+    public void TakeArmedPen(DrawingMode mode)
+    {
+        var armed = _armedPath;
+        _armedPath = false;
+        SetPathMode(armed && mode == DrawingMode.Drawing);
+    }
+
+    /// <summary>
+    /// One lit icon in the drawing tray, never two. The quill's own state comes
+    /// straight from the drawings, so this is correct in both directions: turning the
+    /// path tool off hands the quill its light back if it is the one that is out.
+    /// </summary>
+    public void SyncToolButtons() => Guard.Run("Lighting the tool in hand", () =>
+    {
+        _pathTool.SetSelected(PathMode);
+        if (_screen.GetNodeOrNull<NMapDrawButton>("%DrawButton") is { } quill)
+            quill.SetIsDrawing(
+                !PathMode && _screen.Drawings.GetLocalDrawingMode() == DrawingMode.Drawing);
+    });
 
     /// <summary>
     /// Whether focus is on something of the mod's own. Anything that reacts to a
@@ -852,6 +917,7 @@ internal sealed class PathingView : IDisposable
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Closed -= OnScreenClosed;
         _autoPath.Dispose();
+        _pathTool.Dispose();
         _help.Dispose();
         _options.Dispose();
         _toolbar.Dispose();

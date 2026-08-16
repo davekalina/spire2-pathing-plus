@@ -79,9 +79,9 @@ Everything but those two lives under a collapsible **Advanced** heading.
 
 `HelpTip` is the **?** badge left of the gear: the map's own hand-inked circle
 (`map_circle_4`) with a "?" over it, showing a parchment panel of instructions on
-hover, pinned open by a click. It exists because the mod repurposes controls the game
-already taught — the quill, the eraser, Clear Drawings — so nothing on screen would
-otherwise say they now mean something different. **Its prose lives in
+hover, pinned open by a click. It exists because the mod puts a new tool in the game's
+own tray and quietly widens what two of the existing ones do — the eraser, and Clear
+Drawings — so nothing on screen would otherwise say so. **Its prose lives in
 `text/help.txt`, not in the C#** — player-facing text is David's to edit, and should
 never need a code change or a JSON escape to reword. It is an `EmbeddedResource`, so
 there is no loose file to package and no way for the two to disagree; `#` lines are
@@ -136,13 +136,31 @@ follows the pointer and never asks the left stick anything, which looks exactly 
 broken stick. `SyncToolToInput` rebuilds the tool when the device changes, keeping
 mode and cursor position.
 
-**Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar)
-persist to `PathingPlus.settings.json` in the game's user data dir and raise
-`Changed`, which redraws the open map. **Override Drawing Controls** (on by default) is the only behavioural setting left; the three path modes are gone, since drawing is simply how the mod works. With it on, the mod prefixes
-`NMapDrawings.UpdateCurrentLinePositionLocal`, the single funnel every freehand point
-passes through for both mouse and controller, suppresses the native line, and pins
-the nearest node within `SnapRadius` (add-only, so a stroke doubling back cannot undo
-itself). **The eraser works on steps, not nodes**: over the middle of a run it puts
+**Path drawing is a tool, not a mode the mod is permanently in.** `PathToolButton`
+adds a fourth icon to the game's own drawing tray — quill, eraser, Clear, path — and
+selecting it is what makes a stroke plan a route. Underneath it is plain
+`DrawingMode.Drawing` plus one flag (`PathingView.PathMode`): the cursor, the stroke
+plumbing and all three input drivers stay native, and only what happens to each point
+differs. That is why the flag has to be set **last**, after `SetDrawingModeLocal`,
+and why `MapDrawingModePatch` watches every mode change — stopping the old tool runs
+`SetDrawingModeLocal(None)`, which puts the path tool down again.
+
+Three rules keep the flag honest. Only **one icon is lit**: path mode is Drawing
+underneath, so `UpdateDrawingButtonStates` would light the quill too, and the postfix
+turns it back off (`SyncToolButtons`). A mouse stroke's pen is **armed, not set** —
+the press decides it before the tool exists, and the game refuses to start a stroke
+while input is disabled or the act animation runs, so arming leaves a note that the
+tool collects (`ArmPathStroke` / `TakeArmedPen`) rather than lighting a toolbar over
+an empty hand. And `SyncToolToInput` **re-reads the flag before rebuilding**, because
+a change of device is not a change of pen.
+
+**The quill is the game's quill and the eraser belongs to both.** Once planning has
+its own tool the quill goes back to ink, so the
+`UpdateCurrentLinePositionLocal` prefix stands aside for it. The eraser does not:
+rubbing out is one gesture, and a player who has drawn ink and planned a route on the
+same map means whichever is under the cursor — so the prefix cuts the plan and then
+returns true so the game erases its own ink as well. That holds whatever the settings
+say. **The eraser works on steps, not nodes**: over the middle of a run it puts
 that one (from, to) into `_cut`, and over a node (judged by the node's own rect) it
 deselects the node and forgets every cut touching it. That is the whole reason the
 plan is kept as edges — rubbing out one link between two nodes has to leave both
@@ -161,6 +179,15 @@ this model can still surprise. Keep the invariant.
 an act end node once some selected node is a direct predecessor of it. They stay out
 of `_pins`, so they are never persisted and the eraser has nothing of its own to lift.
 
+**Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar) persist to
+`PathingPlus.settings.json` in the game's user data dir and raise `Changed`, which
+redraws the open map. **Right-Drag Draws Paths** (on by default) is the only
+behavioural setting left, and it covers exactly one thing: right-drag is the game's
+shortcut for the quill, and with this on it picks up the path tool instead. Middle-drag
+is the eraser either way, since the eraser already means both. It was called *Override
+Drawing Controls* and did far more — it made the quill and the eraser plan routes, for
+want of a tool of their own.
+
 Suppressing that funnel is **not enough on its own** to keep native ink off the map.
 `BeginLine` creates the `Line2D` and seeds it with two points half a pixel apart,
 which round-capped in the character's drawing colour renders as a dot — so with every
@@ -177,10 +204,12 @@ tried and it broke the mode outright. So the line is begun as usual and hidden:
 The flag is what scopes it to the local player — `CreateLineForPlayer` also runs for
 lines arriving from other players, and theirs should still show.
 
-Two consequences follow. The `UpdateCurrentLinePositionLocal` prefix **always** skips
-the original in Drawing mode, so the hidden line never gains a point. And the eraser
-has no visible native ink to remove while the mode is on, so it only ever lifts pins
-(Clear drawings still takes everything).
+Only the **path tool's** strokes are hidden: `MapDrawingBeginPatch` reads the override
+mode it is handed (`__1`) rather than the drawings' own, because the override is not
+written onto the drawing state until inside the very call it runs ahead of. The quill's
+ink shows, and the eraser needs its line most of all — that line is what does the
+erasing. With the path tool the `UpdateCurrentLinePositionLocal` prefix then **always**
+skips the original, so the hidden line never gains a point.
 
 Use the **point the patch is handed** — it is the controller's cursor as much as the
 mouse — but converting it back is a trap worth knowing. The game produces it with
@@ -290,10 +319,10 @@ looked right while its icons did not.
 **Map nodes only pulse and hover while no drawing tool is out.** That is
 `NMapPoint.IsInputAllowed`, and it gates the "you can go here" pulse in `_Process`,
 the controller reticle, and the history hover tip — every caller is a visual, none is
-on the click path. Vanilla only holds a tool while you scribble, so the rule reads as
-"don't fight the pen"; this mod holds one permanently, which silently cost every node
-its invitation to be clicked. `MapPointHoverPatch` turns that false back to true, and
-only for the reason the mod created.
+on the click path. For the quill the rule reads as "don't fight the pen" and it is
+right: ink goes where the hand goes. The mod's tools are the other way round — the
+whole gesture is aimed **at** nodes — so `MapPointHoverPatch` turns that false back to
+true for the path tool and the eraser, and leaves the quill exactly native.
 
 **Travel works in every view.** `BeforeMapPointSelected` lets a node through when
 `IsEnabled` — the game offering it as a move — and only plans with the rest. It used to
@@ -399,12 +428,12 @@ Game coupling that a game update can move (verify after every update):
   "-600 + row * _distY" current-row formula.
 - Input actions: `Controller.rightTrigger` for Zoom, `Controller.lStickPress` **and**
   `MegaInput.peek` (Steam Input commonly binds L3 to peek, so the game's own stick
-  click never fires — the same class of gap as the analog stick) to cycle
-  the drawing tools (nothing → quill → eraser → quill, by invoking the screen's own
-  private `OnMapDrawingButtonPressed` / `OnMapErasingButtonPressed`, which already
-  handle stopping and swapping), `MegaInput.confirm` for the legend, and the
-  `raw_l_stick_*` axes for the quill. A trigger is an axis, so it needs a held latch
-  or one pull fires repeatedly.
+  click never fires — the same class of gap as the analog stick) to reach for the
+  mod's own pair: anything else in hand (or nothing) gives the path tool, and the path
+  tool gives the eraser. The native quill is one press away on the toolbar, and a
+  cycle of four is a cycle nobody arrives anywhere in. Also `MegaInput.confirm` for the
+  legend, and the `raw_l_stick_*` axes for the quill. A trigger is an axis, so it needs
+  a held latch or one pull fires repeatedly.
 - **Build the tool switch by hand, and set the mode last.** `SwitchTool` stops every
   live `NMapDrawingInput`, clears the screen's `_drawingInput`, creates and adds the
   new tool itself, then calls `SetDrawingModeLocal` **after** the node is in the tree.
@@ -435,7 +464,14 @@ Game coupling that a game update can move (verify after every update):
   silently showing the south face button. `NControllerManager.GetHotkeyIcon` reads
   the controller config's glyph map and is the fallback that makes raw buttons
   render as themselves.
-- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`.
+- Node paths: `TheMap`, `TheMap/Points`, `MapLegend/Header`, `MapLegend/LegendItems`,
+  and the drawing tray: `%DrawingTools`, its `HBoxContainer` and that box's
+  `DrawButton` / `ClearButton`, plus `DrawingToolsHotkey`.
+- Tray geometry: the tray is a bottom-left nine-patch of fixed width whose button row
+  and hotkey glyph are anchored to its **centre**, so `PathToolButton` grows it by one
+  60px slot, spreads the row half a slot each way, and pushes the glyph back half a
+  slot — and puts all three back on dispose. Any change to those scene offsets moves
+  this.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),
   `images/atlases/compressed.sprites/map/map_dot.tres`,
@@ -444,7 +480,20 @@ Game coupling that a game update can move (verify after every update):
   panel, and the help panel), `images/ui/reward_screen/reward_item_button.png` plus
   `hsv.gdshader` (the view button's face),
   `images/atlases/ui_atlas.sprites/top_bar/top_bar_settings.tres` (the gear),
-  `images/ui/tiny_nine_patch.png`, and the `StsColors` palette.
+  `images/atlases/ui_atlas.sprites/top_bar/top_bar_map.tres` (the path tool's icon,
+  redrawn at runtime by `PathToolIcon` — see below), `images/ui/tiny_nine_patch.png`,
+  and the `StsColors` palette.
+- **The path tool's icon is computed, not shipped.** `PathToolIcon` reads the top bar's
+  map sprite out of the atlas and redraws it as single-colour line art plus a glow
+  copy, in the idiom of `drawing_quill.png` and friends: the silhouette is eroded and
+  subtracted from itself to give an even contour, the near-black dashes and X are
+  lifted by a luminance ramp, and the glow is the result blurred and brightened
+  underneath itself (fitted against the game's own glow pair — a Gaussian of about
+  6.5px at 1.6 gain reproduces it to within a couple of levels out of 255). This keeps
+  the mod carrying no copy of Mega Crit's art and needing no `.pck` to hold one. It is
+  guarded twice over, because the engine reports most of these failures by pushing an
+  error rather than throwing: the result is checked for having any ink on it at all,
+  and the button falls back to the untreated sprite when it has none.
 - Scroll behavior: plan mode writes `_targetDragPos` directly and assumes the
   [-600, 1800] clamp range from `UpdateScrollPosition`.
 
@@ -475,10 +524,21 @@ Game coupling that a game update can move (verify after every update):
   handlers while zoomed — which must keep letting a right/middle **press** through
   in Drawing mode, since `_GuiInput` is where a stroke is created and freezing it
   wholesale kills drawing in both zoomed views.
-- Drawing mode in all three views and with both tools: quill snapping, eraser
-  lifting pins, and neither disturbing pan/zoom.
+- The drawing tray with its fourth button: the tray's width and the hotkey glyph's
+  place in it, the icon's idle / hover / focus / selected states, exactly one lit icon
+  at a time, the focus chain on from Clear, and the tray restored to its own width when
+  the view is disposed.
+- The path tool in all three views: stroke snapping, no native ink left behind, press
+  again to put it down, and neither disturbing pan/zoom.
+- The eraser doing both jobs: lifting pins and cutting steps, and rubbing out the
+  game's own ink in the same stroke.
+- The quill left native: it draws ink, it plans nothing, and map nodes go back to not
+  pulsing under it.
+- **Right-Drag Draws Paths** on and off: right-drag picking up the path tool versus the
+  quill, middle-drag always the eraser, and neither leaving the toolbar lit once the
+  button is released.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
-  quill drawing / erase modes (pins must not fire during them), and travel animation.
+  every drawing tool (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).
 
 ## Mod UI: match the game

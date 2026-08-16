@@ -12,9 +12,14 @@ namespace PathingPlus.PathingPlusCode.Map;
 internal static class PathingOptions
 {
     /// <summary>
-    /// Whether the quill and eraser plan routes instead of drawing freehand. On by
-    /// default — it is what the mod is for — but a player who wants the map's own
-    /// scribbling back can have it, and everything else the mod does still works.
+    /// Whether a right-drag on the map picks up the path tool rather than the game's
+    /// quill. On by default — planning is what the mod is for, and reaching for the
+    /// toolbar every time is the thing a mouse shortcut exists to save — but a player
+    /// who wants the map's own scribbling on that button can have it back, and the
+    /// path tool is still one press away in the drawing tray.
+    ///
+    /// It governs that one shortcut and nothing else. Middle-drag stays the eraser,
+    /// which rubs out ink and plan alike whatever this says.
     /// </summary>
     public static bool OverrideDrawing { get; set; } = true;
 

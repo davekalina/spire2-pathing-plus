@@ -72,11 +72,16 @@ internal static class MapScreenPatches
     /// is let through, and nothing else: the game returns early once a stroke exists,
     /// so no pan can follow it, and the motion that continues the stroke arrives at
     /// the drawing node's own input rather than here.
+    ///
+    /// This is also where a mouse stroke is told which pen it is holding — before the
+    /// game gets the same press and builds the tool.
     /// </summary>
     [HarmonyPrefix]
     [HarmonyPatch(nameof(NMapScreen._GuiInput))]
-    private static bool BeforeScreenGuiInput(NMapScreen __instance, InputEvent __0) =>
-        Guard.Run("Freezing map input while zoomed out", () =>
+    private static bool BeforeScreenGuiInput(NMapScreen __instance, InputEvent __0)
+    {
+        Guard.Run("Choosing the pen for a mouse stroke", () => ArmMouseStroke(__instance, __0));
+        return Guard.Run("Freezing map input while zoomed out", () =>
         {
             if (!ZoomActive(__instance))
                 return true;
@@ -90,6 +95,75 @@ internal static class MapScreenPatches
                 ButtonIndex: MouseButton.Right or MouseButton.Middle,
             };
         }, true);
+    }
+
+    /// <summary>
+    /// Right-drag is the game's shortcut for the quill, middle-drag for the eraser.
+    /// **Right-Drag Draws Paths** redirects the first of them: with it on, a right-drag
+    /// draws a route instead of ink. The eraser needs no redirecting — it is one tool
+    /// that lifts the game's ink and the mod's plan alike.
+    ///
+    /// Only the press that actually starts a stroke counts. With a tool already in
+    /// hand the game ignores this press entirely, and arming on it would relabel the
+    /// pen the player is holding.
+    /// </summary>
+    private static void ArmMouseStroke(NMapScreen screen, InputEvent inputEvent)
+    {
+        if (inputEvent is not InputEventMouseButton { Pressed: true } press)
+            return;
+        if (press.ButtonIndex is not (MouseButton.Right or MouseButton.Middle))
+            return;
+        if (!Views.TryGetValue(screen, out var view))
+            return;
+        if (DrawingInputField?.GetValue(screen) is not null)
+            return;
+        view.ArmPathStroke(press.ButtonIndex == MouseButton.Right && PathingOptions.OverrideDrawing);
+    }
+
+    /// <summary>
+    /// Picking up the game's own quill or eraser puts the path tool down. Both handlers
+    /// stop whatever was out first, so by the time these run the mode has already been
+    /// cleared once; this is the belt to that braces, and the one that covers a press
+    /// that swapped one native tool straight for the other.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch("OnMapDrawingButtonPressed")]
+    private static void AfterDrawingButtonPressed(NMapScreen __instance) =>
+        Guard.Run("Putting the path tool down for the quill",
+            () => Views.GetValueOrDefault(__instance)?.SetPathMode(false));
+
+    [HarmonyPostfix]
+    [HarmonyPatch("OnMapErasingButtonPressed")]
+    private static void AfterErasingButtonPressed(NMapScreen __instance) =>
+        Guard.Run("Putting the path tool down for the eraser",
+            () => Views.GetValueOrDefault(__instance)?.SetPathMode(false));
+
+    /// <summary>
+    /// The toolbar shows one tool in hand, and path mode is the game's Drawing mode
+    /// underneath — so without this the quill lights up alongside the path icon and
+    /// two buttons claim the same pen.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch("UpdateDrawingButtonStates")]
+    private static void AfterUpdateDrawingButtonStates(NMapScreen __instance) =>
+        Guard.Run("Showing which tool is in hand",
+            () => Views.GetValueOrDefault(__instance)?.SyncToolButtons());
+
+    /// <summary>Whether the stroke passing through these drawings is planning a route.</summary>
+    internal static bool PathDrawing(NMapDrawings drawings) => ViewFor(drawings)?.PathMode == true;
+
+    internal static void NotePenChange(NMapDrawings drawings, DrawingMode mode) =>
+        ViewFor(drawings)?.TakeArmedPen(mode);
+
+    private static PathingView? ViewFor(NMapDrawings drawings)
+    {
+        foreach (var (screen, view) in Views)
+        {
+            if (GodotObject.IsInstanceValid(screen) && screen.IsAncestorOf(drawings))
+                return view;
+        }
+        return null;
+    }
 
     /// <summary>Whether the whole-act view is up, where scrolling is suspended.</summary>
     internal static bool ZoomedOut(NMapScreen screen) => ZoomActive(screen);
@@ -146,12 +220,6 @@ internal static class MapScreenPatches
     private static bool _stickPressHeld;
     private static bool _peekHeld;
 
-    /// <summary>Switching quill and eraser is the screen's own doing; we just press it.</summary>
-    private static readonly MethodInfo? DrawingButtonPressed =
-        AccessTools.Method(typeof(NMapScreen), "OnMapDrawingButtonPressed");
-    private static readonly MethodInfo? ErasingButtonPressed =
-        AccessTools.Method(typeof(NMapScreen), "OnMapErasingButtonPressed");
-
     /// <summary>
     /// The screen's live tool, which is the honest state. The drawings' own mode is
     /// not: <c>Create</c> sets it before the input node is in the tree, so a tool that
@@ -204,11 +272,13 @@ internal static class MapScreenPatches
                 __instance.GetViewport().SetInputAsHandled();
             }
 
-            // Clicking the left stick cycles the drawing tools: nothing → quill →
-            // eraser → quill. Leaving drawing altogether stays with the game's cancel.
-            // Both the game's own stick-click action and `peek` are accepted, because
-            // Steam Input commonly binds L3 to peek and then the game never sees the
-            // stick click at all.
+            // Clicking the left stick reaches for the mod's own pair: anything else in
+            // hand (or nothing) gives the path tool, and the path tool gives the
+            // eraser. The native quill is one press away on the toolbar, and a cycle of
+            // four is a cycle nobody arrives anywhere in. Leaving drawing altogether
+            // stays with the game's cancel. Both the game's own stick-click action and
+            // `peek` are accepted, because Steam Input commonly binds L3 to peek and
+            // then the game never sees the stick click at all.
             var clicked = Pulled(__0, Controller.lStickPress, ref _stickPressHeld);
             var peeked = Pulled(__0, MegaInput.peek, ref _peekHeld);
             if ((!clicked && !peeked) || !Ready(__instance))
@@ -225,7 +295,7 @@ internal static class MapScreenPatches
         });
 
     /// <summary>
-    /// Swap the quill for the eraser, or start the quill when neither is out.
+    /// Swap the path tool for the eraser, or reach for the path tool from anything else.
     ///
     /// The tool is built here rather than by asking the screen's own buttons. Those
     /// handlers stop the old tool and start the new one in a single call, and the
@@ -243,10 +313,36 @@ internal static class MapScreenPatches
             return;
 
         var live = LiveTools(screen);
-        var wanted = live.Any(input => input.DrawingMode == DrawingMode.Drawing)
-            ? DrawingMode.Erasing
-            : DrawingMode.Drawing;
-        BuildTool(screen, wanted, live);
+        if (Views.GetValueOrDefault(screen)?.PathMode == true)
+            BuildTool(screen, DrawingMode.Erasing, live);
+        else
+            BuildTool(screen, DrawingMode.Drawing, live, path: true);
+    }
+
+    /// <summary>
+    /// The toolbar's fourth button: take up the path tool, or put it down if it is
+    /// already out — the same press-again-to-cancel the game's own quill and eraser
+    /// buttons have.
+    /// </summary>
+    internal static void SelectPathTool(NMapScreen screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen) || !screen.IsOpen)
+            return;
+
+        var live = LiveTools(screen);
+        if (Views.GetValueOrDefault(screen)?.PathMode == true)
+        {
+            foreach (var input in live)
+                input.StopDrawing();
+            DrawingInputField?.SetValue(screen, null);
+            // Said outright rather than left to the teardown: with no live tool to stop
+            // — which is how the mode can be lit with nothing listening — nothing else
+            // would ever put the pen down, and the icon would stay on.
+            screen.Drawings.SetDrawingModeLocal(DrawingMode.None);
+            UpdateButtonStates?.Invoke(screen, null);
+            return;
+        }
+        BuildTool(screen, DrawingMode.Drawing, live, path: true);
     }
 
     /// <summary>
@@ -273,7 +369,10 @@ internal static class MapScreenPatches
         if (wantController == live.Any(input => input is NControllerMapDrawingInput))
             return;
 
-        BuildTool(screen, live[0].DrawingMode, live);
+        // Read before the rebuild: tearing the old tool down clears the mode, and this
+        // is a change of device, not a change of pen.
+        var path = Views.GetValueOrDefault(screen)?.PathMode == true;
+        BuildTool(screen, live[0].DrawingMode, live, path);
     }
 
     private static List<NMapDrawingInput> LiveTools(NMapScreen screen) =>
@@ -281,8 +380,13 @@ internal static class MapScreenPatches
             .Where(input => GodotObject.IsInstanceValid(input) && !input.IsQueuedForDeletion())
             .ToList();
 
+    /// <param name="path">
+    /// Whether the new tool plans routes rather than drawing ink. Asserted after the
+    /// mode, for the same reason the mode is asserted last: stopping the old tool runs
+    /// <c>SetDrawingModeLocal(None)</c>, which puts the path tool down.
+    /// </param>
     private static void BuildTool(
-        NMapScreen screen, DrawingMode wanted, List<NMapDrawingInput> live)
+        NMapScreen screen, DrawingMode wanted, List<NMapDrawingInput> live, bool path = false)
     {
         var carryOver = live.Select(CursorOf).OfType<Control>().FirstOrDefault()?.GlobalPosition;
 
@@ -302,6 +406,7 @@ internal static class MapScreenPatches
 
         // Last word on the mode, once the node is live and every teardown has run.
         screen.Drawings.SetDrawingModeLocal(wanted);
+        Views.GetValueOrDefault(screen)?.SetPathMode(path && wanted == DrawingMode.Drawing);
         UpdateButtonStates?.Invoke(screen, null);
 
         if (carryOver is { } position && CursorOf(tool) is { } cursor)
@@ -420,44 +525,56 @@ internal static class MapScreenPatches
 }
 
 /// <summary>
-/// Drawing mode, replaced. Every freehand point — mouse or controller — funnels
-/// through <c>UpdateCurrentLinePositionLocal</c>, so in Drawing path mode the mod
-/// takes the stroke and drops the line: each point snaps to the nearest node it
-/// passes, and the mod's own trails join them up. Returning true leaves the game's
-/// drawing exactly as it was, which is what every other mode wants.
+/// Where the two systems meet. Every freehand point — mouse or controller — funnels
+/// through <c>UpdateCurrentLinePositionLocal</c>, so this one prefix decides, per
+/// point, whether the game draws it, the mod plans with it, or both.
+///
+/// **The path tool plans and the game draws nothing.** Each point snaps to the nearest
+/// node it passes and the mod's own trails join them up, so the native line is dropped.
+///
+/// **The eraser does both.** It is one tool for one gesture — rubbing something out —
+/// and a player who has drawn ink and planned a route on the same map means whichever
+/// of them is under the cursor. So the plan is cut here and the game's own erasing is
+/// then let through untouched. This holds whatever the drawing settings say: the
+/// override chooses which pen a right-drag picks up, not what rubbing out means.
+///
+/// **The quill is the game's own.** Now that planning has a tool of its own, the quill
+/// goes back to being ink, and this stands aside for it.
 /// </summary>
 [HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.UpdateCurrentLinePositionLocal))]
 internal static class MapDrawingSnapPatch
 {
-
     [HarmonyPrefix]
     private static bool BeforeUpdateLine(NMapDrawings __instance, ref Vector2 __0)
     {
-        if (!PathingOptions.OverrideDrawing)
+        // Copied out first: a ref parameter cannot be captured by a guarded lambda.
+        var point = __0;
+        var mode = Guard.Run("Reading the drawing mode",
+            () => __instance.GetLocalDrawingMode(), DrawingMode.None);
+
+        // The game hands us the point in the drawings node's own space, and it is the
+        // controller's cursor as much as the mouse for a pointer — so it, not the
+        // mouse, is what both of these follow.
+        if (mode == DrawingMode.Erasing)
+            Guard.Run("Rubbing out part of the plan",
+                () => MapScreenPatches.RouteDrawingPoint(__instance, point, erasing: true));
+
+        var planning = mode == DrawingMode.Drawing
+            && Guard.Run("Reading the path tool",
+                () => MapScreenPatches.PathDrawing(__instance), false);
+        if (!planning)
         {
             // Standing aside, but the point still has to be right: the zoomed views
             // scale the map and the game's own conversion cannot survive that. Guarded
             // like every other boundary — a bad matrix costs the correction, not the
             // player's stroke.
-            var given = __0;
             __0 = Guard.Run("Correcting a drawn point",
-                () => MapScreenPatches.CorrectDrawingPoint(__instance, given), given);
+                () => MapScreenPatches.CorrectDrawingPoint(__instance, point), point);
             return true;
         }
 
-        // Copied out first: a ref parameter cannot be captured by the guarded lambda.
-        var point = __0;
-        Guard.Run("Snapping a drawn stroke to the map", () =>
-        {
-            var drawing = __instance.GetLocalDrawingMode();
-            if (drawing is not (DrawingMode.Drawing or DrawingMode.Erasing))
-                return;
-            // The game hands us the point in the drawings node's own space, and it is
-            // the cursor for a controller as much as the mouse for a pointer — so it,
-            // not the mouse, is what the stroke follows.
-            MapScreenPatches.RouteDrawingPoint(
-                __instance, point, drawing == DrawingMode.Erasing);
-        });
+        Guard.Run("Snapping a drawn stroke to the map",
+            () => MapScreenPatches.RouteDrawingPoint(__instance, point, erasing: false));
 
         // Never the original, whatever happened above. The line exists — it has to,
         // or the game stops forwarding motion at all (see MapDrawingBeginPatch) — but
@@ -467,11 +584,29 @@ internal static class MapDrawingSnapPatch
 }
 
 /// <summary>
+/// Every change of pen passes through here — <c>StopDrawing</c>, the screen's own tool
+/// buttons, and the creation of any tool at all — which makes it the one place that
+/// can keep the mod's icon honest about what is in the player's hand.
+///
+/// A new tool takes whatever the press that summoned it armed, and putting the pen
+/// down puts the path tool down with it. Callers that build a tool deliberately assert
+/// the mode again afterwards, so they have the last word over this.
+/// </summary>
+[HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.SetDrawingModeLocal))]
+internal static class MapDrawingModePatch
+{
+    [HarmonyPostfix]
+    private static void AfterSetMode(NMapDrawings __instance, DrawingMode __0) =>
+        Guard.Run("Following the drawing mode",
+            () => MapScreenPatches.NotePenChange(__instance, __0));
+}
+
+/// <summary>
 /// The stroke that is begun but never seen.
 ///
 /// <c>BeginLine</c> creates a Line2D and seeds it with two points half a pixel apart —
-/// which, round-capped and in the character's drawing colour, renders as a dot. In
-/// Drawing path mode every later point of that stroke is dropped, so the seed is the
+/// which, round-capped and in the character's drawing colour, renders as a dot. With
+/// the path tool out every later point of that stroke is dropped, so the seed is the
 /// only thing that ever gets drawn: one blob of native ink per stroke, left on the map
 /// after the mod has drawn the real route.
 ///
@@ -486,16 +621,28 @@ internal static class MapDrawingSnapPatch
 ///
 /// The flag scopes this to the local player's strokes: <c>CreateLineForPlayer</c> also
 /// runs for lines arriving from other players, and those should still be visible.
+///
+/// Only the path tool's strokes are hidden. The quill's ink is the game's own again,
+/// and the eraser needs its line most of all — that line is what does the erasing.
 /// </summary>
 [HarmonyPatch(typeof(NMapDrawings), nameof(NMapDrawings.BeginLineLocal))]
 internal static class MapDrawingBeginPatch
 {
     internal static bool Hiding;
 
+    /// <param name="__1">
+    /// The mode this one stroke overrides to, if any. It has to be consulted rather
+    /// than the drawings' own mode: the override is only written onto the drawing state
+    /// inside the very call this runs ahead of.
+    /// </param>
     [HarmonyPrefix]
-    private static void BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0)
+    private static void BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0, DrawingMode? __1)
     {
-        Hiding = PathingOptions.OverrideDrawing;
+        var stroke = __1 ?? Guard.Run("Reading the drawing mode",
+            () => __instance.GetLocalDrawingMode(), DrawingMode.None);
+        Hiding = stroke == DrawingMode.Drawing
+            && Guard.Run("Reading the path tool",
+                () => MapScreenPatches.PathDrawing(__instance), false);
         if (Hiding)
             return;
         var given = __0;

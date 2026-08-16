@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
-/// Gives map nodes their hover back while the mod holds the quill.
+/// Gives map nodes their hover back while the mod's own tools are out.
 ///
 /// <c>NMapPoint.IsInputAllowed</c> is false whenever a drawing tool is out:
 ///
@@ -14,10 +14,11 @@ namespace PathingPlus.PathingPlusCode.Map;
 ///     return _screen.Drawings.GetLocalDrawingMode() == DrawingMode.None;
 /// </code>
 ///
-/// Vanilla only has a tool out for as long as you are scribbling, so that reads as
-/// "don't fight the pen". This mod keeps one out permanently — that is the whole
-/// design — which silently cost every node its idle pulse and its hover response.
-/// The travelable node stopped inviting the click even though the click worked.
+/// For the quill that reads as "don't fight the pen", and it is right: ink goes where
+/// the hand goes and a node lighting up under it is noise. The mod's tools are the
+/// other way round — the whole gesture is aimed **at** nodes — so with the path tool
+/// or the eraser in hand the pulse and the hover are exactly what the player needs to
+/// see, and losing them cost every node its invitation to be clicked.
 ///
 /// Every caller of that gate is a **visual**: the "you can go here" pulse in
 /// <c>_Process</c>, the controller reticle, and the history hover tip in
@@ -38,12 +39,16 @@ internal static class MapPointHoverPatch
 
     private static bool HoverShouldBeLive()
     {
-        // Only ever turns a false into a true, and only for the one reason the mod
-        // created: a tool the player did not choose to be holding.
-        if (!PathingOptions.OverrideDrawing)
-            return false;
+        // Only ever turns a false into a true, and only for the mod's own tools: the
+        // eraser, which lifts pins by the node it is over, and the path tool, which
+        // draws by them. The game's quill keeps the game's behaviour.
         if (NMapScreen.Instance is not { IsOpen: true } screen || screen.IsTraveling)
             return false;
-        return screen.Drawings.GetLocalDrawingMode() != DrawingMode.None;
+        return screen.Drawings.GetLocalDrawingMode() switch
+        {
+            DrawingMode.Erasing => true,
+            DrawingMode.Drawing => MapScreenPatches.PathDrawing(screen.Drawings),
+            _ => false,
+        };
     }
 }
