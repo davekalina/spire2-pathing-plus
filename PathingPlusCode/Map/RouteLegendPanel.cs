@@ -9,8 +9,8 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// <summary>
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
 /// wider, transposed — node types as rows, one column per computed route (up to
-/// eight), each headed by a dash of its own line colour, or by the pin ring once that
-/// route is locked. Locking folds the table down to the locked column.
+/// eight), each headed by a dash of its own line colour, or by a pin once that route
+/// is locked. Locking folds the table down to the locked column.
 ///
 /// Hovering or focusing a type icon fires the game's own
 /// <c>HighlightPointType</c> broadcast, exactly what the native legend items do.
@@ -34,7 +34,7 @@ internal sealed class RouteLegendPanel : IDisposable
 
     private const float IconColumnX = 30f;
     private const float IconSize = 42f;
-    private const float FirstRowY = 64f;
+    private const float FirstRowY = 48f;
     private const float RowHeight = 46f;
     private const float ColumnsStartX = 88f;
     private const float ColumnWidth = 42f;
@@ -44,10 +44,15 @@ internal sealed class RouteLegendPanel : IDisposable
     /// holds is a mark rather than lettering — the letters that used to head these
     /// columns needed a 28pt line and told the player nothing the colour did not.
     /// </summary>
-    private const float HeaderY = 24f;
+    private const float HeaderY = 8f;
 
-    /// <summary>Parchment left below the last row. The panel's height is otherwise its contents.</summary>
-    private const float BottomPad = 20f;
+    /// <summary>
+    /// Parchment left below the last row. Generous, and deliberately more than the inset
+    /// at the top: the legend art's torn lower edge eats into its own rectangle, so a
+    /// margin measured off the control's bounds ran the last row off the bottom of the
+    /// parchment it was supposed to be sitting on.
+    /// </summary>
+    private const float BottomPad = 36f;
 
     /// <summary>The widest the type names get, for the no-routes state.</summary>
     private const float NamesWidth = 200f;
@@ -59,12 +64,11 @@ internal sealed class RouteLegendPanel : IDisposable
     private const float KeySize = 26f;
 
     /// <summary>
-    /// The map's own dash, which is what the routes themselves are drawn from, and its
-    /// hand-inked ring, which is what a pinned node wears. So a column is headed by a
-    /// sample of its line, and a locked one by the mod's own mark for "pinned".
+    /// The map's own dash, which is what the routes themselves are drawn from. A column
+    /// is headed by a sample of its line — and by <see cref="PinIcon" /> once that route
+    /// is locked.
     /// </summary>
     private const string DashTexture = "res://images/atlases/compressed.sprites/map/map_dot.tres";
-    private const string PinTexture = "res://images/atlases/compressed.sprites/map/map_circle_4.tres";
 
     public event Action<MapPointType>? TypeHot;
     public event Action? TypeCold;
@@ -89,8 +93,15 @@ internal sealed class RouteLegendPanel : IDisposable
     /// </summary>
     private readonly List<int> _columnRoutes = [];
 
-    /// <summary>Each column's key mark, swapped between the route dash and the pin ring.</summary>
+    /// <summary>Each column's key mark, swapped between the route dash and the pin.</summary>
     private readonly List<TextureRect> _columnKeys = [];
+
+    /// <summary>
+    /// The generated pin, kept for this panel's lifetime rather than rebuilt per mark —
+    /// the marks are refreshed on every hover. Re-made if it is ever found invalid.
+    /// </summary>
+    private Texture2D? _pin;
+
     private int _hot = -1;
     private int _locked = -1;
 
@@ -105,6 +116,13 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>The route shown on its own, or null while the whole table is up.</summary>
     private int? FoldedRoute =>
         _folded && _locked >= 0 && _locked < _routes.Count ? _locked : null;
+
+    private Texture2D? PinMark()
+    {
+        if (_pin is null || !GodotObject.IsInstanceValid(_pin))
+            _pin = PinIcon.Build();
+        return _pin;
+    }
 
     /// <summary>The five that earned a column, and the headerless one under the cursor.</summary>
     private IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> _routes = [];
@@ -123,7 +141,7 @@ internal sealed class RouteLegendPanel : IDisposable
         _panel.OffsetRight = -24f;
         // Top and left are computed from the contents in FitPanel; only the corner
         // this hangs from is fixed.
-        _panel.OffsetBottom = -128f;
+        _panel.OffsetBottom = -112f;
         _panel.GrowHorizontal = Control.GrowDirection.Begin;
         _panel.GrowVertical = Control.GrowDirection.Begin;
 
@@ -472,11 +490,12 @@ internal sealed class RouteLegendPanel : IDisposable
             // it is currently marked.
             if (i < _columnKeys.Count)
             {
-                _columnKeys[i].Texture = ResourceLoader.Load<Texture2D>(
-                    locked ? PinTexture : DashTexture, null, ResourceLoader.CacheMode.Reuse);
+                _columnKeys[i].Texture = locked
+                    ? PinMark()
+                    : ResourceLoader.Load<Texture2D>(
+                        DashTexture, null, ResourceLoader.CacheMode.Reuse);
                 // The dash texture runs along its own Y axis, so a quarter turn lays it
-                // across the column the way a length of route reads. The ring is round
-                // and wants no turning.
+                // across the column the way a length of route reads. The pin stands up.
                 _columnKeys[i].Rotation = locked ? 0f : Mathf.Pi / 2f;
                 _columnKeys[i].Scale = locked ? Vector2.One : new Vector2(0.85f, 1.5f);
             }

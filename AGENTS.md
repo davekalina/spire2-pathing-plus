@@ -515,15 +515,26 @@ in the mod a colour is lifted toward cream, because it is read against the darke
 frame of the same colour rather than against the parchment.
 
 **Columns are headed by a mark, not a letter.** A dash of `map_dot` in the route's own
-colour — a sample of the very line it stands for — and the `map_circle_4` ring, the
-mod's own mark for a pinned node, once that route is locked. The letters said nothing
-the colour did not, and cost a 28pt band to say it. The dash texture runs along its own
-Y axis, so it is turned a quarter to lie across the column.
+colour — a sample of the very line it stands for — and a **pin** once that route is
+locked. The letters said nothing the colour did not, and cost a 28pt band to say it.
+The dash texture runs along its own Y axis, so it is turned a quarter to lie across the
+column.
+
+**The pin is generated** (`PinIcon`), because the game has none: its map icon set is the
+player's marker, a ping ring and the treasure X, and the ink ring that first stood in
+for one already means "a node in the plan" out on the map. It is the round-headed
+pointed marker every map has used for decades, drawn white on transparent so the legend
+can tint it with the route's own colour. Its outline carries a low **fixed** wobble —
+a ruled circle-and-cone reads as a web glyph dropped on parchment, and a random one
+would shimmer between redraws.
 
 **The panel is exactly its contents** (`FitPanel`): anchored bottom right, so that
 corner stays put and the top and left edges come in to meet what is drawn — width from
 the column count, height from the row block. Both were hard-coded, which left a band of
 empty parchment under the last row and a table five columns wide however few it held.
+`BottomPad` is deliberately larger than the inset at the top, because **the legend art's
+torn lower edge eats into its own rectangle**: a margin measured off the control's
+bounds ran the last row off the bottom of the parchment it was meant to sit on.
 
 **A locked table folds down to the locked column**, so a chosen route stops charging
 the screen for four alternatives nobody is reading any more. The other routes keep
