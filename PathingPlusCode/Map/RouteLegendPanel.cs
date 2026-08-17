@@ -34,17 +34,20 @@ internal sealed class RouteLegendPanel : IDisposable
 
     private const float IconColumnX = 30f;
     private const float IconSize = 42f;
-    private const float FirstRowY = 48f;
+    private const float FirstRowY = 60f;
     private const float RowHeight = 46f;
     private const float ColumnsStartX = 88f;
     private const float ColumnWidth = 42f;
 
     /// <summary>
-    /// The band above the rows, holding each column's key. It is short because what it
-    /// holds is a mark rather than lettering — the letters that used to head these
-    /// columns needed a 28pt line and told the player nothing the colour did not.
+    /// The band above the rows, holding each column's key. Short, because what it holds
+    /// is a mark rather than lettering — the letters that used to head these columns
+    /// needed a 28pt line and told the player nothing the colour did not. Not as short
+    /// as it looks it could be, though: like the bottom, the legend art's torn top edge
+    /// comes in from the control's own bounds, and trimming this to what the *rect*
+    /// allowed put the head of each column above the parchment.
     /// </summary>
-    private const float HeaderY = 8f;
+    private const float HeaderY = 20f;
 
     /// <summary>
     /// Parchment left below the last row. Generous, and deliberately more than the inset
