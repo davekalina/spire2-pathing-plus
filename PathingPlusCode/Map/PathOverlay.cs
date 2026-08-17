@@ -75,12 +75,19 @@ internal sealed class PathOverlay : IDisposable
     private const string TrailLineScene = "screens/map/map_line_draw";
 
     /// <summary>
-    /// How long one line of the trail keeps taking points before the next starts. It
-    /// trades node count against how finely the fade is stepped: at this length a
-    /// stroke leaves about eight lines a second, so a dozen are alive at once and
-    /// neighbours differ by around a tenth of their fade — far too little to see.
+    /// How long one line of the trail keeps taking points before the next starts.
+    ///
+    /// A share of the fade rather than a fixed span, because it is a share of the fade
+    /// that everything about it is measured in: it is how far apart neighbouring lines
+    /// are in their fade, and how far a line has already bent by the time its last
+    /// points are added. Fixed at a tenth of a second it was fine at a one-second fade
+    /// and wrong at a quarter-second one, where a point added late would arrive already
+    /// most of the way onto its target. Clamped so a very long fade does not leave one
+    /// line growing for half a second, or a very short one spend more time making nodes
+    /// than drawing.
     /// </summary>
-    private const ulong TrailChunkMs = 120;
+    private static ulong TrailChunkMs => (ulong)Math.Clamp(
+        PathingOptions.TrailFade * 1000f * 0.12f, 30f, 200f);
 
     private readonly Control _layer;
     private readonly Control _dotLayer;
@@ -98,6 +105,18 @@ internal sealed class PathOverlay : IDisposable
     /// <summary>The line of trail currently taking points, and when it started taking them.</summary>
     private Line2D? _liveTrail;
     private ulong _liveTrailStarted;
+
+    /// <summary>
+    /// Where each point of the live line was drawn and where it is heading. Kept beside
+    /// the line rather than derived from it, because the line's own points are the
+    /// interpolation between the two and no longer say where either end was.
+    /// </summary>
+    private List<Vector2> _liveOrigins = [];
+    private List<Vector2> _liveTargets = [];
+
+    /// <summary>The last point taken, so the next line can start where this one ended.</summary>
+    private Vector2? _lastTrailPoint;
+    private Vector2 _lastTrailTarget;
 
     public PathOverlay(Control theMap, Control points)
     {
@@ -140,18 +159,23 @@ internal sealed class PathOverlay : IDisposable
     /// The last points of a line have lost a tenth of their fade by the time they are
     /// added, which at this length of chunk is not visible.
     ///
-    /// Each line owns its tween and frees itself, so the trail needs no bookkeeping and
-    /// no per-frame work.
+    /// **Every point moves to its own target, and the line bends.** Sliding a whole
+    /// line by one offset was the first attempt and it was quietly wrong: one sample's
+    /// measurement decided the drift for a tenth of a second of ink, so the snap range
+    /// governed the result only loosely and changing it did little. Interpolating each
+    /// point to the step nearest *it* makes the range mean exactly what it says, and
+    /// looks better besides — the trail deforms onto the map's lines rather than
+    /// sliding across them.
+    ///
+    /// Each line owns its tween and frees itself, so the trail needs no bookkeeping
+    /// beyond the live line and no per-frame work of its own.
     /// </summary>
-    public void AddTrailSegment(Vector2 from, Vector2 to, Vector2 drift, Color ink)
+    public void AddTrailPoint(Vector2 at, Vector2 target, Color ink)
     {
         if (_liveTrail is { } live && GodotObject.IsInstanceValid(live) &&
             Time.GetTicksMsec() - _liveTrailStarted < TrailChunkMs)
         {
-            // Local space, because the line is already sliding: a point given in layer
-            // coordinates would land where the line was when it started, and the trail
-            // would visibly lag behind the pen.
-            live.AddPoint(to - live.Position);
+            Extend(live, at, target);
             return;
         }
 
@@ -170,12 +194,19 @@ internal sealed class PathOverlay : IDisposable
         line.Position = Vector2.Zero;
         line.DefaultColor = ink;
         line.Width = PathingOptions.TrailWidth;
-        // Starting at the previous sample is what joins this line to the one before it.
-        line.AddPoint(from);
-        line.AddPoint(to);
         _trailLayer.AddChild(line);
+
         _liveTrail = line;
         _liveTrailStarted = Time.GetTicksMsec();
+        // New lists per line: the closure below holds them for as long as the line
+        // lives, so they must not be shared with the next one.
+        var origins = _liveOrigins = [];
+        var targets = _liveTargets = [];
+
+        // Starting where the last line ended is what joins the two without a seam.
+        if (_lastTrailPoint is { } previous)
+            Extend(line, previous, _lastTrailTarget);
+        Extend(line, at, target);
 
         var fade = PathingOptions.TrailFade;
         var tween = line.CreateTween().SetParallel();
@@ -184,10 +215,35 @@ internal sealed class PathOverlay : IDisposable
         // smear rather than a stroke.
         tween.TweenProperty(line, "modulate:a", 0f, fade)
             .SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
-        if (drift != Vector2.Zero)
-            tween.TweenProperty(line, "position", drift, fade)
-                .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
+        tween.TweenMethod(Callable.From<float>(t => Guard.Run("Bending the drawing trail",
+                    () => Bend(line, origins, targets, t))),
+                0f, 1f, fade)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
         tween.Chain().TweenCallback(Callable.From(line.QueueFree));
+    }
+
+    private void Extend(Line2D line, Vector2 at, Vector2 target)
+    {
+        line.AddPoint(at);
+        _liveOrigins.Add(at);
+        _liveTargets.Add(target);
+        _lastTrailPoint = at;
+        _lastTrailTarget = target;
+    }
+
+    /// <summary>
+    /// Each point of a line, <paramref name="t" /> of the way from where it was drawn
+    /// to the step it is nearest. Points added after the bend began simply join in from
+    /// wherever they were put, which at that age is a fraction of a pixel out.
+    /// </summary>
+    private static void Bend(
+        Line2D line, List<Vector2> origins, List<Vector2> targets, float t)
+    {
+        if (!GodotObject.IsInstanceValid(line))
+            return;
+        var count = Math.Min(origins.Count, line.GetPointCount());
+        for (var i = 0; i < count; i++)
+            line.SetPointPosition(i, origins[i].Lerp(targets[i], t));
     }
 
     /// <summary>
@@ -195,7 +251,11 @@ internal sealed class PathOverlay : IDisposable
     /// continuing this one — otherwise a new stroke's first point would be joined to
     /// wherever the last one happened to stop.
     /// </summary>
-    public void EndTrail() => _liveTrail = null;
+    public void EndTrail()
+    {
+        _liveTrail = null;
+        _lastTrailPoint = null;
+    }
 
     private Control MakeSubLayer(string name)
     {

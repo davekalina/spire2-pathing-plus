@@ -202,20 +202,37 @@ really a run of lines between nodes.
 along its own length, so a node per sample restarts the texture — and puts two round
 caps — every few pixels, which is exactly what makes a trail read as beads rather than
 a stroke. Points are appended to one live line for `TrailChunkMs`, then a new one starts
-**from the last point of the old one** so the two meet with no seam. Two consequences:
-each line begins fading when it is *created*, not when it stops growing, which is what
-gives the trail per-point ages and what stops a pen that pauses mid-stroke leaving one
-length hanging at full opacity; and points appended to a line that is already sliding
-must be given in its **local** space (`to - live.Position`), or the trail visibly lags
-behind the pen.
+**from the last point of the old one** so the two meet with no seam. Each line begins
+fading when it is *created*, not when it stops growing: that is what gives the trail
+per-point ages, and what stops a pen that pauses mid-stroke leaving one length hanging
+at full opacity. `TrailChunkMs` is therefore a **share of the fade**, not a fixed span —
+it is how far apart neighbouring lines are in their fade and how far a line has already
+bent when its last points arrive, and a tenth of a second is right at a one-second fade
+and wrong at a quarter-second one.
+
+**Every point bends to its own target.** Sliding a whole line by one offset was the
+first attempt and it was quietly wrong: one sample's measurement decided the drift for
+a whole chunk of ink, so `TrailSnapRadius` governed the result only loosely and moving
+the slider did little — which is exactly how it was reported. A `TweenMethod` walks a
+0→1 factor and each point is interpolated to the step nearest *it*, so the range means
+what it says, and the trail deforms onto the map's lines rather than sliding across
+them. It also removes the old need to append in local space, since the line itself no
+longer moves.
 
 Two more things it would be easy to get wrong. Points are spaced **by distance
 travelled**, not per event — the funnel fires once per motion event, so a slow stroke
 and a fast flick would otherwise leave wildly different amounts of ink and a still pen
-would pile them up. And the drift target is null rather than distant when nothing is
-within `TrailSnapRadius`, because ink flying across open parchment claims a connection
-the stroke is not making. Everything about the feel — fade, width, step, whether it
-snaps at all, and the snap range — is a slider under **Advanced**.
+would pile them up. And the target is the point itself, rather than a distant line,
+when nothing is within `TrailSnapRadius`: ink flying across open parchment claims a
+connection the stroke is not making. Everything about the feel — fade, width, step,
+whether it snaps at all, the snap range, and the pen's own `SnapRadius` — is a slider
+under **Advanced**.
+
+**The trail snaps to the whole map graph, not to the routes still open.** `MapSegments`
+walks every node's successors. Taking the set from the surviving complete routes was the
+first attempt, and it left the ink refusing to snap to lines the player could plainly
+see: the map goes on drawing the steps behind the marker and the legs into the boss long
+after no complete route runs through them.
 
 **The quill is the game's quill and the eraser belongs to both.** Once planning has
 its own tool the quill goes back to ink, so the
@@ -448,7 +465,7 @@ would clear the column the legend had just lit. Map-side hit testing must use
 `PathOverlay.RouteShift`, the same sideways offset the routes are **drawn** with:
 against the shared centreline every route lies on top of every other and picking
 between two neighbours is a coin toss. Its radius is `HoverRadius` (14), not the
-quill's `SnapRadius` (55) — that one is scaled to a node and swallows whole bundles of
+pen's `SnapRadius` (55 by default, and a slider) — that one is scaled to a node and swallows whole bundles of
 lines. Backdrop routes have no column but are hoverable too: they are drawn as merged
 edges, so there is nothing per-route to light, and `ShowTrace` picks the one route out
 over the top instead. Only the **run between two nodes** answers the pointer: hover is

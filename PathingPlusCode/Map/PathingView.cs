@@ -816,11 +816,9 @@ internal sealed class PathingView : IDisposable
             return;
         _lastTrailMark = cursor;
 
-        // One drift for the whole length, taken from its middle, so the two ends stay
-        // joined to their neighbours as they travel.
-        var middle = (previous + cursor) * 0.5f;
-        var drift = SnapToEdge(middle) is { } target ? target - middle : Vector2.Zero;
-        _overlay.AddTrailSegment(previous, cursor, drift, DrawingInk());
+        // Each point carries its own destination. The overlay bends the line onto them
+        // rather than sliding it, which is what makes the snap range mean what it says.
+        _overlay.AddTrailPoint(cursor, SnapToEdge(cursor) ?? cursor, DrawingInk());
     }
 
     /// <summary>
@@ -856,11 +854,33 @@ internal sealed class PathingView : IDisposable
     /// <summary>Where the trail last reached, and where the next length starts from.</summary>
     private Vector2? _lastTrailMark;
 
-    /// <summary>Every step of the map as a segment, for the trail to be drawn onto.</summary>
+    /// <summary>
+    /// Every step the map draws, as a segment — the whole graph, not the routes still
+    /// open ahead. The trail snaps to what is **on screen**, and the map goes on
+    /// drawing the steps behind the marker and the legs into the boss long after no
+    /// complete route runs through them; taking the set from the surviving routes left
+    /// the ink refusing to snap to lines the player could plainly see.
+    /// </summary>
     private IReadOnlyList<(Vector2 From, Vector2 To)> _edgeSegments = [];
 
+    private List<(Vector2 From, Vector2 To)> MapSegments()
+    {
+        var segments = new List<(Vector2, Vector2)>();
+        if (_adapter is null)
+            return segments;
+        foreach (var node in _adapter.Graph.Nodes)
+        {
+            if (EndpointOf(node.Id) is not { } from)
+                continue;
+            foreach (var next in _adapter.Graph.Successors(node.Id))
+                if (EndpointOf(next) is { } to)
+                    segments.Add((from, to));
+        }
+        return segments;
+    }
+
     /// <summary>How near a stroke must pass a node to catch it, in map units.</summary>
-    private const float SnapRadius = 55f;
+    private static float SnapRadius => PathingOptions.SnapRadius;
 
     /// <summary>"?" nodes come in two kinds that mean the same thing to a player.</summary>
     private static string NormalizedKind(string kind) =>
@@ -913,10 +933,7 @@ internal sealed class PathingView : IDisposable
         // Pinnability comes from the full routes, so manual mode can still reach
         // every node ahead even when it draws only as far as the plan goes.
         _completeRoutes = routes;
-        // Every step the map offers, for the drawing trail to settle onto. Taken from
-        // the complete routes rather than the plan: the trail hints at where a line
-        // could go, which is the whole map, not the part already drawn.
-        _edgeSegments = EdgesOf(routes).ToList();
+        _edgeSegments = MapSegments();
         _startId = startId;
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);

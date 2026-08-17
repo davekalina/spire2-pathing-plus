@@ -185,8 +185,12 @@ internal sealed class OptionsPanel : IDisposable
             () => PathingOptions.TrailSpacing, v => PathingOptions.TrailSpacing = v);
         AddToggle(advanced, "Trail Snaps to Lines",
             () => PathingOptions.TrailSnap, v => PathingOptions.TrailSnap = v);
-        AddSlider(advanced, "Trail Snap Range", 20f, 400f, 10f,
+        AddSlider(advanced, "Trail Snap Range", 10f, 300f, 5f,
             () => PathingOptions.TrailSnapRadius, v => PathingOptions.TrailSnapRadius = v);
+        // The tool's own snap, not the trail's: how near the pen must pass a node to
+        // catch it. Next to the trail's because the two are read against each other.
+        AddSlider(advanced, "Pen Snap", 20f, 140f, 5f,
+            () => PathingOptions.SnapRadius, v => PathingOptions.SnapRadius = v);
 
         AddSpacer(advanced);
         AddSlider(advanced, "Wide Fit", 0.5f, 1f, 0.01f,

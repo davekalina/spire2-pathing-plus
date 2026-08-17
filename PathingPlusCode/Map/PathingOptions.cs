@@ -61,10 +61,17 @@ internal static class PathingOptions
 
     /// <summary>
     /// How near a map step has to be for the trail to be drawn onto it. Beyond this the
-    /// ink simply fades where it was: a length flying across open parchment to reach a
-    /// line claims a connection the stroke is not making.
+    /// ink simply fades where it was: ink flying across open parchment to reach a line
+    /// claims a connection the stroke is not making.
     /// </summary>
     public static float TrailSnapRadius { get; set; } = 150f;
+
+    /// <summary>
+    /// How near the pen must pass a node to catch it, in map units — the snap the tool
+    /// actually plans with, as opposed to the trail's visual one. It also decides how
+    /// near the pointer counts as being over a pinned node.
+    /// </summary>
+    public static float SnapRadius { get; set; } = 55f;
 
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
@@ -107,6 +114,7 @@ internal static class PathingOptions
         TrailSpacing = 4f;
         TrailSnap = true;
         TrailSnapRadius = 150f;
+        SnapRadius = 55f;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -146,6 +154,7 @@ internal static class PathingOptions
         public float? TrailSpacing { get; set; }
         public bool? TrailSnap { get; set; }
         public float? TrailSnapRadius { get; set; }
+        public float? SnapRadius { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -174,6 +183,7 @@ internal static class PathingOptions
         TrailSpacing = saved.TrailSpacing ?? TrailSpacing;
         TrailSnap = saved.TrailSnap ?? TrailSnap;
         TrailSnapRadius = saved.TrailSnapRadius ?? TrailSnapRadius;
+        SnapRadius = saved.SnapRadius ?? SnapRadius;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -196,6 +206,7 @@ internal static class PathingOptions
             TrailSpacing = TrailSpacing,
             TrailSnap = TrailSnap,
             TrailSnapRadius = TrailSnapRadius,
+            SnapRadius = SnapRadius,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,
