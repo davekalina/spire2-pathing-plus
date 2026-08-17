@@ -355,16 +355,38 @@ internal sealed class PathingView : IDisposable
     /// controller both count as directional navigation and keep it, and so does the
     /// zoomed grid, where a node holding focus **is** the cursor.
     /// </summary>
-    public void ReleaseNodeFocusForPointer() => Guard.Run("Letting the next nodes pulse", () =>
+    /// <remarks>
+    /// **Deferred, and that is the fix rather than a detail.** Every grab this undoes
+    /// lands *after* the moment the mod hears about it. A map point carries
+    /// <c>focus_mode = All</c>, so clicking one takes focus during GUI dispatch — which
+    /// is after <c>_Input</c>, where the pointer hook runs. The zoomed grid hands focus
+    /// back with a <c>CallDeferred</c> of its own. Releasing on the spot lost both
+    /// races: a node clicked while planning kept its focus, and its silence, until
+    /// something else happened to refresh the screen — which is exactly why clearing
+    /// the drawings appeared to fix it.
+    /// </remarks>
+    public void ReleaseNodeFocusForPointer()
     {
-        if (NControllerManager.Instance?.IsUsingDirectionalNavigation is not false)
+        // One queued release per frame; the pointer hook fires on every mouse motion.
+        if (_releasingNodeFocus)
             return;
-        if (_zoom.Zoomed)
-            return;
-        if (_screen.GetViewport()?.GuiGetFocusOwner() is NMapPoint focused &&
-            GodotObject.IsInstanceValid(focused))
-            focused.ReleaseFocus();
-    });
+        _releasingNodeFocus = true;
+        Callable.From(() => Guard.Run("Letting the next nodes pulse", () =>
+        {
+            _releasingNodeFocus = false;
+            if (!GodotObject.IsInstanceValid(_screen) || !_screen.IsOpen)
+                return;
+            if (NControllerManager.Instance?.IsUsingDirectionalNavigation is not false)
+                return;
+            if (_zoom.Zoomed)
+                return;
+            if (_screen.GetViewport()?.GuiGetFocusOwner() is NMapPoint focused &&
+                GodotObject.IsInstanceValid(focused))
+                focused.ReleaseFocus();
+        })).CallDeferred();
+    }
+
+    private bool _releasingNodeFocus;
 
     /// <summary>
     /// The mouse moved over the map. Two things answer it: a pinned node under the

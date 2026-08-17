@@ -434,6 +434,14 @@ cursor on the map at all, so one of the two nodes you may move to simply stops i
 the click while the other goes on pulsing, which is exactly how it was reported. The
 grab is handed straight back on mouse and keyboard (`ReleaseNodeFocusForPointer`, from
 a postfix on that same method and from the pointer's own first event).
+
+**That release must be deferred, and it is the whole fix rather than a detail.** Every
+grab it undoes lands *after* the moment the mod hears about it: map points carry
+`focus_mode = All`, so **clicking one takes focus during GUI dispatch**, which is after
+`_Input` where the pointer hook runs — and the zoomed grid hands focus back with a
+`CallDeferred` of its own. Releasing on the spot lost both races, so a node clicked
+while planning kept its focus, and its silence, until something else refreshed the
+screen. That is why clearing the drawings appeared to fix it: the clear is a refresh.
 `IsUsingDirectionalNavigation` is false **only** for `MouseAndKeyboard`, so keyboard-only
 and controller keep their focus, and so does the zoomed grid, where a node holding focus
 *is* the cursor.
@@ -782,7 +790,9 @@ Game coupling that a game update can move (verify after every update):
   quill, middle-drag always the eraser, and neither leaving the toolbar lit once the
   button is released.
 - Every travelable node pulsing, at the moment travel is granted: open the map right
-  after a Neow bonus with a route already drawn, and both next nodes must pulse. Then
+  after a Neow bonus with a route already drawn, and both next nodes must pulse. Also
+  **click a node, then travel until it becomes a destination** — the click's own focus
+  grab is the case that survived the first attempt at this. Then
   the same on a pad, where the focused one must **not** pulse — it has the reticle.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   every drawing tool (pins must not fire during them), and travel animation.
