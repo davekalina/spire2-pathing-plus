@@ -191,18 +191,31 @@ action would still arrive from under a pause menu; the handler asks
 **The drawing trail** (`PathingOptions.DrawingTrail`, on by default) answers a problem
 the design creates: the mod's stroke is invisible on purpose — the native line is
 suppressed so the route can be the drawing — which reads as a dead pen until the first
-node is caught. `PathOverlay.AddTrailMark` puts a speck of the map's own dash under the
-pen, in the character's own `MapDrawingColor`, fading to nothing over a second and
-**drifting onto the nearest map step** as it goes: the ink says the stroke registered,
-and spends its second saying that a stroke is really a run of lines between nodes.
+node is caught. `PathOverlay.AddTrailSegment` lays the game's **own drawing line**
+(`scenes/screens/map/map_line_draw`, so width, round caps and joints, the trail texture
+and the drawing shader all come free) under the pen in the character's own
+`MapDrawingColor`, fading to nothing and **drifting onto the nearest map step** as it
+goes: the ink says the stroke registered, and spends its second saying that a stroke is
+really a run of lines between nodes.
 
-Three things it gets right and would be easy to get wrong. Marks are spaced **by
-distance travelled**, not per event — the funnel fires once per motion event, so a slow
-stroke and a fast flick would otherwise leave wildly different amounts of ink and a
-still pen would pile them up. The drift target is null rather than distant when nothing
-is within `TrailSnapRadius`, because a speck flying across open parchment claims a
-connection the stroke is not making. And each mark owns its tween and frees itself, so
-the trail needs no bookkeeping and no per-frame work at all.
+**It is built in short polylines, not a node per sample.** That line tiles a texture
+along its own length, so a node per sample restarts the texture — and puts two round
+caps — every few pixels, which is exactly what makes a trail read as beads rather than
+a stroke. Points are appended to one live line for `TrailChunkMs`, then a new one starts
+**from the last point of the old one** so the two meet with no seam. Two consequences:
+each line begins fading when it is *created*, not when it stops growing, which is what
+gives the trail per-point ages and what stops a pen that pauses mid-stroke leaving one
+length hanging at full opacity; and points appended to a line that is already sliding
+must be given in its **local** space (`to - live.Position`), or the trail visibly lags
+behind the pen.
+
+Two more things it would be easy to get wrong. Points are spaced **by distance
+travelled**, not per event — the funnel fires once per motion event, so a slow stroke
+and a fast flick would otherwise leave wildly different amounts of ink and a still pen
+would pile them up. And the drift target is null rather than distant when nothing is
+within `TrailSnapRadius`, because ink flying across open parchment claims a connection
+the stroke is not making. Everything about the feel — fade, width, step, whether it
+snaps at all, and the snap range — is a slider under **Advanced**.
 
 **The quill is the game's quill and the eraser belongs to both.** Once planning has
 its own tool the quill goes back to ink, so the
@@ -595,11 +608,13 @@ Game coupling that a game update can move (verify after every update):
   three do (and not taking theirs down with it), naming the currently bound key the way
   the native two name their mouse buttons, and the tray restored to its own width when
   the view is disposed.
-- The drawing trail: ink under the pen in the character's own colour, gone within a
-  second, drifting onto the nearest step, even density at any drawing speed, nothing
-  left behind when a stroke ends, and the whole thing off when the setting is off.
-  Check it in the rotated view too — the marks live inside `TheMap`, so they inherit
-  its transform.
+- The drawing trail: ink under the pen in the character's own colour, reading as one
+  continuous stroke rather than beads, gone within a second, drifting onto the nearest
+  step, even density at any drawing speed, no lag behind the cursor, nothing left
+  behind when a stroke ends, and the whole thing off when the setting is off. Pause
+  mid-stroke and the ink must still fade. Check it in the rotated view too — the lines
+  live inside `TheMap`, so they inherit its transform. Every slider under Advanced
+  should change what it says it changes, and survive Reset to defaults.
 - The shortcut: Q by default, its row in Settings → Input reading "Pathing Plus: Path
   Tool" with a binding in the mouse-and-keyboard column, a dash in the keyboard-only
   column and no controller binding, rebinding it, Reset to Default returning it to Q,

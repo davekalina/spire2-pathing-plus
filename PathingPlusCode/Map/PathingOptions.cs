@@ -39,6 +39,33 @@ internal static class PathingOptions
     /// </summary>
     public static bool DrawingTrail { get; set; } = true;
 
+    /// <summary>Seconds a length of trail takes to go from full ink to nothing.</summary>
+    public static float TrailFade { get; set; } = 1f;
+
+    /// <summary>Trail girth. The game's own drawing line is 4.</summary>
+    public static float TrailWidth { get; set; } = 4f;
+
+    /// <summary>
+    /// How far the pen travels between one point of the trail and the next. These are
+    /// points on a polyline rather than nodes, so a small step costs almost nothing and
+    /// buys smooth curves; it exists mainly so that a stroke's ink density does not
+    /// depend on how fast the mouse reports.
+    /// </summary>
+    public static float TrailSpacing { get; set; } = 4f;
+
+    /// <summary>
+    /// Whether the trail slides onto the map step it is nearest as it fades — the hint
+    /// that a stroke is really a run of lines between nodes rather than a scribble.
+    /// </summary>
+    public static bool TrailSnap { get; set; } = true;
+
+    /// <summary>
+    /// How near a map step has to be for the trail to be drawn onto it. Beyond this the
+    /// ink simply fades where it was: a length flying across open parchment to reach a
+    /// line claims a connection the stroke is not making.
+    /// </summary>
+    public static float TrailSnapRadius { get; set; } = 150f;
+
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
 
@@ -75,6 +102,11 @@ internal static class PathingOptions
         OverrideDrawing = true;
         StartWide = false;
         DrawingTrail = true;
+        TrailFade = 1f;
+        TrailWidth = 4f;
+        TrailSpacing = 4f;
+        TrailSnap = true;
+        TrailSnapRadius = 150f;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -109,6 +141,11 @@ internal static class PathingOptions
         public bool? OverrideDrawing { get; set; }
         public bool? StartWide { get; set; }
         public bool? DrawingTrail { get; set; }
+        public float? TrailFade { get; set; }
+        public float? TrailWidth { get; set; }
+        public float? TrailSpacing { get; set; }
+        public bool? TrailSnap { get; set; }
+        public float? TrailSnapRadius { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -132,6 +169,11 @@ internal static class PathingOptions
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
         StartWide = saved.StartWide ?? StartWide;
         DrawingTrail = saved.DrawingTrail ?? DrawingTrail;
+        TrailFade = saved.TrailFade ?? TrailFade;
+        TrailWidth = saved.TrailWidth ?? TrailWidth;
+        TrailSpacing = saved.TrailSpacing ?? TrailSpacing;
+        TrailSnap = saved.TrailSnap ?? TrailSnap;
+        TrailSnapRadius = saved.TrailSnapRadius ?? TrailSnapRadius;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -149,6 +191,11 @@ internal static class PathingOptions
             OverrideDrawing = OverrideDrawing,
             StartWide = StartWide,
             DrawingTrail = DrawingTrail,
+            TrailFade = TrailFade,
+            TrailWidth = TrailWidth,
+            TrailSpacing = TrailSpacing,
+            TrailSnap = TrailSnap,
+            TrailSnapRadius = TrailSnapRadius,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,

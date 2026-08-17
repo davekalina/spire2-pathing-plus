@@ -307,9 +307,10 @@ internal sealed class PathingView : IDisposable
     public void OnStrokeEnded()
     {
         _lastDrawn = null;
-        // And with no ink behind it either, or the first mark of the next stroke is
-        // spaced against wherever the last one happened to end.
+        // And with no ink behind it either, or the next stroke's first length is drawn
+        // from wherever this one happened to stop.
         _lastTrailMark = null;
+        _overlay.EndTrail();
     }
 
     /// <summary>The mouse took over; the controller's focus ring is no longer the cursor.</summary>
@@ -792,32 +793,46 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>
-    /// Ink under the pen while the path tool draws, fading over a second and sliding
-    /// onto the map line it is nearest as it goes.
+    /// Ink under the pen while the path tool draws: the length just travelled, drawn
+    /// with the game's own line, fading and sliding onto the map step it is nearest.
     ///
-    /// Marks are spaced by distance rather than by event, because the funnel this comes
-    /// through fires once per motion event — so a slow careful stroke and a fast flick
-    /// would otherwise leave wildly different amounts of ink, and a stationary pen would
-    /// pile marks on one spot.
+    /// Lengths are laid by distance travelled rather than per event, because the funnel
+    /// this comes through fires once per motion event — so a slow careful stroke and a
+    /// fast flick would otherwise leave wildly different amounts of ink, and a
+    /// stationary pen would pile them up on one spot.
     /// </summary>
     private void LeaveTrailMark(Vector2 cursor)
     {
         if (!PathingOptions.DrawingTrail)
             return;
-        if (_lastTrailMark is { } previous && previous.DistanceTo(cursor) < TrailSpacing)
+        // The first point of a stroke has nothing behind it to draw from; it becomes
+        // the anchor the next one measures against.
+        if (_lastTrailMark is not { } previous)
+        {
+            _lastTrailMark = cursor;
+            return;
+        }
+        if (previous.DistanceTo(cursor) < Math.Max(1f, PathingOptions.TrailSpacing))
             return;
         _lastTrailMark = cursor;
-        _overlay.AddTrailMark(cursor, SnapToEdge(cursor) ?? cursor, DrawingInk());
+
+        // One drift for the whole length, taken from its middle, so the two ends stay
+        // joined to their neighbours as they travel.
+        var middle = (previous + cursor) * 0.5f;
+        var drift = SnapToEdge(middle) is { } target ? target - middle : Vector2.Zero;
+        _overlay.AddTrailSegment(previous, cursor, drift, DrawingInk());
     }
 
     /// <summary>
     /// The nearest point on any step of the map, or null if the pen is nowhere near
-    /// one. Null rather than a far-away point on purpose: a mark that flies across open
+    /// one. Null rather than a far-away point on purpose: ink that flies across open
     /// parchment to reach a line claims a connection the stroke is not making.
     /// </summary>
     private Vector2? SnapToEdge(Vector2 point)
     {
-        var best = (Point: (Vector2?)null, Distance: TrailSnapRadius);
+        if (!PathingOptions.TrailSnap)
+            return null;
+        var best = (Point: (Vector2?)null, Distance: PathingOptions.TrailSnapRadius);
         foreach (var (from, to) in _edgeSegments)
         {
             var closest = ClosestPointOnSegment(point, from, to);
@@ -838,13 +853,7 @@ internal sealed class PathingView : IDisposable
             ?? Colors.Black,
         Colors.Black);
 
-    /// <summary>Distance the pen must travel between one mark of the trail and the next.</summary>
-    private const float TrailSpacing = 7f;
-
-    /// <summary>How near a map step must be for the trail to be drawn onto it.</summary>
-    private const float TrailSnapRadius = 150f;
-
-    /// <summary>Where the last mark went, so the next is spaced from it.</summary>
+    /// <summary>Where the trail last reached, and where the next length starts from.</summary>
     private Vector2? _lastTrailMark;
 
     /// <summary>Every step of the map as a segment, for the trail to be drawn onto.</summary>

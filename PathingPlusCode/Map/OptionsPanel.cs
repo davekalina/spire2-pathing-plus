@@ -174,6 +174,20 @@ internal sealed class OptionsPanel : IDisposable
         AddSlider(advanced, "Route Gap", 0f, 24f, 1f,
             () => PathingOptions.RouteSeparation, v => PathingOptions.RouteSeparation = v);
 
+        // The drawing trail's feel. Grouped after the route geometry because it is the
+        // same kind of number: tuned by eye, then left alone.
+        AddSpacer(advanced);
+        AddSlider(advanced, "Trail Fade", 0.2f, 3f, 0.1f,
+            () => PathingOptions.TrailFade, v => PathingOptions.TrailFade = v);
+        AddSlider(advanced, "Trail Width", 1f, 12f, 0.5f,
+            () => PathingOptions.TrailWidth, v => PathingOptions.TrailWidth = v);
+        AddSlider(advanced, "Trail Step", 1f, 20f, 1f,
+            () => PathingOptions.TrailSpacing, v => PathingOptions.TrailSpacing = v);
+        AddToggle(advanced, "Trail Snaps to Lines",
+            () => PathingOptions.TrailSnap, v => PathingOptions.TrailSnap = v);
+        AddSlider(advanced, "Trail Snap Range", 20f, 400f, 10f,
+            () => PathingOptions.TrailSnapRadius, v => PathingOptions.TrailSnapRadius = v);
+
         AddSpacer(advanced);
         AddSlider(advanced, "Wide Fit", 0.5f, 1f, 0.01f,
             () => PathingOptions.LandscapeFit, v => PathingOptions.LandscapeFit = v);
