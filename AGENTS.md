@@ -507,7 +507,28 @@ locking gives it a `StyleBoxFlat` — a 4px border in the route's colour plus a 
 the same colour at 0.42 alpha, both **deepened toward black** first. A plain wash in
 the route's own colour is what it used to be, and it was invisible: half the palette
 is pale, and pale over pale parchment reads as nothing. The border, not the fill, is
-what makes a locked column unmistakable. The native legend is
+what makes a locked column unmistakable.
+
+**A locked table folds down to the locked column**, so a chosen route stops charging
+the screen for four alternatives nobody is reading any more. The other routes keep
+being drawn on the map — this is about the panel's footprint, not about hiding
+anything. Three rules shape it. The fold is **armed by the lock and performed only when
+the player looks away** (`LookedAway`, from the pointer leaving `Covers` or from focus
+leaving the panel): folding on the click itself would pull four columns out from under
+a pointer still in the middle of comparing them, so the panel would jump away from the
+cursor at the instant of choosing. Unlocking **expands at once**, since having asked
+for the rest back you should not have to go and look elsewhere before they arrive. And
+the **preview column survives the fold**, because it is only ever there while the
+pointer is on some other route out on the map, which is exactly the comparison being
+made.
+
+Because of the fold, a column's place in the row is no longer its route's index —
+`_columnRoutes` carries the mapping and every hover, lock and mark goes through it.
+The focus check is deferred a frame: whether focus left the *legend* cannot be answered
+until the next control has taken it, or stepping from one column to the next would read
+as leaving.
+
+The native legend is
 `Visible = false` for the view's lifetime (restored on dispose) and its hotkey
 handler `OnLegendHotkeyPressed` is prefix-rerouted into this panel with the same
 toggle semantics. Hovering or focusing a type icon also bands that whole row inside
@@ -629,6 +650,12 @@ Game coupling that a game update can move (verify after every update):
   markers stay unambiguous; the pin itself keeps filtering.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
+- The fold: locking leaves the table full while the pointer stays on it, folds to the
+  locked column once the pointer leaves, and expands the moment it is unlocked. The
+  same with a pad, driven by focus leaving the panel rather than the pointer — and
+  stepping between columns must not count as leaving. Folded, the locked column must
+  still hover, mark and unlock as itself, and a preview column may appear beside it.
+  Check a refresh while folded (travelling, zooming) keeps the right column.
 - The routes table: column header icons, per-row counts (zeros dimmed), fixed
   category order, row hover/focus/select, and the vertical icon-column tooltip
   (boss at top) with its position and clamping.

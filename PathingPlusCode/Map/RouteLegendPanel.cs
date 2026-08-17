@@ -54,8 +54,27 @@ internal sealed class RouteLegendPanel : IDisposable
     private readonly List<Control> _columns = [];
     private readonly List<Panel> _columnMarks = [];
     private readonly List<Color> _columnColors = [];
+
+    /// <summary>
+    /// Which route each drawn column belongs to, or -1 for the preview. Once the table
+    /// can fold to a single column, a column's place in the row stops being its route's
+    /// index, and every hover, lock and mark has to go through this instead.
+    /// </summary>
+    private readonly List<int> _columnRoutes = [];
     private int _hot = -1;
     private int _locked = -1;
+
+    /// <summary>
+    /// Locked, and folded down to that one column — or waiting to be. The fold is held
+    /// back until the player looks away, because collapsing the table under a pointer
+    /// that is still choosing from it moves the very thing being read.
+    /// </summary>
+    private bool _foldPending;
+    private bool _folded;
+
+    /// <summary>The route shown on its own, or null while the whole table is up.</summary>
+    private int? FoldedRoute =>
+        _folded && _locked >= 0 && _locked < _routes.Count ? _locked : null;
 
     /// <summary>The five that earned a column, and the headerless one under the cursor.</summary>
     private IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> _routes = [];
@@ -128,7 +147,11 @@ internal sealed class RouteLegendPanel : IDisposable
             cell.MouseEntered += () => Guard.Run("Type hover", () => OnTypeHot(row));
             cell.MouseExited += () => Guard.Run("Type unhover", OnTypeCold);
             cell.FocusEntered += () => Guard.Run("Type focus", () => OnTypeHot(row));
-            cell.FocusExited += () => Guard.Run("Type unfocus", OnTypeCold);
+            cell.FocusExited += () => Guard.Run("Type unfocus", () =>
+            {
+                OnTypeCold();
+                NoteFocusChanged();
+            });
             _iconCells.Add(cell);
             _panel.AddChild(cell);
 
@@ -225,10 +248,21 @@ internal sealed class RouteLegendPanel : IDisposable
         _columns.Clear();
         _columnMarks.Clear();
         _columnColors.Clear();
+        _columnRoutes.Clear();
 
-        var routes = _preview is { } extra
-            ? [.. _routes, (extra.Color, "", extra.Counts)]
-            : _routes;
+        // Folded, the table is the locked route and nothing else — the rest are still
+        // drawn on the map, they have simply stopped asking for room here. The preview
+        // column survives the fold on purpose: it only exists while the pointer is on
+        // some other route out on the map, and holding it against the locked one is
+        // exactly the comparison being made at that moment.
+        var routes = new List<(int Route, Color Color, string Letter, IReadOnlyList<int> Counts)>();
+        if (FoldedRoute is { } only)
+            routes.Add((only, _routes[only].Color, _routes[only].Letter, _routes[only].Counts));
+        else
+            for (var i = 0; i < _routes.Count; i++)
+                routes.Add((i, _routes[i].Color, _routes[i].Letter, _routes[i].Counts));
+        if (_preview is { } extra)
+            routes.Add((-1, extra.Color, "", extra.Counts));
 
         FitWidth(routes.Count);
         foreach (var name in _typeNames)
@@ -236,11 +270,11 @@ internal sealed class RouteLegendPanel : IDisposable
 
         for (var i = 0; i < routes.Count; i++)
         {
-            var index = i;
+            var index = routes[i].Route;
             // The preview column reports nothing: it exists because the pointer is on
             // the map, and clicking a column that vanishes on the next mouse move
             // would lock a route the player cannot see the name of.
-            var interactive = i < _routes.Count;
+            var interactive = index >= 0;
             var column = new Control
             {
                 Name = $"Route{routes[i].Letter}",
@@ -259,6 +293,7 @@ internal sealed class RouteLegendPanel : IDisposable
             column.AddChild(mark);
             _columnMarks.Add(mark);
             _columnColors.Add(routes[i].Color);
+            _columnRoutes.Add(index);
 
             var letter = MakeLabel(28, routes[i].Letter, routes[i].Color);
             letter.Position = new Vector2(0, 0);
@@ -280,7 +315,11 @@ internal sealed class RouteLegendPanel : IDisposable
                 column.MouseEntered += () => Guard.Run("Column hover", () => ColumnHot?.Invoke(index));
                 column.MouseExited += () => Guard.Run("Column unhover", () => ColumnCold?.Invoke(index));
                 column.FocusEntered += () => Guard.Run("Column focus", () => ColumnHot?.Invoke(index));
-                column.FocusExited += () => Guard.Run("Column unfocus", () => ColumnCold?.Invoke(index));
+                column.FocusExited += () => Guard.Run("Column unfocus", () =>
+                {
+                    ColumnCold?.Invoke(index);
+                    NoteFocusChanged();
+                });
                 column.GuiInput += inputEvent => Guard.Run("Column select", () =>
                 {
                     var selected = inputEvent.IsActionPressed(MegaInput.select) ||
@@ -303,11 +342,62 @@ internal sealed class RouteLegendPanel : IDisposable
         WireIconFocus();
     }
 
+    /// <summary>
+    /// Which route is locked, and with it whether the table folds down to that one
+    /// column. Locking only *arms* the fold — see <see cref="LookedAway" />. Unlocking
+    /// undoes it at once: having asked for the rest back, the player should not have to
+    /// go and look somewhere else before they arrive.
+    /// </summary>
     public void SetLocked(int index)
     {
+        var before = FoldedRoute;
         _locked = index;
-        RefreshMarks();
+        if (index < 0)
+        {
+            _foldPending = false;
+            _folded = false;
+        }
+        else if (!_folded)
+        {
+            _foldPending = true;
+        }
+
+        if (FoldedRoute != before)
+            Render();
+        else
+            RefreshMarks();
     }
+
+    /// <summary>
+    /// The player's attention has left the legend — the pointer is off it, or focus has
+    /// gone elsewhere — so an armed fold happens now.
+    ///
+    /// Held until this moment on purpose. Folding on the click itself would pull four
+    /// columns out from under a pointer that is still in the middle of comparing them,
+    /// and the panel would jump away from the cursor at the instant of choosing.
+    /// </summary>
+    public void LookedAway()
+    {
+        if (!_foldPending)
+            return;
+        _foldPending = false;
+        _folded = true;
+        Render();
+    }
+
+    /// <summary>
+    /// Focus has left one of our controls. Whether it left the *legend* can only be
+    /// answered once the next control has taken focus, so the question waits a frame —
+    /// otherwise stepping from one column to the next would read as leaving.
+    /// </summary>
+    private void NoteFocusChanged() =>
+        Callable.From(() => Guard.Run("Following focus out of the legend", () =>
+        {
+            if (!GodotObject.IsInstanceValid(_panel))
+                return;
+            if (!OwnsFocus(_panel.GetViewport()?.GuiGetFocusOwner()))
+                LookedAway();
+        })).CallDeferred();
 
     /// <summary>The column under the mouse or holding focus, tinted so it reads as hot.</summary>
     public void SetHot(int index)
@@ -320,9 +410,12 @@ internal sealed class RouteLegendPanel : IDisposable
     {
         for (var i = 0; i < _columnMarks.Count; i++)
         {
+            // By route, not by place in the row: folded, the one column left is not
+            // column zero's route.
+            var route = _columnRoutes[i];
             // The preview column is only ever there because the pointer is on its route.
-            var locked = i == _locked;
-            var hot = i == _hot || i >= _routes.Count;
+            var locked = route >= 0 && route == _locked;
+            var hot = route < 0 || route == _hot;
             _columnMarks[i].Visible = locked || hot;
             if (!locked && !hot)
                 continue;

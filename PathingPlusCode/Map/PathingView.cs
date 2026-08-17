@@ -343,8 +343,14 @@ internal sealed class PathingView : IDisposable
     /// </summary>
     public void OnPointerMoved(Vector2 globalPoint) => Guard.Run("Map hover", () =>
     {
-        if (!_screen.IsOpen || _legend.Covers(globalPoint))
+        if (!_screen.IsOpen)
             return;
+        if (_legend.Covers(globalPoint))
+            return;
+        // Off the legend: a route locked a moment ago can fold the table down to itself
+        // now that the pointer has finished with it. Idempotent, so calling it on every
+        // move out here costs nothing.
+        _legend.LookedAway();
         if (MapPointFromGlobal(globalPoint) is not { } point)
             return;
 
