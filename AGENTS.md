@@ -28,8 +28,8 @@ girth and spacing are sliders, and default to native girth at a tighter 10px pit
 its own overlay layer inside `TheMap` (above the game's dotted connections, below the
 node icons). Colors come from `StsColors`; the >threshold union view is darkBlue at
 0.65 alpha — it is the entire display at act start, so it must not be faint. With five or fewer routes left, a legend panel above the native Share
-button shows them as a table — one row per route, named by a letter in the route's
-line color ("A.", "B.", …), sorted most elites first then most fires, count columns
+button shows them as a table — one row per route, headed by a dash in the route's own
+line color (or the pin ring once it is locked), sorted most elites first then most fires, count columns
 headed by map icons in the fixed order
 elites / fires / combats / shops / chests / events, zeros dimmed — plus a vertical
 icon-column tooltip (boss end at the top) on hover/focus, darkening that route to
@@ -507,7 +507,23 @@ locking gives it a `StyleBoxFlat` — a 4px border in the route's colour plus a 
 the same colour at 0.42 alpha, both **deepened toward black** first. A plain wash in
 the route's own colour is what it used to be, and it was invisible: half the palette
 is pale, and pale over pale parchment reads as nothing. The border, not the fill, is
-what makes a locked column unmistakable.
+what makes a locked column unmistakable. **Locked and under the cursor is its own
+state**: a pad moving onto the column it has already pinned otherwise gets no answer at
+all — the lock's frame is already there, nothing changes, and the cursor is simply lost.
+So that frame gets heavier (6px) and goes **lighter** rather than darker, the one place
+in the mod a colour is lifted toward cream, because it is read against the darkened
+frame of the same colour rather than against the parchment.
+
+**Columns are headed by a mark, not a letter.** A dash of `map_dot` in the route's own
+colour — a sample of the very line it stands for — and the `map_circle_4` ring, the
+mod's own mark for a pinned node, once that route is locked. The letters said nothing
+the colour did not, and cost a 28pt band to say it. The dash texture runs along its own
+Y axis, so it is turned a quarter to lie across the column.
+
+**The panel is exactly its contents** (`FitPanel`): anchored bottom right, so that
+corner stays put and the top and left edges come in to meet what is drawn — width from
+the column count, height from the row block. Both were hard-coded, which left a band of
+empty parchment under the last row and a table five columns wide however few it held.
 
 **A locked table folds down to the locked column**, so a chosen route stops charging
 the screen for four alternatives nobody is reading any more. The other routes keep
@@ -650,6 +666,11 @@ Game coupling that a game update can move (verify after every update):
   markers stay unambiguous; the pin itself keeps filtering.
 - The routes panel: header count, hint line, up to five route rows, lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
+- Column heads: a dash in the route's colour, the pin ring on the locked one, and a
+  locked column under the cursor plainly different from a locked one that is not —
+  check that last one with a pad, which is where it matters.
+- The panel's size against its contents at one, five and zero columns: no dead band
+  under the last row, no width kept for columns that are not there.
 - The fold: locking leaves the table full while the pointer stays on it, folds to the
   locked column once the pointer leaves, and expands the moment it is unlocked. The
   same with a pad, driven by focus leaving the panel rather than the pointer — and

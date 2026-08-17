@@ -9,7 +9,8 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// <summary>
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
 /// wider, transposed — node types as rows, one column per computed route (up to
-/// eight), the route letter in its trail colour heading each column.
+/// eight), each headed by a dash of its own line colour, or by the pin ring once that
+/// route is locked. Locking folds the table down to the locked column.
 ///
 /// Hovering or focusing a type icon fires the game's own
 /// <c>HighlightPointType</c> broadcast, exactly what the native legend items do.
@@ -31,13 +32,39 @@ internal sealed class RouteLegendPanel : IDisposable
         (MapPointType.Elite, nameof(MapPointType.Elite), [nameof(MapPointType.Elite)]),
     ];
 
-    private const float IconColumnX = 36f;
-    private const float IconSize = 46f;
-    private const float FirstRowY = 96f;
-    private const float RowHeight = 52f;
-    private const float ColumnsStartX = 104f;
-    private const float ColumnWidth = 44f;
-    private const float HeaderY = 40f;
+    private const float IconColumnX = 30f;
+    private const float IconSize = 42f;
+    private const float FirstRowY = 64f;
+    private const float RowHeight = 46f;
+    private const float ColumnsStartX = 88f;
+    private const float ColumnWidth = 42f;
+
+    /// <summary>
+    /// The band above the rows, holding each column's key. It is short because what it
+    /// holds is a mark rather than lettering — the letters that used to head these
+    /// columns needed a 28pt line and told the player nothing the colour did not.
+    /// </summary>
+    private const float HeaderY = 24f;
+
+    /// <summary>Parchment left below the last row. The panel's height is otherwise its contents.</summary>
+    private const float BottomPad = 20f;
+
+    /// <summary>The widest the type names get, for the no-routes state.</summary>
+    private const float NamesWidth = 200f;
+
+    /// <summary>Margin past the last column, matching the inset on the left.</summary>
+    private const float EdgePad = 18f;
+
+    /// <summary>The key mark heading a column, sized to sit inside the header band.</summary>
+    private const float KeySize = 26f;
+
+    /// <summary>
+    /// The map's own dash, which is what the routes themselves are drawn from, and its
+    /// hand-inked ring, which is what a pinned node wears. So a column is headed by a
+    /// sample of its line, and a locked one by the mod's own mark for "pinned".
+    /// </summary>
+    private const string DashTexture = "res://images/atlases/compressed.sprites/map/map_dot.tres";
+    private const string PinTexture = "res://images/atlases/compressed.sprites/map/map_circle_4.tres";
 
     public event Action<MapPointType>? TypeHot;
     public event Action? TypeCold;
@@ -61,6 +88,9 @@ internal sealed class RouteLegendPanel : IDisposable
     /// index, and every hover, lock and mark has to go through this instead.
     /// </summary>
     private readonly List<int> _columnRoutes = [];
+
+    /// <summary>Each column's key mark, swapped between the route dash and the pin ring.</summary>
+    private readonly List<TextureRect> _columnKeys = [];
     private int _hot = -1;
     private int _locked = -1;
 
@@ -85,14 +115,14 @@ internal sealed class RouteLegendPanel : IDisposable
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
         // Bottom right, in the space the mod's old routes table held — out of the
-        // rotated view's way — wearing the native legend parchment. Six route
-        // columns fit this width.
+        // rotated view's way — wearing the native legend parchment. Its size is its
+        // contents; see FitPanel.
         _panel = new Control { Name = "PathingPlusLegend", MouseFilter = Control.MouseFilterEnum.Stop };
         _panel.AnchorLeft = _panel.AnchorRight = 1f;
         _panel.AnchorTop = _panel.AnchorBottom = 1f;
-        _panel.OffsetLeft = -421f;
         _panel.OffsetRight = -24f;
-        _panel.OffsetTop = -582f;
+        // Top and left are computed from the contents in FitPanel; only the corner
+        // this hangs from is fixed.
         _panel.OffsetBottom = -128f;
         _panel.GrowHorizontal = Control.GrowDirection.Begin;
         _panel.GrowVertical = Control.GrowDirection.Begin;
@@ -168,14 +198,14 @@ internal sealed class RouteLegendPanel : IDisposable
         // legend carried the same glyph and this panel replaces it.
         Guard.Run("Legend hotkey glyph", () =>
         {
-            _hotkeyGlyph = new HotkeyGlyph(_panel, MegaInput.confirm, new Vector2(44, 44));
+            _hotkeyGlyph = new HotkeyGlyph(_panel, MegaInput.confirm, new Vector2(34, 34));
             var icon = _hotkeyGlyph.Node;
-            icon.Position = new Vector2(IconColumnX - 4f, 34f);
-            icon.Size = new Vector2(44, 44);
+            icon.Position = new Vector2(IconColumnX + 4f, HeaderY + 1f);
+            icon.Size = new Vector2(34, 34);
         });
 
         screen.AddChild(_panel);
-        FitWidth(0);
+        FitPanel(0);
         WireIconFocus();
     }
 
@@ -198,13 +228,20 @@ internal sealed class RouteLegendPanel : IDisposable
         TypeCold?.Invoke();
     }
 
-    /// <summary>Right edge stays put; the left edge comes in to hug the content.</summary>
-    private void FitWidth(int columnCount)
+    /// <summary>
+    /// The panel is exactly its contents. Anchored bottom-right, so the corner stays
+    /// put and the other two edges come in to meet what is actually drawn — the width
+    /// following the column count, the height following the fixed row block. Both were
+    /// hard-coded before, which left a band of empty parchment under the last row and
+    /// a table that stayed five columns wide however few it had.
+    /// </summary>
+    private void FitPanel(int columnCount)
     {
         var width = columnCount > 0
-            ? ColumnsStartX + columnCount * ColumnWidth + 22f
-            : ColumnsStartX + 210f;
+            ? ColumnsStartX + columnCount * ColumnWidth + EdgePad
+            : ColumnsStartX + NamesWidth + EdgePad;
         _panel.OffsetLeft = _panel.OffsetRight - width;
+        _panel.OffsetTop = _panel.OffsetBottom - (FirstRowY + Rows.Length * RowHeight + BottomPad);
     }
 
     /// <summary>One column per route: its colour, its letter, its counts in row order.</summary>
@@ -249,6 +286,7 @@ internal sealed class RouteLegendPanel : IDisposable
         _columnMarks.Clear();
         _columnColors.Clear();
         _columnRoutes.Clear();
+        _columnKeys.Clear();
 
         // Folded, the table is the locked route and nothing else — the rest are still
         // drawn on the map, they have simply stopped asking for room here. The preview
@@ -264,7 +302,7 @@ internal sealed class RouteLegendPanel : IDisposable
         if (_preview is { } extra)
             routes.Add((-1, extra.Color, "", extra.Counts));
 
-        FitWidth(routes.Count);
+        FitPanel(routes.Count);
         foreach (var name in _typeNames)
             name.Visible = routes.Count == 0;
 
@@ -295,10 +333,22 @@ internal sealed class RouteLegendPanel : IDisposable
             _columnColors.Add(routes[i].Color);
             _columnRoutes.Add(index);
 
-            var letter = MakeLabel(28, routes[i].Letter, routes[i].Color);
-            letter.Position = new Vector2(0, 0);
-            letter.Size = new Vector2(ColumnWidth, FirstRowY - HeaderY);
-            column.AddChild(letter);
+            // The column's key: a dash of the very texture its route is drawn with, in
+            // its colour — a sample of that line rather than a letter standing in for
+            // one. RefreshMarks swaps it for the pin ring while the route is locked.
+            var key = new TextureRect
+            {
+                Name = "Key",
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                Position = new Vector2((ColumnWidth - KeySize) / 2f, (FirstRowY - HeaderY - KeySize) / 2f),
+                Size = new Vector2(KeySize, KeySize),
+                PivotOffset = new Vector2(KeySize / 2f, KeySize / 2f),
+                Modulate = routes[i].Color,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            };
+            _columnKeys.Add(key);
+            column.AddChild(key);
 
             for (var r = 0; r < Rows.Length && r < routes[i].Counts.Count; r++)
             {
@@ -416,6 +466,21 @@ internal sealed class RouteLegendPanel : IDisposable
             // The preview column is only ever there because the pointer is on its route.
             var locked = route >= 0 && route == _locked;
             var hot = route < 0 || route == _hot;
+
+            // The key: the route's dash normally, the pin ring once it is locked. Set
+            // before the early return below, since every column has one whether or not
+            // it is currently marked.
+            if (i < _columnKeys.Count)
+            {
+                _columnKeys[i].Texture = ResourceLoader.Load<Texture2D>(
+                    locked ? PinTexture : DashTexture, null, ResourceLoader.CacheMode.Reuse);
+                // The dash texture runs along its own Y axis, so a quarter turn lays it
+                // across the column the way a length of route reads. The ring is round
+                // and wants no turning.
+                _columnKeys[i].Rotation = locked ? 0f : Mathf.Pi / 2f;
+                _columnKeys[i].Scale = locked ? Vector2.One : new Vector2(0.85f, 1.5f);
+            }
+
             _columnMarks[i].Visible = locked || hot;
             if (!locked && !hot)
                 continue;
@@ -433,8 +498,15 @@ internal sealed class RouteLegendPanel : IDisposable
                 // pale, and a pale wash over pale parchment reads as nothing — it was
                 // the border that made a locked column unmistakable, not the fill.
                 style.BgColor = Deepen(_columnColors[i], 0.55f) with { A = 0.42f };
-                style.BorderColor = Deepen(_columnColors[i], 0.7f);
-                style.SetBorderWidthAll(4);
+                // Locked and *under the cursor* has to be its own state, or a pad
+                // moving onto the column it has already pinned gets no answer at all —
+                // the lock's own frame is already there, so nothing changes and the
+                // cursor is simply lost. A pale, heavier frame is that answer: still
+                // plainly the lock's frame, unmistakably lit.
+                style.BorderColor = hot
+                    ? Lift(_columnColors[i], 0.55f)
+                    : Deepen(_columnColors[i], 0.7f);
+                style.SetBorderWidthAll(hot ? 6 : 4);
             }
             else
             {
@@ -448,6 +520,14 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>Toward black, keeping the hue, so light route colours still bite.</summary>
     private static Color Deepen(Color color, float amount) =>
         new(color.R * amount, color.G * amount, color.B * amount, color.A);
+
+    /// <summary>
+    /// Toward cream, for the one place a colour has to get *lighter* rather than
+    /// darker: a locked column's frame under the cursor, which is read against the
+    /// darkened frame of the same colour rather than against the parchment.
+    /// </summary>
+    private static Color Lift(Color color, float amount) =>
+        color.Lerp(new Color(1f, 0.98f, 0.92f), amount) with { A = color.A };
 
     /// <summary>
     /// Whether the pointer is over the panel. Map-side route hover has to stand down
