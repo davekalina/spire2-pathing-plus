@@ -42,6 +42,13 @@ internal sealed class MapZoom : IDisposable
     /// <summary>Shared by every view-change animation, node icon counter-spin included.</summary>
     public const double TweenDuration = 0.55;
 
+    /// <summary>
+    /// How long the map takes to disappear on close before it is reset behind the
+    /// player's back. Short on purpose: the game starts its own fade of this node a
+    /// tenth of a second in, and this has to be finished by then.
+    /// </summary>
+    private const double HideDuration = 0.1;
+
     private readonly NMapScreen _screen;
     private readonly Control _theMap;
     private readonly Func<IReadOnlyList<Vector2>> _nodeCenters;
@@ -53,6 +60,9 @@ internal sealed class MapZoom : IDisposable
     private static readonly Color TrayIdle = new(0.92f, 0.92f, 0.92f);
     private HotkeyGlyph? _hotkeyGlyph;
     private Tween? _tween;
+
+    /// <summary>The fade that hides the map while it is put back upright on close.</summary>
+    private Tween? _fade;
 
     public MapViewMode Mode { get; private set; } = MapViewMode.Normal;
 
@@ -231,19 +241,68 @@ internal sealed class MapZoom : IDisposable
     }
 
     /// <summary>
-    /// Back to the normal view — on map change, map close, and map open. The map must
-    /// not be left scaled and rotated once the mod stops drawing it.
+    /// Back to the normal view — on map change and map open. The map must not be left
+    /// scaled and rotated once the mod stops drawing it.
     ///
-    /// Tweened, including on close: snapping it upright is more jarring than watching
-    /// it turn, even though the screen is on its way out. Tried instant, reverted.
+    /// Tweened: snapping it upright is more jarring than watching it turn. Tried
+    /// instant, reverted. Closing the map is the exception — see
+    /// <see cref="ResetOutOfSight" />.
     /// </summary>
     public void Reset()
     {
+        CancelHide();
         if (Mode == MapViewMode.Normal)
             return;
         Mode = MapViewMode.Normal;
         Apply();
         Toggled?.Invoke(false);
+    }
+
+    /// <summary>
+    /// Back to the normal view on the way out, with the turn never seen: the map's own
+    /// alpha goes first, and the reset happens behind it.
+    ///
+    /// Watching it turn is right when the map is staying — it says where the view went.
+    /// On the way out it is neither: the screen is already sliding down and fading, and
+    /// a quarter-turn from the wide view sweeps the act across and off the edge of the
+    /// screen while it goes. The game begins fading <c>TheMap</c> 0.1s into its own
+    /// close, so this beats it to nothing and then snaps, which nobody can see.
+    ///
+    /// The alpha is left at zero. The game's open animation tweens this very node's
+    /// modulate <c>.From(transparentBlack)</c>, so it restores it without being asked;
+    /// <see cref="CancelHide" /> covers every other way back.
+    /// </summary>
+    public void ResetOutOfSight()
+    {
+        if (Mode == MapViewMode.Normal)
+            return;
+        _tween?.Kill();
+        _fade?.Kill();
+        _fade = _theMap.CreateTween();
+        _fade.TweenProperty(_theMap, "modulate:a", 0f, HideDuration)
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+        _fade.TweenCallback(Callable.From(() => Guard.Run("Resetting the map out of sight", () =>
+        {
+            Mode = MapViewMode.Normal;
+            Apply(instant: true);
+            // Instant, so the node icons snap upright with the map rather than
+            // spinning into place on a map that has already arrived.
+            Toggled?.Invoke(true);
+        })));
+    }
+
+    /// <summary>
+    /// Undo a hide that is still in flight, or one whose map never came back. The mod
+    /// must never leave the game's own map node transparent.
+    /// </summary>
+    private void CancelHide()
+    {
+        if (_fade is null)
+            return;
+        _fade.Kill();
+        _fade = null;
+        if (GodotObject.IsInstanceValid(_theMap))
+            _theMap.Modulate = _theMap.Modulate with { A = 1f };
     }
 
     public void Dispose()

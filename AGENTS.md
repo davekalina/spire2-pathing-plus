@@ -29,7 +29,7 @@ its own overlay layer inside `TheMap` (above the game's dotted connections, belo
 node icons). Colors come from `StsColors`; the >threshold union view is darkBlue at
 0.65 alpha — it is the entire display at act start, so it must not be faint. With five or fewer routes left, a legend panel above the native Share
 button shows them as a table — one row per route, headed by a dash in the route's own
-line color (or the pin ring once it is locked), sorted most elites first then most fires, count columns
+line color (or a pin once it is locked), sorted most elites first then most fires, count columns
 headed by map icons in the fixed order
 elites / fires / combats / shops / chests / events, zeros dimmed — plus a vertical
 icon-column tooltip (boss end at the top) on hover/focus, darkening that route to
@@ -442,10 +442,27 @@ Hit testing goes through `Polyline`, so what can be hovered is exactly what is
 drawn. Leaving the first leg *undrawn* while travel is live was tried and reverted:
 it read as the plan having a hole in it rather than as an invitation to click.
 
-`Reset` stays **tweened** at all four callers. Snapping the map upright on close was
-tried and is worse than watching it turn — more jarring, not less. Only the initial
-view snaps. `Reset` still returns to Normal
-on close and dispose, or the game keeps a scaled, rotated map after the mod is gone.
+`Reset` stays **tweened** where the map is staying — on map change and on open — because
+watching it turn is what says where the view went. Snapping it upright in front of the
+player was tried and is worse: more jarring, not less. Only the initial view snaps.
+`Reset` still returns to Normal on dispose, or the game keeps a scaled, rotated map
+after the mod is gone, and it cancels any hide in flight so the mod can never leave the
+game's own map node transparent.
+
+**Closing is the exception: the map is put back upright behind its own fade**
+(`ResetOutOfSight`). Turning it in view is neither right nor wrong there, it is simply
+awful — the screen is already sliding down and fading, and a quarter-turn out of the
+wide view sweeps the whole act across and off the edge of the screen on the way. So the
+map's alpha goes to nothing in 0.1s and the reset snaps behind it. That number is not
+free: the game begins fading `TheMap` (which is its own `_mapContainer`) **0.1s** into
+`AnimClose`, so this has to be finished by then. The alpha is deliberately left at zero
+— `AnimOpen` tweens that node's modulate `.From(transparentBlack)`, so the way back in
+restores it without being asked.
+
+Because the reset now waits, **focus teardown had to be pulled out in front of it**:
+`OnScreenClosed` deactivates the navigator itself, with `takeFocus: false`. The screen
+is going, the game has already moved the active context on, and handing focus back to a
+map node a tenth of a second later would take it from whatever is arriving.
 
 **The Zoom button cycles three views** (Right Trigger or the button; every map open
 starts Normal): Normal → Zoomed (whole act on screen) → Rotated (whole act on its
@@ -693,6 +710,10 @@ Game coupling that a game update can move (verify after every update):
   (boss at top) with its position and clamping.
 - Persistence: pins and locked route restored only onto their own map, pruned when
   stale, saved on every change; the Clear button empties the file's pin list too.
+- Closing the map from the wide view: no turn should be visible at all, and none of
+  the act should sweep off the edge on the way out. Reopen immediately afterwards and
+  the map must come back at full opacity, upright. Close from Normal too, where nothing
+  should fade early.
 - The Zoom button: label states, its Right Trigger glyph (controller only), full-map
   framing at any act size, drag/wheel while zoomed, and the snap back to the
   current row.

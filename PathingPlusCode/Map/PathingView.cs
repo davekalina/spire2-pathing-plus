@@ -1178,7 +1178,16 @@ internal sealed class PathingView : IDisposable
 
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
-        _zoom.Reset();
+        // Focus first and at once, because the view reset now waits behind a fade and
+        // this must not. `takeFocus: false` on the way out: the screen is going, the
+        // game has already moved the active context on, and handing focus back to a map
+        // node a tenth of a second later would take it from whatever is arriving.
+        _navigator.SetActive(false, takeFocus: false);
+        _overlay.HideCursor();
+        // The map is put back upright behind its own fade rather than in front of the
+        // player — a quarter-turn out of the wide view sweeps the act off the edge of
+        // the screen, and the screen is on its way out anyway.
+        _zoom.ResetOutOfSight();
         ListenForHotkey(false);
         _hotRoute = -1;
         // The screen root stays in the tree when the map closes — the game only hides
