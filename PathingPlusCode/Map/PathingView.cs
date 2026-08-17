@@ -333,7 +333,38 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>The mouse took over; the controller's focus ring is no longer the cursor.</summary>
-    public void OnPointerUsed() => _overlay.HideCursor();
+    public void OnPointerUsed()
+    {
+        _overlay.HideCursor();
+        ReleaseNodeFocusForPointer();
+    }
+
+    /// <summary>
+    /// Give the next nodes their pulse back.
+    ///
+    /// <c>RefreshAllPointVisuals</c> ends by grabbing focus onto
+    /// <c>DefaultFocusedControl</c> — the first travelable node ahead — and a focused
+    /// node does not pulse: <c>NNormalMapPoint._Process</c> reads focus as "the cursor
+    /// is on this one" and eases its scale back to rest instead. With a controller that
+    /// is exactly right, because the reticle is sitting on it. With a mouse there is no
+    /// cursor on the map at all, so that node just stops inviting the click while its
+    /// neighbours carry on pulsing — which is precisely what it looks like: of the two
+    /// nodes you may move to, one of them is dead.
+    ///
+    /// So on mouse and keyboard the grab is handed straight back. Keyboard-only and
+    /// controller both count as directional navigation and keep it, and so does the
+    /// zoomed grid, where a node holding focus **is** the cursor.
+    /// </summary>
+    public void ReleaseNodeFocusForPointer() => Guard.Run("Letting the next nodes pulse", () =>
+    {
+        if (NControllerManager.Instance?.IsUsingDirectionalNavigation is not false)
+            return;
+        if (_zoom.Zoomed)
+            return;
+        if (_screen.GetViewport()?.GuiGetFocusOwner() is NMapPoint focused &&
+            GodotObject.IsInstanceValid(focused))
+            focused.ReleaseFocus();
+    });
 
     /// <summary>
     /// The mouse moved over the map. Two things answer it: a pinned node under the

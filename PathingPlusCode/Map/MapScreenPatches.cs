@@ -149,6 +149,19 @@ internal static class MapScreenPatches
         Guard.Run("Showing which tool is in hand",
             () => Views.GetValueOrDefault(__instance)?.SyncToolButtons());
 
+    /// <summary>
+    /// The game finishes every visual refresh by grabbing focus onto the first
+    /// travelable node ahead, and a focused node stops pulsing. That is right for a
+    /// controller and wrong for a mouse — see
+    /// <see cref="PathingView.ReleaseNodeFocusForPointer" />. This is the moment to
+    /// hand it back, because it is the moment it was taken.
+    /// </summary>
+    [HarmonyPostfix]
+    [HarmonyPatch(nameof(NMapScreen.RefreshAllPointVisuals))]
+    private static void AfterRefreshAllPointVisuals(NMapScreen __instance) =>
+        Guard.Run("Handing map focus back to the pointer",
+            () => Views.GetValueOrDefault(__instance)?.ReleaseNodeFocusForPointer());
+
     /// <summary>Whether the stroke passing through these drawings is planning a route.</summary>
     internal static bool PathDrawing(NMapDrawings drawings) => ViewFor(drawings)?.PathMode == true;
 

@@ -425,6 +425,19 @@ every one after. `_iconTweens` keeps the handle per icon so it can be killed fir
 `MapZoom.AnimateTo` already did the same for the map's own tween, which is why the map
 looked right while its icons did not.
 
+**A focused node does not pulse, and with a mouse that is a lie.**
+`NMapScreen.RefreshAllPointVisuals` ends by grabbing focus onto `DefaultFocusedControl`
+— the first travelable node ahead — and `NNormalMapPoint._Process` reads focus as "the
+cursor is on this one", easing that node's scale back to rest instead of pulsing it.
+With a controller that is right: the reticle is sitting on it. With a mouse there is no
+cursor on the map at all, so one of the two nodes you may move to simply stops inviting
+the click while the other goes on pulsing, which is exactly how it was reported. The
+grab is handed straight back on mouse and keyboard (`ReleaseNodeFocusForPointer`, from
+a postfix on that same method and from the pointer's own first event).
+`IsUsingDirectionalNavigation` is false **only** for `MouseAndKeyboard`, so keyboard-only
+and controller keep their focus, and so does the zoomed grid, where a node holding focus
+*is* the cursor.
+
 **Map nodes only pulse and hover while no drawing tool is out.** That is
 `NMapPoint.IsInputAllowed`, and it gates the "you can go here" pulse in `_Process`,
 the controller reticle, and the history hover tip — every caller is a visual, none is
@@ -762,6 +775,9 @@ Game coupling that a game update can move (verify after every update):
 - **Right-Drag Draws Paths** on and off: right-drag picking up the path tool versus the
   quill, middle-drag always the eraser, and neither leaving the toolbar lit once the
   button is released.
+- Every travelable node pulsing, at the moment travel is granted: open the map right
+  after a Neow bonus with a route already drawn, and both next nodes must pulse. Then
+  the same on a pad, where the focused one must **not** pulse — it has the reticle.
 - Interactions with native map input: travel clicks on travelable nodes, drag-to-pan,
   every drawing tool (pins must not fire during them), and travel animation.
 - Multiplayer map voting and the FTUE first-map flow (pins must stay inert there).
