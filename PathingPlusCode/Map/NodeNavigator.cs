@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
 namespace PathingPlus.PathingPlusCode.Map;
@@ -44,6 +45,12 @@ internal sealed class NodeNavigator : IDisposable
         if (Active == active)
             return;
         Active = active;
+        // Focus on this grid is the **controller's** cursor: the gold ring follows it,
+        // and nothing else on screen shows it. Handing it to a pointer player puts an
+        // invisible cursor on a map node, and a node the game thinks holds the cursor
+        // stops pulsing — so the zoomed views were quietly costing a travelable node
+        // its invitation to be clicked. The pointer's own cursor is the pointer.
+        takeFocus &= NControllerManager.Instance?.IsUsingDirectionalNavigation == true;
         if (active)
         {
             ApplyWiring();

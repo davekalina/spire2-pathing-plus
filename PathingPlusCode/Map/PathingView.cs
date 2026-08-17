@@ -394,10 +394,17 @@ internal sealed class PathingView : IDisposable
             _releasingNodeFocus = false;
             if (!GodotObject.IsInstanceValid(_screen) || !_screen.IsOpen)
                 return;
-            if (NControllerManager.Instance?.IsUsingDirectionalNavigation is not false)
+            // Only stand down when the game *says* a cursor is being driven. The test
+            // used to be "is not false", which also stood down when the manager could
+            // not be reached at all — the one case where doing nothing is least safe.
+            if (NControllerManager.Instance?.IsUsingDirectionalNavigation == true)
                 return;
-            if (_zoom.Zoomed)
-                return;
+            // Deliberately **not** exempting the zoomed views any more. The exemption
+            // read "a node holding focus there is the cursor", and that is only true of
+            // directional navigation, which the line above has already let through. For
+            // a pointer the grid is not a cursor, and the grid grabs focus on the way in
+            // and hands it back on the way out — so the wide view was the one place this
+            // was guaranteed not to fire.
             if (_screen.GetViewport()?.GuiGetFocusOwner() is NMapPoint focused &&
                 GodotObject.IsInstanceValid(focused))
                 focused.ReleaseFocus();
