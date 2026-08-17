@@ -4,7 +4,7 @@ A Slay the Spire 2 mod for the map screen to help you make better pathing decisi
 
 ## How to use Pathing Plus:
 
-- Use the Drawing and Eraser tools to draw paths on the map.
+- Use the Pathing Plus Drawing tool (Q on the keyboard) to draw paths on the map.
 - Alternatively, click on individual nodes that you want to visit.
 - Double-click on node types to select all nodes of that type.
 - When paths have been completed, the Legend will show node type counts.
