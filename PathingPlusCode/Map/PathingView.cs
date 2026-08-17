@@ -77,6 +77,14 @@ internal sealed class PathingView : IDisposable
     /// </summary>
     private string? _lastDrawn;
 
+    /// <summary>
+    /// Which node the current stroke has taken on each floor, and how near it came to
+    /// it. One per floor, replaceable by a nearer approach — see
+    /// <see cref="OnDrawingPoint" />. Holds only this stroke's own picks, and is
+    /// emptied when the stroke ends.
+    /// </summary>
+    private readonly Dictionary<int, (string Id, float Distance)> _strokeFloors = [];
+
     /// <summary>The pin set as last drawn, so a redraw can tell a change from a repeat.</summary>
     private string _pinSignature = PinsChangedSentinel;
 
@@ -307,6 +315,9 @@ internal sealed class PathingView : IDisposable
     public void OnStrokeEnded()
     {
         _lastDrawn = null;
+        // The next stroke picks its own node on each floor, and may disagree with this
+        // one — which is how a second pass corrects a first.
+        _strokeFloors.Clear();
         // And with no ink behind it either, or the next stroke's first length is drawn
         // from wherever this one happened to stop.
         _lastTrailMark = null;
@@ -530,6 +541,7 @@ internal sealed class PathingView : IDisposable
         _pins.Clear();
         _cut.Clear();
         _lastDrawn = null;
+        _strokeFloors.Clear();
         _hotRoute = -1;
         _lockedRoute = -1;
         if (_screen.IsOpen)
@@ -545,6 +557,7 @@ internal sealed class PathingView : IDisposable
         _pins.Clear();
         _cut.Clear();
         _lastDrawn = null;
+        _strokeFloors.Clear();
         if (_screen.IsOpen)
             Refresh();
     }
@@ -625,14 +638,15 @@ internal sealed class PathingView : IDisposable
         // The node the player is standing on is a candidate too, even though it can
         // never be pinned. It is one end of the first step, and a stroke has to be able
         // to name it — see below.
-        var nearest = _pinnable.Append(_startId)
+        var caught = _pinnable.Append(_startId)
             .Select(id => (Id: id, Center: EndpointOf(id)))
             .Where(candidate => candidate.Center is not null)
             .Select(candidate => (candidate.Id, Distance: candidate.Center!.Value.DistanceTo(cursor)))
             .Where(candidate => candidate.Distance <= SnapRadius)
             .OrderBy(candidate => candidate.Distance)
-            .Select(candidate => candidate.Id)
+            .Select(candidate => ((string Id, float Distance)?)candidate)
             .FirstOrDefault();
+        var nearest = caught?.Id;
 
         if (!erasing)
         {
@@ -662,10 +676,43 @@ internal sealed class PathingView : IDisposable
                 return;
             }
 
-            if (!restored && _pins.IsSelected(nearest))
+            var floor = _adapter.Graph.Node(nearest).Row;
+            if (_pins.IsSelected(nearest))
+            {
+                // Keep the closest approach this stroke made to its own pick, so a
+                // later contender has to beat how near the stroke actually came rather
+                // than merely where it first came into reach.
+                if (_strokeFloors.TryGetValue(floor, out var mine) && mine.Id == nearest
+                    && caught!.Value.Distance < mine.Distance)
+                    _strokeFloors[floor] = (nearest, caught.Value.Distance);
+                if (restored)
+                    Refresh();
                 return;
-            if (!_pins.IsSelected(nearest))
-                _pins.Toggle(nearest);
+            }
+
+            // One node per floor per stroke, and it is the one the stroke came nearest
+            // to. A route takes a single node from each floor, so a stroke should too;
+            // passing within the pen's reach of a node is not the same as meaning it,
+            // and with a generous reach a crowded floor used to give up two or three of
+            // them, forking the plan with nodes the line was never really near. Coming
+            // nearer to another one later replaces the pick rather than adding to it,
+            // so a stroke that starts ambiguously and then commits still ends up saying
+            // one thing. Only this stroke's own picks are ever displaced: a pin already
+            // on the map was put there deliberately, and same-floor pins are meaningful.
+            if (_strokeFloors.TryGetValue(floor, out var held) && held.Id != nearest)
+            {
+                if (caught!.Value.Distance >= held.Distance)
+                {
+                    if (restored)
+                        Refresh();
+                    return;
+                }
+                _pins.Remove(held.Id);
+                _cut.RemoveWhere(edge => edge.From == held.Id || edge.To == held.Id);
+            }
+
+            _strokeFloors[floor] = (nearest, caught!.Value.Distance);
+            _pins.Toggle(nearest);
             Refresh();
             return;
         }
@@ -1279,6 +1326,7 @@ internal sealed class PathingView : IDisposable
         _pins.Clear();
         _cut.Clear();
         _lastDrawn = null;
+        _strokeFloors.Clear();
         foreach (var id in chosen.SelectMany(route => route.Skip(1)).Distinct())
             if (_pinnable.Contains(id))
                 _pins.Toggle(id);

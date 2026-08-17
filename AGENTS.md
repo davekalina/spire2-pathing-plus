@@ -240,7 +240,24 @@ its own tool the quill goes back to ink, so the
 rubbing out is one gesture, and a player who has drawn ink and planned a route on the
 same map means whichever is under the cursor — so the prefix cuts the plan and then
 returns true so the game erases its own ink as well. That holds whatever the settings
-say. **The eraser works on steps, not nodes**: over the middle of a run it puts
+say.
+
+**A stroke takes one node per floor, and it is the one it came nearest.** A route takes
+a single node from each floor, so a stroke should too. Passing within the pen's reach of
+a node is not the same as meaning it, and with a generous `SnapRadius` a crowded floor
+gave up two or three at once — forking the plan with nodes the line was never really
+near, which is what "vestigial nodes" looked like. `_strokeFloors` holds the pick and
+its closest approach per floor; coming **nearer** to another node on that floor later
+*replaces* the pick rather than adding to it, so a stroke that starts ambiguously and
+then commits still ends up saying one thing. Two limits keep this from becoming a rule
+about pins in general: it is the **closest approach** that is tracked, not first contact
+— otherwise drawing straight through a node and on toward the next floor lets a distant
+neighbour steal it — and **only this stroke's own picks are ever displaced**, because a
+pin already on the map was put there deliberately and same-floor pins are meaningful.
+The record empties when the stroke ends, so a second pass may disagree with the first;
+that is how a mistake gets corrected.
+
+**The eraser works on steps, not nodes**: over the middle of a run it puts
 that one (from, to) into `_cut`, and over a node (judged by the node's own rect) it
 deselects the node and forgets every cut touching it. That is the whole reason the
 plan is kept as edges — rubbing out one link between two nodes has to leave both
@@ -640,6 +657,10 @@ Game coupling that a game update can move (verify after every update):
   that is the case the loc entry is re-asserted for.
 - The path tool in all three views: stroke snapping, no native ink left behind, press
   again to put it down, and neither disturbing pan/zoom.
+- One node per floor from one stroke, at any Pen Snap: draw between two nodes of a
+  floor and only the nearer is taken; carry on to the other and the pick moves rather
+  than doubling; draw straight through a node and on upward and it keeps its floor.
+  A pin made earlier must survive a later stroke passing its floor.
 - The eraser doing both jobs: lifting pins and cutting steps, and rubbing out the
   game's own ink in the same stroke.
 - The quill left native: it draws ink, it plans nothing, and map nodes go back to not
