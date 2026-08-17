@@ -179,7 +179,8 @@ internal sealed class OptionsPanel : IDisposable
         AddSpacer(advanced);
         AddSlider(advanced, "Trail Fade", 0.2f, 3f, 0.1f,
             () => PathingOptions.TrailFade, v => PathingOptions.TrailFade = v);
-        AddSlider(advanced, "Trail Width", 1f, 12f, 0.5f,
+        // Headroom past the default, which sat on the old ceiling.
+        AddSlider(advanced, "Trail Width", 1f, 24f, 0.5f,
             () => PathingOptions.TrailWidth, v => PathingOptions.TrailWidth = v);
         AddSlider(advanced, "Trail Step", 1f, 20f, 1f,
             () => PathingOptions.TrailSpacing, v => PathingOptions.TrailSpacing = v);

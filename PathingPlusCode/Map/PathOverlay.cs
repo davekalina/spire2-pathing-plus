@@ -241,9 +241,13 @@ internal sealed class PathOverlay : IDisposable
     {
         if (!GodotObject.IsInstanceValid(line))
             return;
-        var count = Math.Min(origins.Count, line.GetPointCount());
-        for (var i = 0; i < count; i++)
-            line.SetPointPosition(i, origins[i].Lerp(targets[i], t));
+        // The whole array at once rather than a call per point: at a one-unit step a
+        // line can hold a hundred points, and setting them one by one is a hundred
+        // trips across the engine boundary per line per frame.
+        var bent = new Vector2[origins.Count];
+        for (var i = 0; i < bent.Length; i++)
+            bent[i] = origins[i].Lerp(targets[i], t);
+        line.Points = bent;
     }
 
     /// <summary>

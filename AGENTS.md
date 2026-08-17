@@ -23,8 +23,8 @@ it as a waypoint — double-clicking pins every pinnable node of that kind at on
 toggles off when the rest of the kind is already pinned (the double-click's own first
 click flips the clicked node, so the rule judges by the others). The mod enumerates
 every route from the current position through all pins and draws them as runs of the
-game's `map_dot` texture (native spacing, jitter, flips, and rotation noise, seeded
-per route; girth 1.6x native so the trails read heavier than the map's own dashes) in
+game's `map_dot` texture (native jitter, flips, and rotation noise, seeded per route;
+girth and spacing are sliders, and default to native girth at a tighter 10px pitch) in
 its own overlay layer inside `TheMap` (above the game's dotted connections, below the
 node icons). Colors come from `StsColors`; the >threshold union view is darkBlue at
 0.65 alpha — it is the entire display at act start, so it must not be faint. With five or fewer routes left, a legend panel above the native Share
@@ -261,8 +261,8 @@ of `_pins`, so they are never persisted and the eraser has nothing of its own to
 
 **Settings** (`PathingOptions` + `OptionsPanel`, a gear in the toolbar) persist to
 `PathingPlus.settings.json` in the game's user data dir and raise `Changed`, which
-redraws the open map. **Right-Drag Draws Paths** (on by default) is the only
-behavioural setting left, and it covers exactly one thing: right-drag is the game's
+redraws the open map. **Right-Drag Draws Paths** (on by default) is the only setting
+that changes how the mod plans, and it covers exactly one thing: right-drag is the game's
 shortcut for the quill, and with this on it picks up the path tool instead. Middle-drag
 is the eraser either way, since the eraser already means both. It was called *Override
 Drawing Controls* and did far more — it made the quill and the eraser plan routes, for

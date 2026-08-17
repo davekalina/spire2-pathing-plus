@@ -37,13 +37,13 @@ internal static class PathingOptions
     /// before you do: the pen moves and nothing happens until a node is caught. The
     /// trail answers the stroke immediately, then clears itself.
     /// </summary>
-    public static bool DrawingTrail { get; set; } = true;
+    public static bool DrawingTrail { get; set; }
 
     /// <summary>Seconds a length of trail takes to go from full ink to nothing.</summary>
-    public static float TrailFade { get; set; } = 1f;
+    public static float TrailFade { get; set; } = 0.5f;
 
     /// <summary>Trail girth. The game's own drawing line is 4.</summary>
-    public static float TrailWidth { get; set; } = 4f;
+    public static float TrailWidth { get; set; } = 12f;
 
     /// <summary>
     /// How far the pen travels between one point of the trail and the next. These are
@@ -51,7 +51,7 @@ internal static class PathingOptions
     /// buys smooth curves; it exists mainly so that a stroke's ink density does not
     /// depend on how fast the mouse reports.
     /// </summary>
-    public static float TrailSpacing { get; set; } = 4f;
+    public static float TrailSpacing { get; set; } = 1f;
 
     /// <summary>
     /// Whether the trail slides onto the map step it is nearest as it fades — the hint
@@ -64,17 +64,17 @@ internal static class PathingOptions
     /// ink simply fades where it was: ink flying across open parchment to reach a line
     /// claims a connection the stroke is not making.
     /// </summary>
-    public static float TrailSnapRadius { get; set; } = 150f;
+    public static float TrailSnapRadius { get; set; } = 80f;
 
     /// <summary>
     /// How near the pen must pass a node to catch it, in map units — the snap the tool
     /// actually plans with, as opposed to the trail's visual one. It also decides how
     /// near the pointer counts as being over a pinned node.
     /// </summary>
-    public static float SnapRadius { get; set; } = 55f;
+    public static float SnapRadius { get; set; } = 80f;
 
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
-    public static float DashWidth { get; set; } = 1.7f;
+    public static float DashWidth { get; set; } = 1f;
 
     /// <summary>Dash length along the path, before the per-dash variance.</summary>
     public static float DashLength { get; set; } = 2.7f;
@@ -83,10 +83,15 @@ internal static class PathingOptions
     public static float DashLengthVariance { get; set; } = 1.3f;
 
     /// <summary>Distance between dash centres. The native connections use 22.</summary>
-    public static float DashSpacing { get; set; } = 15f;
+    public static float DashSpacing { get; set; } = 10f;
 
-    /// <summary>Sideways shift between routes sharing an edge, so parallel runs stay legible.</summary>
-    public static float RouteSeparation { get; set; } = 10f;
+    /// <summary>
+    /// Sideways shift between routes sharing an edge. Zero by default: routes then lie
+    /// on the map's own lines rather than beside them, which reads as the map being
+    /// marked up rather than drawn over. Hit testing uses the same offset, so turning
+    /// it up keeps picking between neighbours honest.
+    /// </summary>
+    public static float RouteSeparation { get; set; }
 
     /// <summary>Landscape view: the share of the screen width the map is fitted into.</summary>
     public static float LandscapeFit { get; set; } = 0.95f;
@@ -108,18 +113,18 @@ internal static class PathingOptions
     {
         OverrideDrawing = true;
         StartWide = false;
-        DrawingTrail = true;
-        TrailFade = 1f;
-        TrailWidth = 4f;
-        TrailSpacing = 4f;
+        DrawingTrail = false;
+        TrailFade = 0.5f;
+        TrailWidth = 12f;
+        TrailSpacing = 1f;
         TrailSnap = true;
-        TrailSnapRadius = 150f;
-        SnapRadius = 55f;
-        DashWidth = 1.7f;
+        TrailSnapRadius = 80f;
+        SnapRadius = 80f;
+        DashWidth = 1f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
-        DashSpacing = 15f;
-        RouteSeparation = 10f;
+        DashSpacing = 10f;
+        RouteSeparation = 0f;
         LandscapeFit = 0.95f;
         LandscapeZoom = 1f;
         LandscapeShiftX = 30f;
