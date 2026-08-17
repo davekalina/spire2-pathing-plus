@@ -80,6 +80,21 @@ internal static class PathToolHotkey
     /// </summary>
     public static void EnsureTitle() => ModStrings.Ensure(LocTable, TitleKey, SettingsTitle);
 
+    /// <summary>
+    /// The key the shortcut is on right now, or null if it is unbound. Asked fresh each
+    /// time rather than cached, so a rebind shows up without anything having to watch
+    /// for it. <c>GetCurrentHotkey</c> picks the right map for the control scheme in
+    /// use, which is why keyboard-only mode reports its own binding rather than Q.
+    /// </summary>
+    public static string? CurrentKeyLabel() => Guard.Run("Reading the path tool shortcut", () =>
+    {
+        var key = NInputManager.Instance?.GetCurrentHotkey(Action) ?? Key.None;
+        // The game's own Settings rows print the enum name, warts and all — Key1 for
+        // the 1 key. Matching it beats inventing a prettier name the rebinding screen
+        // then contradicts.
+        return key == Key.None ? null : key.ToString();
+    }, null);
+
     private static void AddToRemappable(IReadOnlyList<StringName> inputs)
     {
         if (inputs.Any(existing => existing.ToString() == Action))

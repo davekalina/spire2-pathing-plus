@@ -233,7 +233,12 @@ internal sealed class PathToolButton : IDisposable
     /// </summary>
     private static HoverTip? Tip()
     {
-        if (!ModStrings.Ensure(TipTable, TipTitleKey, TipTitle) ||
+        // The shortcut goes in the title, the way the game's own two say "(Right-Click)"
+        // and "(Middle-Click)" — and it is read live, so a rebind is reflected the next
+        // time the tip is shown. Unbound simply says nothing.
+        var key = PathToolHotkey.CurrentKeyLabel();
+        var title = key is null ? TipTitle : $"{TipTitle} ({key})";
+        if (!ModStrings.Ensure(TipTable, TipTitleKey, title) ||
             !ModStrings.Ensure(TipTable, TipDescriptionKey, TipDescription))
             return null;
         return new HoverTip(

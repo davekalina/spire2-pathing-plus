@@ -29,6 +29,16 @@ internal static class PathingOptions
     /// </summary>
     public static bool StartWide { get; set; }
 
+    /// <summary>
+    /// Whether the path tool leaves ink under the cursor as it draws.
+    ///
+    /// The mod's stroke is invisible by design — the native line is suppressed and the
+    /// route is what appears — which is correct once you trust it and disconcerting
+    /// before you do: the pen moves and nothing happens until a node is caught. The
+    /// trail answers the stroke immediately, then clears itself.
+    /// </summary>
+    public static bool DrawingTrail { get; set; } = true;
+
     /// <summary>Dash girth across the path; 1.0 is the native dash's own width.</summary>
     public static float DashWidth { get; set; } = 1.7f;
 
@@ -64,6 +74,7 @@ internal static class PathingOptions
     {
         OverrideDrawing = true;
         StartWide = false;
+        DrawingTrail = true;
         DashWidth = 1.7f;
         DashLength = 2.7f;
         DashLengthVariance = 1.3f;
@@ -97,6 +108,7 @@ internal static class PathingOptions
 
         public bool? OverrideDrawing { get; set; }
         public bool? StartWide { get; set; }
+        public bool? DrawingTrail { get; set; }
         public float? DashWidth { get; set; }
         public float? DashLength { get; set; }
         public float? DashLengthVariance { get; set; }
@@ -119,6 +131,7 @@ internal static class PathingOptions
             return;
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
         StartWide = saved.StartWide ?? StartWide;
+        DrawingTrail = saved.DrawingTrail ?? DrawingTrail;
         DashWidth = saved.DashWidth ?? DashWidth;
         DashLength = saved.DashLength ?? DashLength;
         DashLengthVariance = saved.DashLengthVariance ?? DashLengthVariance;
@@ -135,6 +148,7 @@ internal static class PathingOptions
         {
             OverrideDrawing = OverrideDrawing,
             StartWide = StartWide,
+            DrawingTrail = DrawingTrail,
             DashWidth = DashWidth,
             DashLength = DashLength,
             DashLengthVariance = DashLengthVariance,

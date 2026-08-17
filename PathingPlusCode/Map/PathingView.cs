@@ -1,5 +1,6 @@
 using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.HoverTips;
@@ -303,7 +304,13 @@ internal sealed class PathingView : IDisposable
     }
 
     /// <summary>A stroke finished, so the next one starts with no node behind it.</summary>
-    public void OnStrokeEnded() => _lastDrawn = null;
+    public void OnStrokeEnded()
+    {
+        _lastDrawn = null;
+        // And with no ink behind it either, or the first mark of the next stroke is
+        // spaced against wherever the last one happened to end.
+        _lastTrailMark = null;
+    }
 
     /// <summary>The mouse took over; the controller's focus ring is no longer the cursor.</summary>
     public void OnPointerUsed() => _overlay.HideCursor();
@@ -628,6 +635,10 @@ internal sealed class PathingView : IDisposable
 
         if (!erasing)
         {
+            // Before the early return: the ink answers the stroke, not the outcome of
+            // it, so it has to appear over open map as much as over a node it catches.
+            LeaveTrailMark(cursor);
+
             if (nearest is null)
                 return;
 
@@ -767,15 +778,77 @@ internal sealed class PathingView : IDisposable
         return best.Edge;
     }
 
-    private static float DistanceToSegment(Vector2 point, Vector2 from, Vector2 to)
+    private static float DistanceToSegment(Vector2 point, Vector2 from, Vector2 to) =>
+        point.DistanceTo(ClosestPointOnSegment(point, from, to));
+
+    private static Vector2 ClosestPointOnSegment(Vector2 point, Vector2 from, Vector2 to)
     {
         var span = to - from;
         var lengthSquared = span.LengthSquared();
         if (lengthSquared <= 0.001f)
-            return point.DistanceTo(from);
+            return from;
         var t = Mathf.Clamp((point - from).Dot(span) / lengthSquared, 0f, 1f);
-        return point.DistanceTo(from + span * t);
+        return from + span * t;
     }
+
+    /// <summary>
+    /// Ink under the pen while the path tool draws, fading over a second and sliding
+    /// onto the map line it is nearest as it goes.
+    ///
+    /// Marks are spaced by distance rather than by event, because the funnel this comes
+    /// through fires once per motion event — so a slow careful stroke and a fast flick
+    /// would otherwise leave wildly different amounts of ink, and a stationary pen would
+    /// pile marks on one spot.
+    /// </summary>
+    private void LeaveTrailMark(Vector2 cursor)
+    {
+        if (!PathingOptions.DrawingTrail)
+            return;
+        if (_lastTrailMark is { } previous && previous.DistanceTo(cursor) < TrailSpacing)
+            return;
+        _lastTrailMark = cursor;
+        _overlay.AddTrailMark(cursor, SnapToEdge(cursor) ?? cursor, DrawingInk());
+    }
+
+    /// <summary>
+    /// The nearest point on any step of the map, or null if the pen is nowhere near
+    /// one. Null rather than a far-away point on purpose: a mark that flies across open
+    /// parchment to reach a line claims a connection the stroke is not making.
+    /// </summary>
+    private Vector2? SnapToEdge(Vector2 point)
+    {
+        var best = (Point: (Vector2?)null, Distance: TrailSnapRadius);
+        foreach (var (from, to) in _edgeSegments)
+        {
+            var closest = ClosestPointOnSegment(point, from, to);
+            var distance = point.DistanceTo(closest);
+            if (distance < best.Distance)
+                best = (closest, distance);
+        }
+        return best.Point;
+    }
+
+    /// <summary>
+    /// The colour the player's own character draws the map in, which is what the game
+    /// would have inked this stroke with. Black is <c>CharacterModel</c>'s own default
+    /// and reads on parchment, so it is the right answer when there is no run to ask.
+    /// </summary>
+    private static Color DrawingInk() => Guard.Run("Reading the drawing colour", () =>
+        LocalContext.GetMe(RunManager.Instance?.DebugOnlyGetState())?.Character.MapDrawingColor
+            ?? Colors.Black,
+        Colors.Black);
+
+    /// <summary>Distance the pen must travel between one mark of the trail and the next.</summary>
+    private const float TrailSpacing = 7f;
+
+    /// <summary>How near a map step must be for the trail to be drawn onto it.</summary>
+    private const float TrailSnapRadius = 150f;
+
+    /// <summary>Where the last mark went, so the next is spaced from it.</summary>
+    private Vector2? _lastTrailMark;
+
+    /// <summary>Every step of the map as a segment, for the trail to be drawn onto.</summary>
+    private IReadOnlyList<(Vector2 From, Vector2 To)> _edgeSegments = [];
 
     /// <summary>How near a stroke must pass a node to catch it, in map units.</summary>
     private const float SnapRadius = 55f;
@@ -831,6 +904,10 @@ internal sealed class PathingView : IDisposable
         // Pinnability comes from the full routes, so manual mode can still reach
         // every node ahead even when it draws only as far as the plan goes.
         _completeRoutes = routes;
+        // Every step the map offers, for the drawing trail to settle onto. Taken from
+        // the complete routes rather than the plan: the trail hints at where a line
+        // could go, which is the whole map, not the part already drawn.
+        _edgeSegments = EdgesOf(routes).ToList();
         _startId = startId;
         _pinnable = routes.SelectMany(route => route.Skip(1)).ToHashSet();
         _pins.RetainWhere(_pinnable.Contains);

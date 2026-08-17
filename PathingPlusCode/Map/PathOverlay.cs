@@ -66,10 +66,14 @@ internal sealed class PathOverlay : IDisposable
     private const double MarkerHold = 3.0;
     private const double MarkerFadeOut = 0.6;
 
+    /// <summary>How long a mark of the drawing trail lasts, from full ink to nothing.</summary>
+    private const double TrailLife = 1.0;
+
     private readonly Control _layer;
     private readonly Control _dotLayer;
     private readonly Control _pinLayer;
     private readonly Control _cursorLayer;
+    private readonly Control _trailLayer;
     private readonly List<List<(TextureRect Dot, Vector2 BaseScale)>> _routeDots = [];
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
@@ -91,6 +95,56 @@ internal sealed class PathOverlay : IDisposable
         _dotLayer = MakeSubLayer("Dots");
         _pinLayer = MakeSubLayer("Pins");
         _cursorLayer = MakeSubLayer("Cursor");
+        // Last, so the ink being laid down is never hidden under the plan it is making.
+        _trailLayer = MakeSubLayer("Trail");
+    }
+
+    /// <summary>
+    /// One mark of the drawing trail: ink where the pen is, fading to nothing over a
+    /// second and drifting onto <paramref name="target" /> as it goes.
+    ///
+    /// The mod's stroke is invisible by design — the native line is suppressed so the
+    /// route can be the drawing — which reads as a dead pen until the first node is
+    /// caught. This says "yes, that registered" without putting a scribble on the map:
+    /// the ink is gone a second later, and it has spent that second sliding onto the
+    /// line the stroke is really making, which is the thing worth teaching.
+    ///
+    /// Each mark owns its own tween and frees itself at the end of it, so the trail
+    /// needs no bookkeeping and no per-frame work.
+    /// </summary>
+    public void AddTrailMark(Vector2 at, Vector2 target, Color ink)
+    {
+        var half = new Vector2(8, 8);
+        // The map's own dash, small and spun at random: an ink speck in the hand the
+        // rest of the map is drawn in, rather than a geometric dot laid over it.
+        var random = new Random(unchecked((int)at.X * 397 ^ (int)at.Y));
+        var mark = new TextureRect
+        {
+            Texture = ResourceLoader.Load<Texture2D>(
+                "res://images/atlases/compressed.sprites/map/map_dot.tres",
+                null, ResourceLoader.CacheMode.Reuse),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Size = new Vector2(16, 16),
+            PivotOffset = half,
+            Position = at - half,
+            Rotation = (float)(random.NextDouble() * Math.Tau),
+            Scale = Vector2.One * (0.9f + (float)random.NextDouble() * 0.4f),
+            Modulate = ink,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _trailLayer.AddChild(mark);
+
+        var tween = mark.CreateTween().SetParallel();
+        // Quadratic ease-in: the ink holds while the pen is still near it and then goes
+        // quickly. A linear fade spends the whole second visibly dying, which reads as
+        // a smear rather than a mark.
+        tween.TweenProperty(mark, "modulate:a", 0f, TrailLife)
+            .SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
+        if (target != at)
+            tween.TweenProperty(mark, "position", target - half, TrailLife)
+                .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.InOut);
+        tween.Chain().TweenCallback(Callable.From(mark.QueueFree));
     }
 
     private Control MakeSubLayer(string name)

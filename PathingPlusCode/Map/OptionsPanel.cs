@@ -156,6 +156,8 @@ internal sealed class OptionsPanel : IDisposable
             () => PathingOptions.OverrideDrawing, v => PathingOptions.OverrideDrawing = v);
         AddToggle(_rows, "Start in Wide View",
             () => PathingOptions.StartWide, v => PathingOptions.StartWide = v);
+        AddToggle(_rows, "Drawing Trail",
+            () => PathingOptions.DrawingTrail, v => PathingOptions.DrawingTrail = v);
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.
