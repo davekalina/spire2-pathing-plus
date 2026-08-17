@@ -85,6 +85,14 @@ internal sealed class PathingView : IDisposable
     /// </summary>
     private readonly Dictionary<int, (string Id, float Distance)> _strokeFloors = [];
 
+    /// <summary>
+    /// The two ends of the step the eraser has just cut, for the next <see cref="Refresh" />
+    /// to check for having been left with no lines at all. Null the rest of the time,
+    /// which is what keeps this a consequence of erasing rather than a standing rule
+    /// against unconnected pins.
+    /// </summary>
+    private IReadOnlyList<string>? _strandedBy;
+
     /// <summary>The pin set as last drawn, so a redraw can tell a change from a repeat.</summary>
     private string _pinSignature = PinsChangedSentinel;
 
@@ -732,6 +740,10 @@ internal sealed class PathingView : IDisposable
         else if (EdgeNear(cursor) is { } edge)
         {
             _cut.Add(edge);
+            // Either end of the step just cut may have been holding on by it alone.
+            // The next Refresh is where that can be seen, since it is what recomputes
+            // the plan's lines.
+            _strandedBy = [edge.From, edge.To];
         }
         else
         {
@@ -1004,6 +1016,31 @@ internal sealed class PathingView : IDisposable
         // nothing joins, and it says so by sitting there with no line on it.
         _links = PathSolver.ConnectSelected(
             _adapter.Graph, startId, WithLastStep(terminals), _cut);
+
+        // A step was just rubbed out, so an end of it may have nothing left holding it
+        // in the plan. Only the two ends of that step are ever considered, and only
+        // straight after the cut: a pin with no lines is a perfectly good thing to be —
+        // it is what every plan's first click looks like — so the rule is "erasing the
+        // last line to a node takes the node too", not "a node without lines cannot
+        // exist". There is no cascade to run: a stranded node contributes no segments,
+        // so dropping it cannot strand anything else.
+        if (_strandedBy is { } ends)
+        {
+            _strandedBy = null;
+            var joined = _links.SelectMany(link => link).ToHashSet();
+            var stranded = ends.Where(id => _pins.IsSelected(id) && !joined.Contains(id)).ToList();
+            if (stranded.Count > 0)
+            {
+                foreach (var id in stranded)
+                {
+                    _pins.Remove(id);
+                    _cut.RemoveWhere(edge => edge.From == id || edge.To == id);
+                }
+                _links = PathSolver.ConnectSelected(
+                    _adapter.Graph, startId, WithLastStep(terminals), _cut);
+            }
+        }
+
         var assembled = PathSolver.AssembleRoutes(_links);
 
         // Everything the plan allows is still drawn; the legend's worth of best

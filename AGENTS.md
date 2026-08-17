@@ -266,6 +266,18 @@ next restores a cut step between *that pair only*; `_lastDrawn` tracks it and is
 cleared when the stroke ends (`MapDrawingStopPatch`), or a later stroke starting
 elsewhere would restore a link nobody drew over.
 
+**Erasing the last line to a node takes the node with it.** Cutting steps rather than
+nodes leaves a node selected with nothing joined to it, which draws as a pin sitting on
+an empty floor with no explanation. So after a cut, the two ends of *that step* are
+checked, and one left with no segment at all is deselected (with its own cuts). Two
+things scope it deliberately. It is **only after a cut**, and only **those two ends** —
+a pin with no lines is otherwise a perfectly good thing to be, since it is what every
+plan's first click looks like, and a rule against unconnected pins would delete it. And
+it needs **no cascade**: a stranded node contributes no segments, so dropping it cannot
+strand anything else (`A_node_with_no_steps_left_is_holding_up_no_other_step` pins that
+down, because the single-pass version is only correct while it holds). Erasing a *node*
+does not trigger it, which is the one gap: that can strand a neighbour the same way.
+
 **A cut lives only while both its ends are selected.** Deselecting either end forgets
 it, and selecting a node clears every cut at that node. A cut outliving its context is
 invisible state of exactly the kind the old node blocks were — two adjacent nodes
@@ -662,7 +674,9 @@ Game coupling that a game update can move (verify after every update):
   than doubling; draw straight through a node and on upward and it keeps its floor.
   A pin made earlier must survive a later stroke passing its floor.
 - The eraser doing both jobs: lifting pins and cutting steps, and rubbing out the
-  game's own ink in the same stroke.
+  game's own ink in the same stroke. Cutting the last step to a node must deselect it;
+  a node selected on its own, with no lines yet, must survive an erase somewhere else
+  on the map.
 - The quill left native: it draws ink, it plans nothing, and map nodes go back to not
   pulsing under it.
 - **Right-Drag Draws Paths** on and off: right-drag picking up the path tool versus the

@@ -86,6 +86,27 @@ public class ConnectSelectedTests
         Assert.Contains(segments, s => s[0] == "mid" && s[1] == "right");
     }
 
+    /// <summary>
+    /// Cutting the last step into a node leaves it selected but joined to nothing. The
+    /// view takes that as its cue to drop the selection, and it does so in a single
+    /// pass — which is only safe because a node with no segments cannot be holding
+    /// anyone else's up. This pins that down: "left" is stranded here, and every other
+    /// segment is exactly what it would be if "left" had never been selected.
+    /// </summary>
+    [Fact]
+    public void A_node_with_no_steps_left_is_holding_up_no_other_step()
+    {
+        var selected = new[] { "mid", "left", "right", "top" };
+        var cut = new[] { ("mid", "left"), ("left", "top") };
+
+        var stranded = PathSolver.ConnectSelected(Graph(), "here", selected, cut);
+        Assert.DoesNotContain(stranded, s => s.Contains("left"));
+
+        var withoutIt = PathSolver.ConnectSelected(
+            Graph(), "here", new[] { "mid", "right", "top" }, cut);
+        Assert.Equal(withoutIt, stranded);
+    }
+
     [Fact]
     public void Two_selected_nodes_the_map_does_not_join_draw_nothing()
     {
