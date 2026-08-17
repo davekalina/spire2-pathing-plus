@@ -57,8 +57,15 @@ internal sealed class RouteLegendPanel : IDisposable
     /// </summary>
     private const float BottomPad = 36f;
 
-    /// <summary>The widest the type names get, for the no-routes state.</summary>
-    private const float NamesWidth = 200f;
+    /// <summary>Point size of the type names, and the width to assume if the font is gone.</summary>
+    private const int NameFontSize = 24;
+    private const float FallbackNamesWidth = 200f;
+
+    /// <summary>
+    /// The lettering carries an 8px outline, which is drawn outside the box the font
+    /// measures. Without this the longest name's edge sits flush against the parchment.
+    /// </summary>
+    private const float NameOutlinePad = 10f;
 
     /// <summary>Margin past the last column, matching the inset on the left.</summary>
     private const float EdgePad = 18f;
@@ -207,10 +214,10 @@ internal sealed class RouteLegendPanel : IDisposable
             _panel.AddChild(cell);
 
             // With no routes to tabulate this is a plain legend, so read like one.
-            var name = MakeLabel(24, TypeNames[r], StsColors.legendText);
+            var name = MakeLabel(NameFontSize, TypeNames[r], StsColors.legendText);
             name.HorizontalAlignment = HorizontalAlignment.Left;
             name.Position = new Vector2(ColumnsStartX, FirstRowY + r * RowHeight);
-            name.Size = new Vector2(200, RowHeight);
+            name.Size = new Vector2(NamesWidth(), RowHeight);
             _typeNames.Add(name);
             _panel.AddChild(name);
         }
@@ -233,6 +240,30 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>Row names for the no-routes state, matching the native legend's wording.</summary>
     private static readonly string[] TypeNames =
         ["Unknown", "Merchant", "Treasure", "Rest Site", "Enemy", "Elite"];
+
+    /// <summary>
+    /// How much room the type names actually need, measured from the font rather than
+    /// reserved by a constant.
+    ///
+    /// With no routes yet the legend is nothing but those six words, so that constant
+    /// *was* the panel's width — and being generous enough for the longest of them in
+    /// any font left a third of the parchment blank at the very moment the panel has
+    /// least to say. Measured once and kept: the names never change, and this is read
+    /// on every render.
+    /// </summary>
+    private float _namesWidth;
+
+    private float NamesWidth()
+    {
+        if (_namesWidth > 0f)
+            return _namesWidth;
+        if (_font is { } font)
+            foreach (var name in TypeNames)
+                _namesWidth = Mathf.Max(_namesWidth,
+                    font.GetStringSize(name, HorizontalAlignment.Left, -1f, NameFontSize).X);
+        _namesWidth = _namesWidth > 0f ? _namesWidth + NameOutlinePad : FallbackNamesWidth;
+        return _namesWidth;
+    }
 
     private void OnTypeHot(int row)
     {
@@ -260,7 +291,7 @@ internal sealed class RouteLegendPanel : IDisposable
     {
         var width = columnCount > 0
             ? ColumnsStartX + columnCount * ColumnWidth + EdgePad
-            : ColumnsStartX + NamesWidth + EdgePad;
+            : ColumnsStartX + NamesWidth() + EdgePad;
         _panel.OffsetLeft = _panel.OffsetRight - width;
         _panel.OffsetTop = _panel.OffsetBottom - (FirstRowY + Rows.Length * RowHeight + BottomPad);
     }

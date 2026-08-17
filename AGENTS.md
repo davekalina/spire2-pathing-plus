@@ -566,6 +566,11 @@ empty parchment under the last row and a table five columns wide however few it 
 torn lower edge eats into its own rectangle**: a margin measured off the control's
 bounds ran the last row off the bottom of the parchment it was meant to sit on.
 
+With no routes yet the panel is nothing but the six type names, so its width is those
+names — **measured from the font** (`NamesWidth`), not reserved by a constant. A
+constant generous enough for the longest of them in any font left a third of the
+parchment blank at exactly the moment the panel has least to say.
+
 **A locked table folds down to the locked column**, so a chosen route stops charging
 the screen for four alternatives nobody is reading any more. The other routes keep
 being drawn on the map — this is about the panel's footprint, not about hiding
@@ -711,7 +716,8 @@ Game coupling that a game update can move (verify after every update):
   locked column under the cursor plainly different from a locked one that is not —
   check that last one with a pad, which is where it matters.
 - The panel's size against its contents at one, five and zero columns: no dead band
-  under the last row, no width kept for columns that are not there.
+  under the last row, no width kept for columns that are not there, and with no routes
+  at all no parchment kept to the right of the type names.
 - The fold: locking leaves the table full while the pointer stays on it, folds to the
   locked column once the pointer leaves, and expands the moment it is unlocked. The
   same with a pad, driven by focus leaving the panel rather than the pointer — and
