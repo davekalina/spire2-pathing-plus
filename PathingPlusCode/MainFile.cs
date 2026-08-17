@@ -18,7 +18,7 @@ public partial class MainFile : Node
     public const string ModName = "Pathing Plus";
 
     /// <summary>Keep in sync with the manifest version. Printed in-game and logged.</summary>
-    public const string Version = "v1.3.0";
+    public const string Version = "v1.3.1";
 
     /// <summary>The Steam handle, shown beside the version so screenshots identify themselves.</summary>
     public const string Author = "realtruegravy";
