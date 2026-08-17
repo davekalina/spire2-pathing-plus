@@ -417,6 +417,14 @@ normal map and then flips it, which reads as a glitch. `Toggled` therefore carri
 map while they tween leaves every icon visibly spinning into place on a map that has
 already arrived. Anything else that follows the view must honour that flag too.
 
+**The counter-spin follows the nodes, not just the view.** It is applied when the view
+*changes*, and a new act changes the **nodes** instead — `SetMap` frees every map point
+and builds new ones, which have never been turned. Arriving into a view that is already
+rotated, that toggle has already happened, so the new icons lie on their side with the
+map until the player cycles the view by hand. `Refresh` therefore snaps any node it has
+not seen before, which is also the only safe moment to capture a base: a node that new
+has not been counter-rotated yet, so what it reads is the real tilt.
+
 **A snap must kill the tween it is overriding.** Closing the map resets the view,
 which starts a 0.55s tween pulling every icon back to its base rotation; the next open
 snapped them a frame later and the surviving tween simply carried on writing
@@ -737,6 +745,9 @@ Game coupling that a game update can move (verify after every update):
   (boss at top) with its position and clamping.
 - Persistence: pins and locked route restored only onto their own map, pruned when
   stale, saved on every change; the Clear button empties the file's pin list too.
+- **Finish an act with Start in Wide View on.** The new act's icons must be upright
+  the moment its map appears, without touching the view — they are new nodes arriving
+  into an already-rotated view, which is its own case and not covered by toggling.
 - Closing the map from the wide view: no turn should be visible at all, and none of
   the act should sweep off the edge on the way out. Reopen immediately afterwards and
   the map must come back at full opacity, upright. Close from Normal too, where nothing

@@ -241,6 +241,24 @@ internal sealed class PathingView : IDisposable
         }
     }
 
+    /// <summary>
+    /// Forget everything remembered about the old map's icons — after **killing** the
+    /// tweens that are still turning them. Dropping the handles alone leaves those
+    /// tweens running with nothing left able to stop them, which is precisely the
+    /// failure the handles exist to prevent: a tween that outlives the snap meant to
+    /// override it goes on writing `rotation_degrees` and wins.
+    /// </summary>
+    private void ForgetIconRotations()
+    {
+        foreach (var tween in _iconTweens.Values)
+        {
+            if (tween.IsValid())
+                tween.Kill();
+        }
+        _iconTweens.Clear();
+        _iconBaseRotations.Clear();
+    }
+
     /// <summary>Any node hover tip left open when the view changes stays until dismissed; kill them.</summary>
     private void HideNodeHoverTips()
     {
@@ -618,8 +636,7 @@ internal sealed class PathingView : IDisposable
     public void OnMapChanged()
     {
         _zoom.Reset();
-        _iconBaseRotations.Clear();
-        _iconTweens.Clear();
+        ForgetIconRotations();
         _adapter = null;
         _pins.Clear();
         _cut.Clear();
@@ -1033,6 +1050,15 @@ internal sealed class PathingView : IDisposable
         }
 
         _nodesByCoord = ReadPointDictionary();
+
+        // Icons are counter-spun when the **view** changes, and a new act changes the
+        // nodes instead: `SetMap` frees every map point and builds new ones, which have
+        // never been turned. Arriving into a view that is already rotated, that toggle
+        // has already happened — so without this they lie on their side with the map
+        // until the player cycles the view by hand, which is how it was reported after
+        // finishing an act. Snapped, because they are appearing rather than moving.
+        if (_nodesByCoord.Values.Any(node => !_iconBaseRotations.ContainsKey(node)))
+            SyncIconRotation(instant: true);
 
         var start = state.CurrentMapPoint ?? map.StartingMapPoint;
         var startId = MapGraphAdapter.IdOf(start);
