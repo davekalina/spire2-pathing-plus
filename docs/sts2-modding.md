@@ -115,7 +115,7 @@ unchanged after the initial upload:
 | `tags` | `Tools & APIs` is reserved for mods that are genuinely tools or APIs |
 | `dependencies` | Workshop mod ids, taken from the Workshop URL — not manifest ids |
 | `contentDescriptors` | `nudity`, `frequent_violence`, `adult_only`, `gratuitous_nudity`, `general_mature` |
-| `minBranch` / `maxBranch` | e.g. `public-beta`, `public`. Mega Crit notes these behave oddly through the API and recommends setting them on the Steam web page instead. Omitting them means all versions are supported. |
+| `minBranch` / `maxBranch` | **Do not set these.** Verified on 2026-08-18: an upload carrying `minBranch` sat in `k_EItemUpdateStatusCommittingChanges` for minutes and then failed with `k_EResultTimeout`, leaving the item in an unknown state; the identical upload with the field removed succeeded immediately. Mega Crit's own note that they "behave oddly through the API" is putting it mildly. Omitting them means all versions are supported. Set the range by hand instead, on the item's **change notes** page (`steamcommunity.com/sharedfiles/filedetails/changelog/<id>`), where Steam attaches it to a specific item *version* — so it needs re-applying after every upload, and it only appears at all if the developer has enabled Game Branch Versions for the app. |
 
 Supported-branch enforcement happens Steam-side, not in the manifest: at load time the
 game queries `SteamUGC.GetSupportedGameVersions` for each subscribed item and refuses to

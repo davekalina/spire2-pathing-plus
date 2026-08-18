@@ -2,8 +2,7 @@
   "title": "Pathing Plus",
   "description": "Pathing Plus is designed to help you draw better paths (and hopefully make\r\nbetter pathing decisions as a result).\r\n\r\nFeatures include:\r\n\r\n- Use the draw and eraser tools to map out your path - straight lines snap to the path you draw.\r\n- Alternate map views - fit the entire map on screen vertically or horizontally.\r\n- Automatic route analysis: how many elites / fires / events are there on each path?\r\n- Improved gamepad support for the map features (left analog button to switch between draw and eraser tools, right trigger to switch between map views, scroll the map with the right analog stick (only if Steam Input is disabled))\r\n\r\nFeedback and feature requests always welcome!\r\n\r\nSource code and issue tracker:\r\nhttps://github.com/davekalina/spire2-pathing-plus",
   "visibility": "public",
-  "minBranch": "public-beta",
-  "changeNote": "- No gameplay changes. This build is marked as needing the beta branch.\n- Pathing Plus requires game version 0.111.0, which is only on public-beta; on the default branch the game refuses to load it. Steam should now keep it off that branch rather than handing over a mod that cannot start.",
+  "changeNote": "- No gameplay changes.\n- Note: Pathing Plus needs game version 0.111.0, which is currently only on the public-beta branch. On the default branch the game will refuse to load it.",
   "tags": [
     "QoL",
     "Utility"
