@@ -3,6 +3,7 @@ using MegaCrit.Sts2.addons.mega_text;
 using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Nodes.CommonUi;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -10,7 +11,7 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
 /// wider, transposed — node types as rows, one column per computed route (up to
 /// eight), each headed by a dash of its own line colour, or by a pin once that route
-/// is locked. Locking folds the table down to the locked column.
+/// is pinned. Looking away folds the table down to its pinned columns.
 ///
 /// Hovering or focusing a type icon fires the game's own
 /// <c>HighlightPointType</c> broadcast, exactly what the native legend items do.
@@ -85,11 +86,23 @@ internal sealed class RouteLegendPanel : IDisposable
     public event Action<int>? ColumnHot;
     public event Action<int>? ColumnCold;
     public event Action<int>? ColumnLockToggled;
+    public event Action? ClearUnpinned;
+    public event Action<int>? PageChanged;
 
     private readonly Control _panel;
     private HotkeyGlyph? _hotkeyGlyph;
     private readonly ColorRect _rowMark;
     private readonly Font? _font;
+    private readonly LegendActionButton _clearUnpinned;
+    private readonly LegendActionButton _previousPage;
+    private readonly LegendActionButton _nextPage;
+    private readonly MegaLabel _pageLabel;
+    private int _page;
+    private int _pageCount = 1;
+    private int _selected = -1;
+    private const float ActionHeight = 34f;
+    private const float ActionGap = 8f;
+    private const float ActionInset = 24f;
     private readonly List<Control> _iconCells = [];
     private readonly List<MegaLabel> _typeNames = [];
     private readonly List<Control> _columns = [];
@@ -113,19 +126,18 @@ internal sealed class RouteLegendPanel : IDisposable
     private Texture2D? _pin;
 
     private int _hot = -1;
-    private int _locked = -1;
+    private IReadOnlySet<int> _pinned = new HashSet<int>();
+    private int _pinnedCount;
 
     /// <summary>
-    /// Locked, and folded down to that one column — or waiting to be. The fold is held
+    /// Pinned, and folded down to the pinned columns — or waiting to be. The fold is held
     /// back until the player looks away, because collapsing the table under a pointer
     /// that is still choosing from it moves the very thing being read.
     /// </summary>
     private bool _foldPending;
     private bool _folded;
 
-    /// <summary>The route shown on its own, or null while the whole table is up.</summary>
-    private int? FoldedRoute =>
-        _folded && _locked >= 0 && _locked < _routes.Count ? _locked : null;
+    private bool _expandPending;
 
     private Texture2D? PinMark()
     {
@@ -134,8 +146,8 @@ internal sealed class RouteLegendPanel : IDisposable
         return _pin;
     }
 
-    /// <summary>The five that earned a column, and the headerless one under the cursor.</summary>
-    private IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> _routes = [];
+    /// <summary>The current page (including the pin), and the hover-only preview.</summary>
+    private IReadOnlyList<(Color Color, string Key, IReadOnlyList<int> Counts)> _routes = [];
     private (Color Color, IReadOnlyList<int> Counts)? _preview;
 
     public RouteLegendPanel(Control screen)
@@ -204,7 +216,11 @@ internal sealed class RouteLegendPanel : IDisposable
             });
             cell.MouseEntered += () => Guard.Run("Type hover", () => OnTypeHot(row));
             cell.MouseExited += () => Guard.Run("Type unhover", OnTypeCold);
-            cell.FocusEntered += () => Guard.Run("Type focus", () => OnTypeHot(row));
+            cell.FocusEntered += () => Guard.Run("Type focus", () =>
+            {
+                ShowAlternativesForController();
+                OnTypeHot(row);
+            });
             cell.FocusExited += () => Guard.Run("Type unfocus", () =>
             {
                 OnTypeCold();
@@ -233,6 +249,21 @@ internal sealed class RouteLegendPanel : IDisposable
         });
 
         screen.AddChild(_panel);
+        using var labelStream = typeof(RouteLegendPanel).Assembly.GetManifestResourceStream("clear-unpinned.txt")
+            ?? throw new InvalidOperationException("Missing clear-unpinned.txt resource.");
+        using var labelReader = new System.IO.StreamReader(labelStream);
+        _clearUnpinned = new LegendActionButton("ClearUnpinned", labelReader.ReadToEnd().Trim(), _font,
+            () => ClearUnpinned?.Invoke());
+        _previousPage = new LegendActionButton("PreviousRoutes", "‹", _font, () => PageChanged?.Invoke(-1));
+        _nextPage = new LegendActionButton("NextRoutes", "›", _font, () => PageChanged?.Invoke(1));
+        _pageLabel = MakeLabel(18, "", StsColors.legendText);
+        foreach (var action in new[] { _clearUnpinned, _previousPage, _nextPage })
+        {
+            _panel.AddChild(action.Control);
+            action.Control.FocusExited += NoteFocusChanged;
+            action.Control.FocusEntered += ShowAlternativesForController;
+        }
+        _panel.AddChild(_pageLabel);
         FitPanel(0);
         WireIconFocus();
     }
@@ -292,17 +323,56 @@ internal sealed class RouteLegendPanel : IDisposable
         var width = columnCount > 0
             ? ColumnsStartX + columnCount * ColumnWidth + EdgePad
             : ColumnsStartX + NamesWidth() + EdgePad;
+        var clearing = _pinnedCount > 0;
+        var paging = _routes.Count > 0 && _pageCount > 1;
+        if (clearing || paging)
+            width = Math.Max(width, 208f);
+        var actionY = FirstRowY + Rows.Length * RowHeight + ActionGap;
+        var footerHeight = clearing ? ActionHeight + ActionGap : 0f;
+        if (paging)
+            footerHeight += ActionHeight + ActionGap;
         _panel.OffsetLeft = _panel.OffsetRight - width;
-        _panel.OffsetTop = _panel.OffsetBottom - (FirstRowY + Rows.Length * RowHeight + BottomPad);
+        _panel.OffsetTop = _panel.OffsetBottom - (FirstRowY + Rows.Length * RowHeight + BottomPad + footerHeight);
+        SetActionVisible(_clearUnpinned.Control, clearing);
+        SetActionVisible(_previousPage.Control, paging);
+        SetActionVisible(_nextPage.Control, paging);
+        _pageLabel.Visible = paging;
+        _clearUnpinned.Control.Position = new Vector2(ActionInset, actionY);
+        _clearUnpinned.Control.Size = new Vector2(width - ActionInset * 2f, ActionHeight);
+        _clearUnpinned.SetAvailable(clearing);
+        var pageY = actionY + (clearing ? ActionHeight + ActionGap : 0f);
+        _previousPage.Control.Position = new Vector2(ActionInset, pageY);
+        _previousPage.Control.Size = new Vector2(ActionHeight, ActionHeight);
+        _nextPage.Control.Position = new Vector2(width - ActionInset - ActionHeight, pageY);
+        _nextPage.Control.Size = new Vector2(ActionHeight, ActionHeight);
+        _previousPage.SetAvailable(_page > 0);
+        _nextPage.SetAvailable(_page + 1 < _pageCount);
+        _pageLabel.Position = new Vector2(ActionInset + ActionHeight, pageY);
+        _pageLabel.Size = new Vector2(width - 2f * (ActionInset + ActionHeight), ActionHeight);
+        _pageLabel.Text = $"{_page + 1} / {_pageCount}";
     }
 
-    /// <summary>One column per route: its colour, its letter, its counts in row order.</summary>
-    public void SetRoutes(IReadOnlyList<(Color Color, string Letter, IReadOnlyList<int> Counts)> routes)
+    private void SetActionVisible(Control action, bool visible)
     {
+        if (!visible && action.HasFocus())
+            _iconCells[0].GrabFocus();
+        action.Visible = visible;
+    }
+
+    /// <summary>One column per route: its colour, stable identity, and counts in row order.</summary>
+    public void SetRoutes(IReadOnlyList<(Color Color, string Key, IReadOnlyList<int> Counts)> routes,
+        IReadOnlySet<int>? pinned = null, int selected = -1, int page = 0, int pageCount = 1,
+        int pinnedCount = 0)
+    {
+        var focusedKey = FocusedRouteKey();
         _routes = routes;
+        _selected = selected;
+        _page = page;
+        _pageCount = pageCount;
+        UpdatePins(pinned ?? new HashSet<int>(), pinnedCount);
         _preview = null;
         _hot = -1;
-        Render();
+        Render(focusedKey);
     }
 
     /// <summary>
@@ -327,8 +397,18 @@ internal sealed class RouteLegendPanel : IDisposable
         Render();
     }
 
-    private void Render()
+    private string? FocusedRouteKey()
     {
+        var column = _columns.FindIndex(control => control.HasFocus());
+        if (column < 0)
+            return null;
+        var route = _columnRoutes[column];
+        return route >= 0 && route < _routes.Count ? _routes[route].Key : null;
+    }
+
+    private void Render(string? focusedKey = null)
+    {
+        focusedKey ??= FocusedRouteKey();
         foreach (var column in _columns)
         {
             _panel.RemoveChild(column);
@@ -340,17 +420,13 @@ internal sealed class RouteLegendPanel : IDisposable
         _columnRoutes.Clear();
         _columnKeys.Clear();
 
-        // Folded, the table is the locked route and nothing else — the rest are still
-        // drawn on the map, they have simply stopped asking for room here. The preview
-        // column survives the fold on purpose: it only exists while the pointer is on
-        // some other route out on the map, and holding it against the locked one is
-        // exactly the comparison being made at that moment.
-        var routes = new List<(int Route, Color Color, string Letter, IReadOnlyList<int> Counts)>();
-        if (FoldedRoute is { } only)
-            routes.Add((only, _routes[only].Color, _routes[only].Letter, _routes[only].Counts));
-        else
-            for (var i = 0; i < _routes.Count; i++)
-                routes.Add((i, _routes[i].Color, _routes[i].Letter, _routes[i].Counts));
+        // A folded page keeps every pin on that page and the explicitly selected
+        // candidate. A page of alternatives remains usable even if all pins are on
+        // another page. Hover previews can still be compared alongside the pins.
+        var routes = new List<(int Route, Color Color, string Key, IReadOnlyList<int> Counts)>();
+        for (var i = 0; i < _routes.Count; i++)
+            if (!_folded || _pinned.Count == 0 || _pinned.Contains(i) || i == _selected)
+                routes.Add((i, _routes[i].Color, _routes[i].Key, _routes[i].Counts));
         if (_preview is { } extra)
             routes.Add((-1, extra.Color, "", extra.Counts));
 
@@ -367,7 +443,7 @@ internal sealed class RouteLegendPanel : IDisposable
             var interactive = index >= 0;
             var column = new Control
             {
-                Name = $"Route{routes[i].Letter}",
+                Name = $"Route{i}",
                 Position = new Vector2(ColumnsStartX + i * ColumnWidth, HeaderY),
                 Size = new Vector2(ColumnWidth, FirstRowY - HeaderY + Rows.Length * RowHeight),
                 FocusMode = Control.FocusModeEnum.All,
@@ -416,7 +492,11 @@ internal sealed class RouteLegendPanel : IDisposable
             {
                 column.MouseEntered += () => Guard.Run("Column hover", () => ColumnHot?.Invoke(index));
                 column.MouseExited += () => Guard.Run("Column unhover", () => ColumnCold?.Invoke(index));
-                column.FocusEntered += () => Guard.Run("Column focus", () => ColumnHot?.Invoke(index));
+                column.FocusEntered += () => Guard.Run("Column focus", () =>
+                {
+                    ShowAlternativesForController();
+                    ColumnHot?.Invoke(index);
+                });
                 column.FocusExited += () => Guard.Run("Column unfocus", () =>
                 {
                     ColumnCold?.Invoke(index);
@@ -427,7 +507,20 @@ internal sealed class RouteLegendPanel : IDisposable
                     var selected = inputEvent.IsActionPressed(MegaInput.select) ||
                         inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
                     if (selected)
-                        ColumnLockToggled?.Invoke(index);
+                    {
+                        column.AcceptEvent();
+                        var key = routes.First(route => route.Route == index).Key;
+                        Callable.From(() => Guard.Run("Selecting a legend column", () =>
+                        {
+                            if (!GodotObject.IsInstanceValid(_panel) || !_panel.IsVisibleInTree())
+                                return;
+                            var current = _routes.ToList().FindIndex(route => route.Key == key);
+                            if (current >= 0)
+                                ColumnLockToggled?.Invoke(current);
+                        })).CallDeferred();
+                    }
+                    else if (inputEvent.IsActionReleased(MegaInput.select))
+                        column.AcceptEvent();
                 });
             }
             else
@@ -442,19 +535,23 @@ internal sealed class RouteLegendPanel : IDisposable
 
         RefreshMarks();
         WireIconFocus();
+        if (focusedKey is not null)
+        {
+            var index = _columnRoutes.FindIndex(route => route >= 0 && _routes[route].Key == focusedKey);
+            var target = index >= 0 ? _columns[index] : _columns.FirstOrDefault(control => control.FocusMode != Control.FocusModeEnum.None);
+            (target ?? _iconCells[0]).GrabFocus();
+        }
     }
 
     /// <summary>
-    /// Which route is locked, and with it whether the table folds down to that one
-    /// column. Locking only *arms* the fold — see <see cref="LookedAway" />. Unlocking
-    /// undoes it at once: having asked for the rest back, the player should not have to
-    /// go and look somewhere else before they arrive.
+    /// Pinning arms the fold. Removing a pin expands the page for comparison.
     /// </summary>
-    public void SetLocked(int index)
+    private void UpdatePins(IReadOnlySet<int> pinned, int count)
     {
-        var before = FoldedRoute;
-        _locked = index;
-        if (index < 0)
+        var previousCount = _pinnedCount;
+        _pinned = pinned;
+        _pinnedCount = count;
+        if (count == 0 || count < previousCount)
         {
             _foldPending = false;
             _folded = false;
@@ -463,11 +560,34 @@ internal sealed class RouteLegendPanel : IDisposable
         {
             _foldPending = true;
         }
+    }
 
-        if (FoldedRoute != before)
+    public void Expand()
+    {
+        _foldPending = false;
+        _folded = false;
+    }
+
+    /// <summary>Re-entering the legend makes it possible to add another pin.</summary>
+    private void ShowAlternativesForController() => Guard.Run("Showing routes on controller focus", () =>
+    {
+        if (NControllerManager.Instance?.IsUsingDirectionalNavigation == true)
+            ShowAlternatives();
+    });
+
+    public void ShowAlternatives()
+    {
+        if (!_folded || _expandPending)
+            return;
+        _expandPending = true;
+        Callable.From(() => Guard.Run("Expanding route choices", () =>
+        {
+            _expandPending = false;
+            if (!GodotObject.IsInstanceValid(_panel) || !_panel.IsVisibleInTree() || !_folded)
+                return;
+            Expand();
             Render();
-        else
-            RefreshMarks();
+        })).CallDeferred();
     }
 
     /// <summary>
@@ -516,8 +636,8 @@ internal sealed class RouteLegendPanel : IDisposable
             // column zero's route.
             var route = _columnRoutes[i];
             // The preview column is only ever there because the pointer is on its route.
-            var locked = route >= 0 && route == _locked;
-            var hot = route < 0 || route == _hot;
+            var locked = route >= 0 && _pinned.Contains(route);
+            var hot = route < 0 || route == _hot || route == _selected;
 
             // The key: the route's dash normally, the pin ring once it is locked. Set
             // before the early return below, since every column has one whether or not
@@ -624,6 +744,11 @@ internal sealed class RouteLegendPanel : IDisposable
     private void WireIconFocus()
     {
         var self = new NodePath(".");
+        var columns = _columns.Where(control => control.FocusMode != Control.FocusModeEnum.None).ToList();
+        var clear = _clearUnpinned.Control.Visible ? _clearUnpinned.Control : null;
+        var previous = _previousPage.Control.Visible ? _previousPage.Control : null;
+        var next = _nextPage.Control.Visible ? _nextPage.Control : null;
+        var firstFooter = clear ?? previous;
         // Relative to the control that carries the property, never to the panel: these
         // live one level down, so a path measured from the panel resolves short and
         // Godot rejects it outright ("Neighbor focus node path is invalid").
@@ -636,18 +761,35 @@ internal sealed class RouteLegendPanel : IDisposable
             var cell = _iconCells[r];
             cell.FocusNeighborLeft = self;
             cell.FocusNeighborTop = r > 0 ? cell.GetPathTo(_iconCells[r - 1]) : Up(cell);
-            cell.FocusNeighborBottom = r < _iconCells.Count - 1 ? cell.GetPathTo(_iconCells[r + 1]) : self;
-            cell.FocusNeighborRight = _columns.Count > 0 ? cell.GetPathTo(_columns[0]) : self;
+            cell.FocusNeighborBottom = r < _iconCells.Count - 1 ? cell.GetPathTo(_iconCells[r + 1])
+                : firstFooter is not null ? cell.GetPathTo(firstFooter) : self;
+            cell.FocusNeighborRight = columns.Count > 0 ? cell.GetPathTo(columns[0]) : self;
         }
-        for (var i = 0; i < _columns.Count; i++)
+        for (var i = 0; i < columns.Count; i++)
         {
-            var column = _columns[i];
+            var column = columns[i];
             column.FocusNeighborTop = Up(column);
-            column.FocusNeighborBottom = self;
+            column.FocusNeighborBottom = firstFooter is not null ? column.GetPathTo(firstFooter) : self;
             column.FocusNeighborLeft = i > 0
-                ? column.GetPathTo(_columns[i - 1])
+                ? column.GetPathTo(columns[i - 1])
                 : _iconCells.Count > 0 ? column.GetPathTo(_iconCells[0]) : self;
-            column.FocusNeighborRight = i < _columns.Count - 1 ? column.GetPathTo(_columns[i + 1]) : self;
+            column.FocusNeighborRight = i < columns.Count - 1 ? column.GetPathTo(columns[i + 1]) : self;
+        }
+        if (clear is not null)
+        {
+            clear.FocusNeighborTop = clear.GetPathTo(columns.FirstOrDefault() ?? _iconCells[^1]);
+            clear.FocusNeighborBottom = previous is not null ? clear.GetPathTo(previous) : self;
+            clear.FocusNeighborLeft = clear.FocusNeighborRight = self;
+        }
+        if (previous is not null && next is not null)
+        {
+            var pageAbove = clear ?? columns.FirstOrDefault() ?? _iconCells[^1];
+            previous.FocusNeighborTop = previous.GetPathTo(pageAbove);
+            previous.FocusNeighborBottom = previous.FocusNeighborLeft = self;
+            previous.FocusNeighborRight = previous.GetPathTo(next);
+            next.FocusNeighborTop = next.GetPathTo(pageAbove);
+            next.FocusNeighborBottom = next.FocusNeighborRight = self;
+            next.FocusNeighborLeft = next.GetPathTo(previous);
         }
     }
 

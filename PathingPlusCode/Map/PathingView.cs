@@ -51,6 +51,13 @@ internal sealed class PathingView : IDisposable
     private MapGraphAdapter? _adapter;
     private Dictionary<MapCoord, NMapPoint>? _nodesByCoord;
     private IReadOnlyList<IReadOnlyList<string>> _shownRoutes = [];
+    private IReadOnlyList<IReadOnlyList<string>> _rankedRoutes = [];
+    private IReadOnlyList<IReadOnlyList<string>> _incompleteRoutes = [];
+    private IReadOnlyList<string>? _selectedRouteIds;
+    private int _routePage;
+    private int _routePageCount = 1;
+    private Vector2? _routePress;
+    private bool _routePressDragged;
 
     /// <summary>Manual-mode links between pinned floors; what the eraser rubs out.</summary>
     private IReadOnlyList<IReadOnlyList<string>> _links = [];
@@ -100,9 +107,11 @@ internal sealed class PathingView : IDisposable
     private const string PinsChangedSentinel = "";
 
     private string _mapKey = "";
-    private IReadOnlyList<string>? _lockedRouteIds;
+    private IReadOnlyList<IReadOnlyList<string>> _pinnedRoutes = [];
+    private IReadOnlyList<IReadOnlyList<string>>? _retainedRoutes;
+    private string _retainedPlanSignature = "";
     private int _hotRoute = -1;
-    private int _lockedRoute = -1;
+    private HashSet<int> _pinnedRouteIndices = [];
 
     /// <summary>The drawn route under the mouse, and whether a pinned node is too.</summary>
     private int _pointerRoute = -1;
@@ -170,6 +179,14 @@ internal sealed class PathingView : IDisposable
             OnRouteCold(index);
         });
         _legend.ColumnLockToggled += index => Guard.Run("Locking a legend route", () => OnRouteLockToggled(index));
+        _legend.ClearUnpinned += () => Guard.Run("Clearing unpinned routes", ClearUnpinnedRoutes);
+        _legend.PageChanged += direction => Guard.Run("Browsing planned routes", () =>
+        {
+            _selectedRouteIds = null;
+            _routePage += direction;
+            _legend.Expand();
+            RefreshRouteDisplay();
+        });
         _navigator.NodeFocused += node => Guard.Run("Showing the map cursor", () =>
         {
             // The gold ring is a controller aid; with a mouse the pointer is the cursor.
@@ -421,10 +438,20 @@ internal sealed class PathingView : IDisposable
     /// </summary>
     public void OnPointerMoved(Vector2 globalPoint) => Guard.Run("Map hover", () =>
     {
+        if (_routePress is { } press && press.DistanceTo(globalPoint) > 6f)
+            _routePressDragged = true;
         if (!_screen.IsOpen)
             return;
         if (_legend.Covers(globalPoint))
+        {
+            _legend.ShowAlternatives();
+            _pointerRoute = -1;
+            _pointerBackdrop = -1;
+            _overlay.ClearTrace();
+            _legend.ClearPreview();
+            ApplyHighlight();
             return;
+        }
         // Off the legend: a route locked a moment ago can fold the table down to itself
         // now that the pointer has finished with it. Idempotent, so calling it on every
         // move out here costs nothing.
@@ -471,17 +498,60 @@ internal sealed class PathingView : IDisposable
     });
 
     /// <summary>
+    /// A click on a route promotes it from a hover preview to a persistent column.
+    /// Observe the press without consuming it so dragging still pans the map.
+    /// Called only from the map's own GUI handler, never through another panel.
+    /// </summary>
+    public bool OnRoutePointerButton(InputEvent inputEvent)
+    {
+        if (inputEvent is not InputEventMouseButton { ButtonIndex: MouseButton.Left } button)
+            return false;
+        var press = _routePress;
+        if (button.Pressed)
+        {
+            _routePress = null;
+            _routePressDragged = false;
+        }
+        else
+            _routePress = null;
+        if (!_screen.IsOpen || _screen.IsTraveling ||
+            !ActiveScreenContext.Instance.IsCurrent(_screen) ||
+            _screen.Drawings.GetLocalDrawingMode() != DrawingMode.None ||
+            MapPointFromGlobal(button.GlobalPosition) is not { } point || OverNode(point))
+            return false;
+        if (button.Pressed)
+        {
+            _routePress = button.GlobalPosition;
+            return false;
+        }
+        if (press is null || _routePressDragged || press.Value.DistanceTo(button.GlobalPosition) > 6f)
+            return false;
+        var shown = RouteNear(point);
+        var backdrop = shown < 0 ? BackdropNear(point) : -1;
+        var route = shown >= 0 ? _shownRoutes[shown]
+            : backdrop >= 0 ? _backdropRoutes[backdrop] : null;
+        // An unfinished stroke remains a preview until it reaches the end of the act.
+        if (route is null || !_rankedRoutes.Contains(route))
+            return false;
+        Callable.From(() => Guard.Run("Selecting a route on the map", () =>
+        {
+            if (!_screen.IsOpen)
+                return;
+            _selectedRouteIds = route;
+            RefreshRouteDisplay();
+        })).CallDeferred();
+        return true;
+    }
+
+    /// <summary>
     /// Hover deepens a route's own colour; a locked one goes to ink. The pointer wins
     /// over the legend, since it is the more recent statement of interest.
     /// </summary>
     private void ApplyHighlight()
     {
-        if (_pointerRoute >= 0)
-            _overlay.SetHighlight(_pointerRoute, PathOverlay.Emphasis.Hover);
-        else if (_hotRoute >= 0)
-            _overlay.SetHighlight(_hotRoute, PathOverlay.Emphasis.Hover);
-        else
-            _overlay.SetHighlight(_lockedRoute, PathOverlay.Emphasis.Lock);
+        var hover = _pointerRoute >= 0 ? _pointerRoute
+            : _hotRoute >= 0 ? _hotRoute : IndexOfRoute(_selectedRouteIds);
+        _overlay.SetHighlights(_pinnedRouteIndices, hover);
     }
 
     /// <summary>
@@ -635,7 +705,11 @@ internal sealed class PathingView : IDisposable
         _lastDrawn = null;
         _strokeFloors.Clear();
         _hotRoute = -1;
-        _lockedRoute = -1;
+        _pinnedRouteIndices.Clear();
+        _pinnedRoutes = [];
+        _retainedRoutes = null;
+        _selectedRouteIds = null;
+        _routePage = 0;
         if (_screen.IsOpen)
             Refresh();
     }
@@ -1045,16 +1119,28 @@ internal sealed class PathingView : IDisposable
             _pins.Clear();
             _cut.Clear();
             _lastDrawn = null;
-            _lockedRouteIds = null;
+            _pinnedRoutes = [];
+            _retainedRoutes = null;
+            _selectedRouteIds = null;
+            _routePage = 0;
             // Same map as a previous session: the pins belong to it, bring them back.
             if (PinStore.Load() is { } saved && saved.MapKey == _mapKey)
             {
                 foreach (var id in saved.Pins)
                     _pins.Toggle(id);
                 _cut = [.. (saved.Cut ?? []).Select(PinStore.ParseEdge).OfType<(string, string)>()];
-                _lockedRouteIds = saved.LockedRoute;
+                _pinnedRoutes = saved.ReadPinnedRoutes();
+                _retainedRoutes = saved.RetainedRoutes;
+                _retainedPlanSignature = PlanSignature();
             }
         }
+
+        // Clearing alternatives retains exact routes even when two pins share a
+        // junction and their combined edges could assemble extra combinations.
+        // An actual draw/erase edit resumes normal route assembly. Travel pruning
+        // happens below this check, so travelling does not count as an edit.
+        if (_retainedRoutes is not null && PlanSignature() != _retainedPlanSignature)
+            _retainedRoutes = null;
 
         _nodesByCoord = ReadPointDictionary();
 
@@ -1138,7 +1224,7 @@ internal sealed class PathingView : IDisposable
         // Everything the plan allows is still drawn; the legend's worth of best
         // complete ones get a colour and a column. Ranked by what a route is
         // usually chosen for: elites, then fires, then shops.
-        var ranked = assembled
+        _rankedRoutes = assembled
             .Where(Complete)
             .Select(route => (Route: route, Counts: LegendCounts(route)))
             .OrderByDescending(entry => entry.Counts[5])
@@ -1146,25 +1232,14 @@ internal sealed class PathingView : IDisposable
             .ThenByDescending(entry => entry.Counts[1])
             .Select(entry => entry.Route)
             .ToList();
-        _shownRoutes = ranked.Take(PathSolver.LegendThreshold).ToList();
-        _backdropRoutes = ranked.Skip(PathSolver.LegendThreshold)
-            .Concat(assembled.Where(route => !Complete(route)))
-            .ToList();
-        _hotRoute = -1;
-        // The redraw clears the trace with the dots it was drawn over, so forget what
-        // the pointer was on: the next movement decides again from scratch.
-        _pointerRoute = -1;
-        _pointerBackdrop = -1;
-
-        // A locked route survives recomputes (and restarts) as long as it still
-        // exists — including as the tail of itself after advancing a floor along it.
-        // Deviating off it means the new position is not on the stored route, no
-        // suffix matches, and the lock clears.
-        _lockedRoute = IndexOfRoute(_lockedRouteIds);
-        _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
-
-        UpdateOverlay();
-        UpdateLegend();
+        if (_retainedRoutes is not null)
+        {
+            _retainedRoutes = RouteDisplay.MatchRemaining(_rankedRoutes, _retainedRoutes);
+            var retained = _retainedRoutes.ToHashSet();
+            _rankedRoutes = _rankedRoutes.Where(retained.Contains).ToList();
+        }
+        _incompleteRoutes = assembled.Where(route => !Complete(route)).ToList();
+        RefreshRouteDisplay();
         // With travel live, the game is already marking the reachable next nodes —
         // a pin ring on one of them reads as "you are here". The pin keeps filtering;
         // only its ring yields until travel resolves the step.
@@ -1177,9 +1252,27 @@ internal sealed class PathingView : IDisposable
                 .Select(EndpointOf).OfType<Vector2>(),
             pinsChanged);
         ApplyHighlight();
-        _legend.SetLocked(_lockedRoute);
         _navigator.SetNodes(BuildNavNodes(), _zoom.Rotated);
+        _retainedPlanSignature = PlanSignature();
         PersistState();
+    }
+
+    private void RefreshRouteDisplay()
+    {
+        var display = RouteDisplay.Arrange(_rankedRoutes, _pinnedRoutes, _selectedRouteIds, _routePage);
+        _shownRoutes = display.Shown;
+        _backdropRoutes = display.Backdrop.Concat(_incompleteRoutes).ToList();
+        _pinnedRoutes = display.Pinned;
+        _selectedRouteIds = display.Selected;
+        _routePage = display.Page;
+        _routePageCount = display.PageCount;
+        _pinnedRouteIndices = _pinnedRoutes.Select(IndexOfRoute).Where(index => index >= 0).ToHashSet();
+        _hotRoute = -1;
+        _pointerRoute = -1;
+        _pointerBackdrop = -1;
+        UpdateOverlay();
+        UpdateLegend();
+        ApplyHighlight();
     }
 
     private int IndexOfRoute(IReadOnlyList<string>? ids)
@@ -1208,13 +1301,19 @@ internal sealed class PathingView : IDisposable
     {
         if (_mapKey.Length == 0)
             return;
-        PinStore.SaveIfChanged(new PinStore.Saved(
+        PinStore.SaveIfChanged(new SavedPlan(
             _mapKey,
             _pins.Ids.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
-            _lockedRouteIds?.ToArray(),
             null,
-            _cut.Select(PinStore.FormatEdge).OrderBy(e => e, StringComparer.Ordinal).ToArray()));
+            null,
+            _cut.Select(PinStore.FormatEdge).OrderBy(e => e, StringComparer.Ordinal).ToArray(),
+            _pinnedRoutes.Select(route => route.ToArray()).ToArray(),
+            _retainedRoutes?.Select(route => route.ToArray()).ToArray()));
     }
+
+    private string PlanSignature() =>
+        string.Join("|", _pins.Ids.OrderBy(id => id, StringComparer.Ordinal)) + ":" +
+        string.Join("|", _cut.Select(PinStore.FormatEdge).OrderBy(edge => edge, StringComparer.Ordinal));
 
     /// <summary>
     /// Every drawn node, for the d-pad grid — the whole map, not just surviving
@@ -1264,6 +1363,7 @@ internal sealed class PathingView : IDisposable
 
     private void OnScreenClosed() => Guard.Run("Resetting on map close", () =>
     {
+        _routePress = null;
         // Focus first and at once, because the view reset now waits behind a fade and
         // this must not. `takeFocus: false` on the way out: the screen is going, the
         // game has already moved the active context on, and handing focus back to a map
@@ -1296,11 +1396,27 @@ internal sealed class PathingView : IDisposable
 
     private void OnRouteLockToggled(int index)
     {
-        _lockedRoute = _lockedRoute == index ? -1 : index;
-        _lockedRouteIds = _lockedRoute >= 0 ? _shownRoutes[_lockedRoute] : null;
-        _legend.SetLocked(_lockedRoute);
-        ApplyHighlight();
+        if (index < 0 || index >= _shownRoutes.Count)
+            return;
+        var route = _shownRoutes[index];
+        _pinnedRoutes = _pinnedRouteIndices.Contains(index)
+            ? _pinnedRoutes.Where(pinned => !pinned.SequenceEqual(route)).ToList()
+            : _pinnedRoutes.Append(route).ToList();
+        _selectedRouteIds = null;
+        RefreshRouteDisplay();
         PersistState();
+    }
+
+    private void ClearUnpinnedRoutes()
+    {
+        if (_pinnedRoutes.Count == 0 || _adapter is null)
+            return;
+        var routes = _pinnedRoutes;
+        ReplacePlan(routes);
+        _pinnedRoutes = routes;
+        _retainedRoutes = routes;
+        _retainedPlanSignature = PlanSignature();
+        Refresh();
     }
 
     private void UpdateOverlay()
@@ -1314,7 +1430,8 @@ internal sealed class PathingView : IDisposable
         else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
         {
             var polylines = _shownRoutes.Select(route => Polyline(route).ToArray()).ToList();
-            _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes));
+            _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes),
+                EdgesOf(_pinnedRoutes.Where(route => !_shownRoutes.Contains(route)).ToList()));
         }
         else
         {
@@ -1342,8 +1459,9 @@ internal sealed class PathingView : IDisposable
         if (_shownRoutes.Count is > 0 and <= PathSolver.LegendThreshold)
             _legend.SetRoutes(_shownRoutes.Select((route, index) => (
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
-                $"{(char)('A' + index)}",
-                LegendCounts(route))).ToList());
+                string.Join("|", route),
+                LegendCounts(route))).ToList(), _pinnedRouteIndices, IndexOfRoute(_selectedRouteIds),
+                _routePage, _routePageCount, _pinnedRoutes.Count);
         else
             _legend.SetRoutes([]);
     }
@@ -1368,6 +1486,12 @@ internal sealed class PathingView : IDisposable
         _navigator.SetNodes([], false);
         _legend.SetRoutes([]);
         _shownRoutes = [];
+        _rankedRoutes = [];
+        _incompleteRoutes = [];
+        _selectedRouteIds = null;
+        _pinnedRoutes = [];
+        _pinnedRouteIndices.Clear();
+        _retainedRoutes = null;
         _backdropRoutes = [];
         _pinnable = [];
         _overlay.Clear();
@@ -1461,31 +1585,25 @@ internal sealed class PathingView : IDisposable
             .Select(entry => entry.Route)
             .ToList();
 
+        ReplacePlan(chosen);
+        Refresh();
+    }
+
+    private void ReplacePlan(IReadOnlyList<IReadOnlyList<string>> routes)
+    {
+        var plan = RoutePlan.FromRoutes(_adapter!.Graph, _startId, _pinnable, routes);
         _pins.Clear();
-        _cut.Clear();
+        foreach (var id in plan.Pins)
+            _pins.Toggle(id);
+        _cut = plan.Cut;
         _lastDrawn = null;
         _strokeFloors.Clear();
-        foreach (var id in chosen.SelectMany(route => route.Skip(1)).Distinct())
-            if (_pinnable.Contains(id))
-                _pins.Toggle(id);
-
-        // Selecting every node of several routes also selects pairs those routes never
-        // step between, and the edge model would draw them as extra routes nobody asked
-        // for. Cutting them is what makes "the best five" mean exactly five.
-        var wanted = new HashSet<(string, string)>();
-        foreach (var route in chosen)
-            for (var i = 1; i < route.Count; i++)
-                wanted.Add((route[i - 1], route[i]));
-        var selected = _pins.Ids.ToHashSet();
-        selected.Add(_startId);
-        foreach (var from in selected)
-            foreach (var to in _adapter.Graph.Successors(from))
-                if (selected.Contains(to) && !wanted.Contains((from, to)))
-                    _cut.Add((from, to));
-
-        _lockedRoute = -1;
-        _lockedRouteIds = null;
+        _strandedBy = null;
+        _pinnedRouteIndices.Clear();
+        _pinnedRoutes = [];
+        _retainedRoutes = null;
+        _selectedRouteIds = null;
+        _routePage = 0;
         _pinSignature = PinsChangedSentinel;
-        Refresh();
     }
 }

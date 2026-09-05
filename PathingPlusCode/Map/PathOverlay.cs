@@ -98,6 +98,7 @@ internal sealed class PathOverlay : IDisposable
     private readonly List<Color> _routeColors = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _unionDots = [];
     private readonly List<(TextureRect Dot, Vector2 BaseScale)> _traceDots = [];
+    private readonly List<(TextureRect Dot, Vector2 BaseScale)> _pinnedDots = [];
     private readonly List<TextureRect> _pinRings = [];
     private Tween? _pinFade;
     private TextureRect? _cursor;
@@ -276,7 +277,8 @@ internal sealed class PathOverlay : IDisposable
     /// hold still shows all of itself, with the picks standing out from the rest.
     /// </summary>
     public void ShowRoutes(
-        IReadOnlyList<Vector2[]> routes, IEnumerable<(Vector2 From, Vector2 To)>? backdrop = null)
+        IReadOnlyList<Vector2[]> routes, IEnumerable<(Vector2 From, Vector2 To)>? backdrop = null,
+        IEnumerable<(Vector2 From, Vector2 To)>? pinnedBackdrop = null)
     {
         ClearDots();
         if (backdrop is not null)
@@ -294,6 +296,12 @@ internal sealed class PathOverlay : IDisposable
             _routeDots.Add(dots);
             _routeColors.Add(color);
         }
+        // Pins on another legend page still belong to the plan and stay in ink.
+        if (pinnedBackdrop is not null)
+            foreach (var (from, to) in pinnedBackdrop)
+                ScatterDots([from, to], HighlightInk, _pinnedDots);
+        foreach (var (dot, baseScale) in _pinnedDots)
+            dot.Scale = baseScale * HighlightScaleFactor;
     }
 
     /// <summary>
@@ -345,41 +353,31 @@ internal sealed class PathOverlay : IDisposable
             ScatterDots([from, to], UnionColor, _unionDots);
     }
 
-    /// <summary>How a singled-out route is drawn.</summary>
-    public enum Emphasis
+    /// <summary>Every pin stays in ink; hover deepens that route's own colour.</summary>
+    public void SetHighlights(IReadOnlySet<int> pinned, int hovered = -1)
     {
-        /// <summary>
-        /// Passing interest: the route's own colour, deepened. Turning it to ink on
-        /// hover reads as a commitment the player has not made, and loses the colour
-        /// that ties the line to its legend column at the moment they are matching
-        /// one to the other.
-        /// </summary>
-        Hover,
-
-        /// <summary>Chosen: ink, the way the game marks a path already travelled.</summary>
-        Lock,
-    }
-
-    /// <summary>−1 restores every route; otherwise that one stands out and the rest fade.</summary>
-    public void SetHighlight(int index, Emphasis emphasis = Emphasis.Lock)
-    {
+        var emphasized = pinned.Count > 0 || _pinnedDots.Count > 0 || hovered >= 0;
         for (var i = 0; i < _routeDots.Count; i++)
         {
-            var (color, factor) = index < 0 ? (_routeColors[i], 1f)
-                : i == index
-                    ? (emphasis is Emphasis.Lock ? HighlightInk : Deepen(_routeColors[i]),
-                        HighlightScaleFactor)
-                    : (_routeColors[i] with { A = FadedAlpha }, 1f);
+            var (color, factor) = i == hovered ? (Deepen(_routeColors[i]), HighlightScaleFactor)
+                : pinned.Contains(i) ? (HighlightInk, HighlightScaleFactor)
+                : (_routeColors[i] with { A = emphasized ? FadedAlpha : _routeColors[i].A }, 1f);
             foreach (var (dot, baseScale) in _routeDots[i])
             {
                 dot.Modulate = color;
                 dot.Scale = baseScale * factor;
             }
+            if (pinned.Contains(i))
+                foreach (var (dot, _) in _routeDots[i])
+                    _dotLayer.MoveChild(dot, _dotLayer.GetChildCount() - 1);
         }
 
+        foreach (var (dot, _) in _unionDots)
+            dot.Modulate = UnionColor with { A = emphasized ? FadedAlpha : UnionColor.A };
+
         // Prominence by tree order within our own sub-layer, never by ZIndex.
-        if (index >= 0 && index < _routeDots.Count)
-            foreach (var (dot, _) in _routeDots[index])
+        if (hovered >= 0 && hovered < _routeDots.Count)
+            foreach (var (dot, _) in _routeDots[hovered])
                 _dotLayer.MoveChild(dot, _dotLayer.GetChildCount() - 1);
     }
 
@@ -545,11 +543,12 @@ internal sealed class PathOverlay : IDisposable
 
     private void ClearDots()
     {
-        foreach (var (dot, _) in _routeDots.SelectMany(run => run).Concat(_unionDots))
+        foreach (var (dot, _) in _routeDots.SelectMany(run => run).Concat(_unionDots).Concat(_pinnedDots))
             dot.QueueFree();
         _routeDots.Clear();
         _routeColors.Clear();
         _unionDots.Clear();
+        _pinnedDots.Clear();
         ClearTrace();
     }
 

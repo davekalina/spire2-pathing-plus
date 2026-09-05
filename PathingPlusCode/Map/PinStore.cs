@@ -8,25 +8,13 @@ using System.Text.Json;
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
-/// Pins and the locked route, persisted across game restarts in the game's own user
+/// Pins and pinned routes, persisted across game restarts in the game's own user
 /// data directory. One file, one map: the key is a hash of the act map's structure,
 /// so restoring a run finds its pins and any other map ignores them. Purely
 /// informational state — losing the file loses nothing but pins.
 /// </summary>
 internal static class PinStore
 {
-    /// <param name="Blocked">
-    /// Nodes the eraser struck, from when erasing worked on nodes. Kept only so an
-    /// older file still loads; nothing reads it now.
-    /// </param>
-    /// <param name="Cut">
-    /// Steps the eraser has taken out, as "from&gt;to". Nullable so a file written
-    /// before the plan was made of edges still loads, as an empty set.
-    /// </param>
-    internal sealed record Saved(
-        string MapKey, string[] Pins, string[]? LockedRoute,
-        string[]? Blocked = null, string[]? Cut = null);
-
     public static string FormatEdge((string From, string To) edge) => $"{edge.From}>{edge.To}";
 
     public static (string From, string To)? ParseEdge(string text) =>
@@ -53,17 +41,17 @@ internal static class PinStore
         return Convert.ToHexString(hash)[..16];
     }
 
-    public static Saved? Load() => Guard.Run("Loading saved pins", () =>
+    public static SavedPlan? Load() => Guard.Run("Loading saved pins", () =>
     {
         if (!File.Exists(FilePath))
             return null;
         var json = File.ReadAllText(FilePath);
-        var saved = JsonSerializer.Deserialize<Saved>(json);
+        var saved = JsonSerializer.Deserialize<SavedPlan>(json);
         _lastWritten = json;
         return saved;
     }, null);
 
-    public static void SaveIfChanged(Saved data) => Guard.Run("Saving pins", () =>
+    public static void SaveIfChanged(SavedPlan data) => Guard.Run("Saving pins", () =>
     {
         var json = JsonSerializer.Serialize(data);
         if (json == _lastWritten)

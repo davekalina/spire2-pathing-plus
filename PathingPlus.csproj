@@ -26,6 +26,7 @@
          code. Embedded rather than shipped beside the DLL: there is then no second
          file to package, and no way for the two to disagree. -->
     <EmbeddedResource Include="text\help.txt" LogicalName="help.txt" />
+    <EmbeddedResource Include="text\clear-unpinned.txt" LogicalName="clear-unpinned.txt" />
   </ItemGroup>
 
   <Target Name="CheckDependencyPaths">

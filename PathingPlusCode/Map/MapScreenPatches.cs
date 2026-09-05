@@ -80,6 +80,11 @@ internal static class MapScreenPatches
     [HarmonyPatch(nameof(NMapScreen._GuiInput))]
     private static bool BeforeScreenGuiInput(NMapScreen __instance, InputEvent __0)
     {
+        Guard.Run("Selecting a drawn route", () =>
+        {
+            if (Views.TryGetValue(__instance, out var view) && view.OnRoutePointerButton(__0))
+                __instance.AcceptEvent();
+        });
         Guard.Run("Choosing the pen for a mouse stroke", () => ArmMouseStroke(__instance, __0));
         return Guard.Run("Freezing map input while zoomed out", () =>
         {
