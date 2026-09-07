@@ -2,7 +2,7 @@
   "title": "Pathing Plus",
   "description": "Pathing Plus is designed to help you draw better paths (and hopefully make\r\nbetter pathing decisions as a result).\r\n\r\nFeatures include:\r\n\r\n- Use the draw and eraser tools to map out your path - straight lines snap to the path you draw.\r\n- Alternate map views - fit the entire map on screen vertically or horizontally.\r\n- Automatic route analysis: how many elites / fires / events are there on each path?\r\n- Improved gamepad support for the map features (left analog button to switch between draw and eraser tools, right trigger to switch between map views, scroll the map with the right analog stick (only if Steam Input is disabled))\r\n\r\nFeedback and feature requests always welcome!\r\n\r\nSource code and issue tracker:\r\nhttps://github.com/davekalina/spire2-pathing-plus\r\n\r\nPathing Plus currently works with version 0.111.0 on the beta-branch only.",
   "visibility": "public",
-  "changeNote": "v1.4.0\n- Pin multiple routes independently.\n- Use Clear unpinned to keep your pinned routes and remove the rest.\n- Click a completed route on the map to keep it in the sidebar for pinning.\n- Browse additional routes with mouse or controller.",
+  "changeNote": "v1.5.0\n- Rebuilt and republished with a new version number to investigate Workshop update delivery.\n- Feature set unchanged from v1.4.0.",
   "tags": [
     "QoL",
     "Utility"
