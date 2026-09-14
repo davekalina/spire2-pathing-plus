@@ -170,6 +170,10 @@ internal static class MapScreenPatches
     /// <summary>Whether the stroke passing through these drawings is planning a route.</summary>
     internal static bool PathDrawing(NMapDrawings drawings) => ViewFor(drawings)?.PathMode == true;
 
+    internal static bool PointerOverLegend(NMapDrawings drawings) =>
+        NControllerManager.Instance?.IsUsingDirectionalNavigation != true
+        && ViewFor(drawings)?.PointerOverLegend == true;
+
     internal static void NotePenChange(NMapDrawings drawings, DrawingMode mode) =>
         ViewFor(drawings)?.TakeArmedPen(mode);
 
@@ -654,18 +658,26 @@ internal static class MapDrawingBeginPatch
     /// inside the very call this runs ahead of.
     /// </param>
     [HarmonyPrefix]
-    private static void BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0, DrawingMode? __1)
+    private static bool BeforeBeginLine(NMapDrawings __instance, ref Vector2 __0, DrawingMode? __1)
     {
+        // A mouse tool reads _Input before GUI dispatch. Without this guard a
+        // background drag also starts a stroke underneath the legend, even though
+        // the legend later consumes the click. Controller strokes stay native.
+        Hiding = false;
+        if (Guard.Run("Keeping legend clicks out of drawing",
+            () => MapScreenPatches.PointerOverLegend(__instance), false))
+            return false;
         var stroke = __1 ?? Guard.Run("Reading the drawing mode",
             () => __instance.GetLocalDrawingMode(), DrawingMode.None);
         Hiding = stroke == DrawingMode.Drawing
             && Guard.Run("Reading the path tool",
                 () => MapScreenPatches.PathDrawing(__instance), false);
         if (Hiding)
-            return;
+            return true;
         var given = __0;
         __0 = Guard.Run("Correcting the first point of a stroke",
             () => MapScreenPatches.CorrectDrawingPoint(__instance, given), given);
+        return true;
     }
 
     [HarmonyFinalizer]

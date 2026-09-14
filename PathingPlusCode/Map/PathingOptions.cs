@@ -29,6 +29,26 @@ internal static class PathingOptions
     /// </summary>
     public static bool StartWide { get; set; }
 
+    /// <summary>Place the legend beneath the top-right settings controls.</summary>
+    public static bool LegendMiddleRight { get; set; }
+
+    /// <summary>Player's drag offset from the selected legend placement, in UI units.</summary>
+    public static float LegendOffsetX { get; set; }
+    public static float LegendOffsetY { get; set; }
+
+    public static void SetLegendPlacement(bool middleRight)
+    {
+        LegendMiddleRight = middleRight;
+        LegendOffsetX = LegendOffsetY = 0f;
+    }
+
+    public static void SaveLegendOffset(Vector2 offset)
+    {
+        LegendOffsetX = offset.X;
+        LegendOffsetY = offset.Y;
+        Save();
+    }
+
     /// <summary>
     /// Whether the path tool leaves ink under the cursor as it draws.
     ///
@@ -113,6 +133,7 @@ internal static class PathingOptions
     {
         OverrideDrawing = true;
         StartWide = false;
+        SetLegendPlacement(false);
         DrawingTrail = false;
         TrailFade = 0.5f;
         TrailWidth = 12f;
@@ -153,6 +174,9 @@ internal static class PathingOptions
 
         public bool? OverrideDrawing { get; set; }
         public bool? StartWide { get; set; }
+        public bool? LegendMiddleRight { get; set; }
+        public float? LegendOffsetX { get; set; }
+        public float? LegendOffsetY { get; set; }
         public bool? DrawingTrail { get; set; }
         public float? TrailFade { get; set; }
         public float? TrailWidth { get; set; }
@@ -182,6 +206,9 @@ internal static class PathingOptions
             return;
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
         StartWide = saved.StartWide ?? StartWide;
+        LegendMiddleRight = saved.LegendMiddleRight ?? LegendMiddleRight;
+        LegendOffsetX = saved.LegendOffsetX is { } x && float.IsFinite(x) ? x : 0f;
+        LegendOffsetY = saved.LegendOffsetY is { } y && float.IsFinite(y) ? y : 0f;
         DrawingTrail = saved.DrawingTrail ?? DrawingTrail;
         TrailFade = saved.TrailFade ?? TrailFade;
         TrailWidth = saved.TrailWidth ?? TrailWidth;
@@ -205,6 +232,9 @@ internal static class PathingOptions
         {
             OverrideDrawing = OverrideDrawing,
             StartWide = StartWide,
+            LegendMiddleRight = LegendMiddleRight,
+            LegendOffsetX = LegendOffsetX,
+            LegendOffsetY = LegendOffsetY,
             DrawingTrail = DrawingTrail,
             TrailFade = TrailFade,
             TrailWidth = TrailWidth,

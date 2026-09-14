@@ -22,8 +22,13 @@ internal sealed class OptionsPanel : IDisposable
     private const float PanelWidth = 372f;
 
     /// <summary>Where the panel hangs from, and the parchment border the rows sit inside.</summary>
-    private const float PanelTop = 336f;
     private const float PanelPadding = 60f;
+
+    private float PanelTop => _toolbar.OffsetBottom + 8f;
+    private float _legendHeight;
+    private readonly Control _screen;
+    private readonly Control _toolbar;
+    private readonly Action _screenResized;
 
     private readonly Control _root;
     private readonly Control _catcher;
@@ -45,8 +50,16 @@ internal sealed class OptionsPanel : IDisposable
     /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
     public Control Focusable => _gear;
 
+    public event Action<float>? LegendTopChanged;
+
+    /// <summary>The toolbar's lower edge, or the open dropdown's lower edge.</summary>
+    public float LegendTop => _panel.Visible ? _panel.OffsetBottom + 8f : PanelTop;
+
     public OptionsPanel(Control screen, Control toolbar)
     {
+        _screen = screen;
+        _toolbar = toolbar;
+        _screenResized = () => Guard.Run("Resizing settings to the screen", ResizePanel);
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
         _root = new Control { Name = "PathingPlusOptions", MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -148,14 +161,34 @@ internal sealed class OptionsPanel : IDisposable
         margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _panel.AddChild(margin);
 
-        _rows = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        // A docked legend needs space below this dropdown. Scroll the settings when
+        // necessary, including Advanced, and bring focused rows into view on a pad.
+        var scroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            FollowFocus = true,
+            MouseFilter = Control.MouseFilterEnum.Stop,
+        };
+        margin.AddChild(scroll);
+        scroll.GetVScrollBar().FocusMode = Control.FocusModeEnum.None;
+        _rows = new VBoxContainer
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+        };
         _rows.AddThemeConstantOverride("separation", 4);
-        margin.AddChild(_rows);
+        scroll.AddChild(_rows);
 
         AddToggle(_rows, "Right-Drag Draws Paths",
             () => PathingOptions.OverrideDrawing, v => PathingOptions.OverrideDrawing = v);
         AddToggle(_rows, "Start in Wide View",
             () => PathingOptions.StartWide, v => PathingOptions.StartWide = v);
+        using (var stream = typeof(OptionsPanel).Assembly.GetManifestResourceStream("move-to-middle-right.txt")
+            ?? throw new InvalidOperationException("Missing move-to-middle-right.txt resource."))
+        using (var reader = new System.IO.StreamReader(stream))
+            AddToggle(_rows, reader.ReadToEnd().Trim(),
+                () => PathingOptions.LegendMiddleRight, PathingOptions.SetLegendPlacement);
         AddToggle(_rows, "Drawing Trail",
             () => PathingOptions.DrawingTrail, v => PathingOptions.DrawingTrail = v);
 
@@ -227,7 +260,16 @@ internal sealed class OptionsPanel : IDisposable
         _root.AddChild(_panel);
         screen.AddChild(_root);
         ResizePanel();
+        _screen.Resized += _screenResized;
     }
+
+    public void SetLegendHeight(float height)
+    {
+        _legendHeight = height;
+        ResizePanel();
+    }
+
+    public void RefreshLayout() => ResizePanel();
 
     /// <summary>Hidden with the map screen, like every other panel this mod adds.</summary>
     public void SetShellVisible(bool visible)
@@ -239,6 +281,8 @@ internal sealed class OptionsPanel : IDisposable
 
     public void Dispose()
     {
+        if (GodotObject.IsInstanceValid(_screen))
+            _screen.Resized -= _screenResized;
         if (GodotObject.IsInstanceValid(_root))
             _root.QueueFree();
     }
@@ -248,6 +292,7 @@ internal sealed class OptionsPanel : IDisposable
         _panel.Visible = open;
         _catcher.Visible = open;
         _gear.Modulate = open ? Colors.White : GearIdle;
+        LegendTopChanged?.Invoke(LegendTop);
         if (!open)
         {
             // Back where it came from, or a controller is left with focus on a panel
@@ -272,6 +317,7 @@ internal sealed class OptionsPanel : IDisposable
         var live = _focusables.Where(row => GodotObject.IsInstanceValid(row) && row.IsVisibleInTree()).ToList();
         for (var i = 0; i < live.Count; i++)
         {
+            live[i].FocusNeighborLeft = live[i].FocusNeighborRight = new NodePath(".");
             live[i].FocusNeighborTop = i > 0
                 ? live[i].GetPathTo(live[i - 1])
                 : live[i].GetPathTo(_gear);
@@ -296,9 +342,14 @@ internal sealed class OptionsPanel : IDisposable
     /// The panel follows its contents, so folding a section away takes the parchment
     /// with it instead of leaving an empty card hanging under the gear.
     /// </summary>
-    private void ResizePanel() =>
+    private void ResizePanel()
+    {
+        var reserved = PathingOptions.LegendMiddleRight ? _legendHeight + 8f : 0f;
+        var available = Math.Max(120f, _screen.Size.Y - PanelTop - 24f - reserved);
         _panel.OffsetBottom = PanelTop
-            + Math.Max(200f, _rows.GetCombinedMinimumSize().Y + PanelPadding);
+            + Math.Min(available, Math.Max(200f, _rows.GetCombinedMinimumSize().Y + PanelPadding));
+        LegendTopChanged?.Invoke(LegendTop);
+    }
 
     private static void AddSpacer(Container into) => into.AddChild(new Control
     {

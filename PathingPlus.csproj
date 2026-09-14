@@ -27,6 +27,7 @@
          file to package, and no way for the two to disagree. -->
     <EmbeddedResource Include="text\help.txt" LogicalName="help.txt" />
     <EmbeddedResource Include="text\clear-unpinned.txt" LogicalName="clear-unpinned.txt" />
+    <EmbeddedResource Include="text\move-to-middle-right.txt" LogicalName="move-to-middle-right.txt" />
   </ItemGroup>
 
   <Target Name="CheckDependencyPaths">

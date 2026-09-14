@@ -196,6 +196,10 @@ internal sealed class PathingView : IDisposable
                 _overlay.HideCursor();
         });
         _options = new OptionsPanel(screen, _toolbar.Root);
+        _options.LegendTopChanged += _legend.SetMiddleRightTop;
+        _legend.HeightChanged += _options.SetLegendHeight;
+        _options.SetLegendHeight(_legend.Height);
+        _legend.SetMiddleRightTop(_options.LegendTop);
         _help = new HelpTip(screen, _toolbar.Root);
         _autoPath = new AutoPathMenu(screen, _toolbar.Root);
         _autoPath.GoalChosen += goal => Guard.Run("Auto-pathing", () => ApplyAutoPath(goal));
@@ -216,6 +220,8 @@ internal sealed class PathingView : IDisposable
 
     private void OnOptionsChanged() => Guard.Run("Applying a settings change", () =>
     {
+        _options.RefreshLayout();
+        _legend.ApplyPlacement();
         if (!_screen.IsOpen)
             return;
         // Changing the marker size should show what it looks like, not leave the
@@ -496,6 +502,10 @@ internal sealed class PathingView : IDisposable
             _legend.ClearPreview();
         }
     });
+
+    public bool PointerOverLegend => _screen.IsOpen
+        && ActiveScreenContext.Instance.IsCurrent(_screen)
+        && _legend.Covers(_screen.GetGlobalMousePosition());
 
     /// <summary>
     /// A click on a route promotes it from a hover preview to a persistent column.

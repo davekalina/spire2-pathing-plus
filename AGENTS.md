@@ -72,7 +72,9 @@ The settings panel hangs directly beneath the toolbar on the same right edge, we
 the same card art upright, and any click outside it dismisses it (a full-rect catcher
 added before the panel, alive only while it is open). Its height follows
 `_rows.GetCombinedMinimumSize()`, so folding a section away takes the parchment with
-it. Path Mode and Path Markers are pull-downs built here (`AddDropdown<T>`, any enum)
+it. Its scroll container keeps the rows reachable when the screen or a docked legend
+limits its height, and follows controller focus. Path Mode and Path Markers are
+pull-downs built here (`AddDropdown<T>`, any enum)
 rather than the native `settings_dropdown` scene, whose root is scriptless — its
 behaviour lives in the settings screen, so it cannot be instantiated as a control.
 Everything but those two lives under a collapsible **Advanced** heading.
@@ -509,9 +511,14 @@ screen close, and dispose. Zoomed is planning, not moving:
 `OnMapPointSelectedLocally` is suppressed while zoomed and select becomes a pin
 toggle, travelable nodes included; travel requires cycling back to Normal.
 
-**The replacement Legend** (`RouteLegendPanel`) sits bottom right — the space the
-mod's retired routes table held — on the native `map_legend` parchment, its width
-fitted to its contents (right edge fixed, left edge hugs). Transposed: type rows in
+**The replacement Legend** (`RouteLegendPanel`) defaults to bottom right on the native
+`map_legend` parchment. Drag empty background with the left mouse button to reposition
+it; icons, route columns and footer buttons retain their own input. The saved offset
+survives map opens and restarts, and placement is clamped to the screen. **Move to
+middle-right** places it below the toolbar when settings are closed and below the
+dropdown when open. Changing that checkbox or resetting settings clears the drag
+offset. The drawing-start patch keeps a mouse tool from starting a stroke underneath
+a legend click, since its `_Input` runs before GUI dispatch. Transposed: type rows in
 the native legend's order (unknown / shop / treasure / rest / monster / elite), one
 column per route headed by its colored letter; with zero routes it shows the type
 names instead, reading like the native legend. Route selection: up to
@@ -574,10 +581,10 @@ can tint it with the route's own colour. Its outline carries a low **fixed** wob
 a ruled circle-and-cone reads as a web glyph dropped on parchment, and a random one
 would shimmer between redraws.
 
-**The panel is exactly its contents** (`FitPanel`): anchored bottom right, so that
-corner stays put and the top and left edges come in to meet what is drawn — width from
-the column count, height from the row block. Both were hard-coded, which left a band of
-empty parchment under the last row and a table five columns wide however few it held.
+**Paged and pinned plans keep a full page's width** (`FitPanel`), including short last
+pages and folded one- or two-pin comparisons. Small unpinned plans still fit their
+column count. Height follows the row block and visible footer controls; a docked
+legend's height also bounds the settings dropdown so both fit on screen.
 `BottomPad` is deliberately larger than the inset at the top, because **the legend art's
 torn lower edge eats into its own rectangle**: a margin measured off the control's
 bounds ran the last row off the bottom of the parchment it was meant to sit on.
@@ -587,10 +594,9 @@ names — **measured from the font** (`NamesWidth`), not reserved by a constant.
 constant generous enough for the longest of them in any font left a third of the
 parchment blank at exactly the moment the panel has least to say.
 
-**A locked table folds down to the locked column**, so a chosen route stops charging
-the screen for four alternatives nobody is reading any more. The other routes keep
-being drawn on the map — this is about the panel's footprint, not about hiding
-anything. Three rules shape it. The fold is **armed by the lock and performed only when
+**A locked table folds down to the locked columns while keeping its width.** The other
+routes keep being drawn on the map. Three rules shape it. The fold is **armed by the
+lock and performed only when
 the player looks away** (`LookedAway`, from the pointer leaving `Covers` or from focus
 leaving the panel): folding on the click itself would pull four columns out from under
 a pointer still in the middle of comparing them, so the panel would jump away from the
@@ -731,9 +737,13 @@ Game coupling that a game update can move (verify after every update):
 - Column heads: a dash in the route's colour, the pin ring on the locked one, and a
   locked column under the cursor plainly different from a locked one that is not —
   check that last one with a pad, which is where it matters.
-- The panel's size against its contents at one, five and zero columns: no dead band
-  under the last row, no width kept for columns that are not there, and with no routes
-  at all no parchment kept to the right of the type names.
+- The panel's size at one, five and zero columns: small unpinned plans fit their
+  contents; paged or pinned plans retain five-column width across short pages and
+  folds; the plain legend fits the type names.
+- Background dragging, control clicks without dragging, no drawing through the
+  legend with a tool selected, saved placement, screen-edge clamping, and the
+  middle-right preset with settings closed, open and Advanced expanded. Check the
+  checkbox and scrolled settings with controller focus too.
 - The fold: locking leaves the table full while the pointer stays on it, folds to the
   locked column once the pointer leaves, and expands the moment it is unlocked. The
   same with a pad, driven by focus leaving the panel rather than the pointer — and

@@ -4,14 +4,16 @@ using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using PathingPlus.PathingPlusCode.Pathing;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
 /// wider, transposed — node types as rows, one column per computed route (up to
-/// eight), each headed by a dash of its own line colour, or by a pin once that route
-/// is pinned. Looking away folds the table down to its pinned columns.
+/// five), each headed by a dash of its own line colour, or by a pin once that route
+/// is pinned. Looking away folds the table down to its pinned columns, retaining
+/// room for a full page. The empty parchment can be dragged to move the panel.
 ///
 /// Hovering or focusing a type icon fires the game's own
 /// <c>HighlightPointType</c> broadcast, exactly what the native legend items do.
@@ -88,8 +90,16 @@ internal sealed class RouteLegendPanel : IDisposable
     public event Action<int>? ColumnLockToggled;
     public event Action? ClearUnpinned;
     public event Action<int>? PageChanged;
+    public event Action<float>? HeightChanged;
+    public float Height => _panel.Size.Y;
 
     private readonly Control _panel;
+    private readonly Control _screen;
+    private readonly Action _screenResized;
+    private bool _dragging;
+    private Vector2 _dragGrabOffset;
+    private float _middleRightTop = 336f;
+    private const float ScreenMargin = 24f;
     private HotkeyGlyph? _hotkeyGlyph;
     private readonly ColorRect _rowMark;
     private readonly Font? _font;
@@ -152,20 +162,17 @@ internal sealed class RouteLegendPanel : IDisposable
 
     public RouteLegendPanel(Control screen)
     {
+        _screen = screen;
+        _screenResized = () => Guard.Run("Keeping the legend on screen", ApplyPlacement);
         _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
         // Bottom right, in the space the mod's old routes table held — out of the
-        // rotated view's way — wearing the native legend parchment. Its size is its
-        // contents; see FitPanel.
+        // rotated view's way — wearing the native legend parchment.
         _panel = new Control { Name = "PathingPlusLegend", MouseFilter = Control.MouseFilterEnum.Stop };
-        _panel.AnchorLeft = _panel.AnchorRight = 1f;
-        _panel.AnchorTop = _panel.AnchorBottom = 1f;
-        _panel.OffsetRight = -24f;
-        // Top and left are computed from the contents in FitPanel; only the corner
-        // this hangs from is fixed.
-        _panel.OffsetBottom = -112f;
-        _panel.GrowHorizontal = Control.GrowDirection.Begin;
-        _panel.GrowVertical = Control.GrowDirection.Begin;
+        // Interactive children stop their own mouse events. Only empty background
+        // reaches this handler; Godot keeps sending the held gesture to this control
+        // even when the pointer crosses a child or leaves the panel.
+        _panel.GuiInput += inputEvent => Guard.Run("Dragging the legend", () => DragBackground(inputEvent));
 
         var background = new TextureRect
         {
@@ -266,7 +273,68 @@ internal sealed class RouteLegendPanel : IDisposable
         _panel.AddChild(_pageLabel);
         FitPanel(0);
         WireIconFocus();
+        _screen.Resized += _screenResized;
     }
+
+    private Vector2 PresetPosition => new(
+        _screen.Size.X - ScreenMargin - _panel.Size.X,
+        PathingOptions.LegendMiddleRight
+            ? _middleRightTop
+            : _screen.Size.Y - 112f - _panel.Size.Y);
+
+    private Vector2 ClampPosition(Vector2 position) => new(
+        Mathf.Clamp(position.X, ScreenMargin, Math.Max(ScreenMargin, _screen.Size.X - _panel.Size.X - ScreenMargin)),
+        Mathf.Clamp(position.Y, ScreenMargin, Math.Max(ScreenMargin, _screen.Size.Y - _panel.Size.Y - ScreenMargin)));
+
+    public void ApplyPlacement()
+    {
+        if (_dragging)
+            return;
+        _panel.Position = ClampPosition(PresetPosition +
+            new Vector2(PathingOptions.LegendOffsetX, PathingOptions.LegendOffsetY));
+    }
+
+    public void SetMiddleRightTop(float top)
+    {
+        _middleRightTop = top;
+        ApplyPlacement();
+    }
+
+    private void DragBackground(InputEvent inputEvent)
+    {
+        if (!_panel.IsVisibleInTree())
+            return;
+        if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left } button)
+        {
+            if (button.Pressed)
+            {
+                _dragGrabOffset = PointerInScreen(button.Position) - _panel.Position;
+                _dragging = true;
+            }
+            else if (_dragging)
+            {
+                _dragging = false;
+                PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+            }
+            _panel.AcceptEvent();
+        }
+        else if (_dragging && inputEvent is InputEventMouseMotion motion)
+        {
+            // A release outside the window can be missed. Do not keep moving the
+            // legend when the pointer returns with no button held.
+            if ((motion.ButtonMask & MouseButtonMask.Left) == 0)
+            {
+                _dragging = false;
+                PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+            }
+            else
+                _panel.Position = ClampPosition(PointerInScreen(motion.Position) - _dragGrabOffset);
+            _panel.AcceptEvent();
+        }
+    }
+
+    private Vector2 PointerInScreen(Vector2 localPoint) =>
+        _screen.GetGlobalTransform().AffineInverse() * (_panel.GetGlobalTransform() * localPoint);
 
     /// <summary>Row names for the no-routes state, matching the native legend's wording.</summary>
     private static readonly string[] TypeNames =
@@ -312,27 +380,30 @@ internal sealed class RouteLegendPanel : IDisposable
     }
 
     /// <summary>
-    /// The panel is exactly its contents. Anchored bottom-right, so the corner stays
-    /// put and the other two edges come in to meet what is actually drawn — the width
-    /// following the column count, the height following the fixed row block. Both were
-    /// hard-coded before, which left a band of empty parchment under the last row and
-    /// a table that stayed five columns wide however few it had.
+    /// Reserve a full page while paging or pinning, including when alternatives
+    /// fold away. Small unpinned plans and the plain type legend still fit their
+    /// contents. The height follows the row block and visible footer controls.
     /// </summary>
     private void FitPanel(int columnCount)
     {
-        var width = columnCount > 0
-            ? ColumnsStartX + columnCount * ColumnWidth + EdgePad
-            : ColumnsStartX + NamesWidth() + EdgePad;
         var clearing = _pinnedCount > 0;
         var paging = _routes.Count > 0 && _pageCount > 1;
+        var reservedColumns = clearing || paging ? Math.Max(columnCount, PathSolver.LegendThreshold) : columnCount;
+        var width = reservedColumns > 0
+            ? ColumnsStartX + reservedColumns * ColumnWidth + EdgePad
+            : ColumnsStartX + NamesWidth() + EdgePad;
         if (clearing || paging)
             width = Math.Max(width, 208f);
         var actionY = FirstRowY + Rows.Length * RowHeight + ActionGap;
         var footerHeight = clearing ? ActionHeight + ActionGap : 0f;
         if (paging)
             footerHeight += ActionHeight + ActionGap;
-        _panel.OffsetLeft = _panel.OffsetRight - width;
-        _panel.OffsetTop = _panel.OffsetBottom - (FirstRowY + Rows.Length * RowHeight + BottomPad + footerHeight);
+        var height = FirstRowY + Rows.Length * RowHeight + BottomPad + footerHeight;
+        var heightChanged = !Mathf.IsEqualApprox(height, _panel.Size.Y);
+        _panel.Size = new Vector2(width, height);
+        if (heightChanged)
+            HeightChanged?.Invoke(height);
+        ApplyPlacement();
         SetActionVisible(_clearUnpinned.Control, clearing);
         SetActionVisible(_previousPage.Control, paging);
         SetActionVisible(_nextPage.Control, paging);
@@ -577,7 +648,7 @@ internal sealed class RouteLegendPanel : IDisposable
 
     public void ShowAlternatives()
     {
-        if (!_folded || _expandPending)
+        if (_dragging || !_folded || _expandPending)
             return;
         _expandPending = true;
         Callable.From(() => Guard.Run("Expanding route choices", () =>
@@ -600,7 +671,7 @@ internal sealed class RouteLegendPanel : IDisposable
     /// </summary>
     public void LookedAway()
     {
-        if (!_foldPending)
+        if (_dragging || !_foldPending)
             return;
         _foldPending = false;
         _folded = true;
@@ -707,7 +778,7 @@ internal sealed class RouteLegendPanel : IDisposable
     /// while it is, or it would clear the very column the legend just lit.
     /// </summary>
     public bool Covers(Vector2 globalPoint) =>
-        _panel.Visible && _panel.GetGlobalRect().HasPoint(globalPoint);
+        _panel.Visible && (_dragging || _panel.GetGlobalRect().HasPoint(globalPoint));
 
     /// <summary>Where the legend hotkey lands; null when the panel is hidden.</summary>
     public Control? FirstFocus => _panel.Visible ? _iconCells.FirstOrDefault() : null;
@@ -715,10 +786,22 @@ internal sealed class RouteLegendPanel : IDisposable
     public bool OwnsFocus(Control? focused) =>
         focused is { } control && _panel.IsAncestorOf(control);
 
-    public void SetShellVisible(bool visible) => _panel.Visible = visible;
+    public void SetShellVisible(bool visible)
+    {
+        if (!visible && _dragging)
+        {
+            _dragging = false;
+            PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+        }
+        _panel.Visible = visible;
+        if (visible)
+            ApplyPlacement();
+    }
 
     public void Dispose()
     {
+        if (GodotObject.IsInstanceValid(_screen))
+            _screen.Resized -= _screenResized;
         _hotkeyGlyph?.Dispose();
         if (GodotObject.IsInstanceValid(_panel))
             _panel.QueueFree();
