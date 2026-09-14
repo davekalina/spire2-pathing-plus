@@ -688,7 +688,9 @@ internal sealed class RouteLegendPanel : IDisposable
 
     public void Expand()
     {
-        _foldPending = false;
+        // Looking at alternatives is temporary while pins remain. Re-arm the fold
+        // on every visit, even when no route or pin refresh happens between visits.
+        _foldPending = _pinnedCount > 0;
         _folded = false;
     }
 

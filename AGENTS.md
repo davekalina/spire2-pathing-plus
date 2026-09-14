@@ -609,6 +609,10 @@ the **preview column survives the fold**, because it is only ever there while th
 pointer is on some other route out on the map, which is exactly the comparison being
 made.
 
+Re-entering to compare alternatives re-arms the fold while any route remains pinned.
+Repeated entry/exit must keep expanding and collapsing without a route or pin refresh
+between visits; that refresh can otherwise mask a one-shot fold-state bug.
+
 Because of the fold, a column's place in the row is no longer its route's index —
 `_columnRoutes` carries the mapping and every hover, lock and mark goes through it.
 The focus check is deferred a frame: whether focus left the *legend* cannot be answered
