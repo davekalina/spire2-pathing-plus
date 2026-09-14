@@ -4,7 +4,6 @@ using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
-using PathingPlus.PathingPlusCode.Pathing;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -12,8 +11,8 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
 /// wider, transposed — node types as rows, one column per computed route (up to
 /// five), each headed by a dash of its own line colour, or by a pin once that route
-/// is pinned. Looking away folds the table down to its pinned columns, retaining
-/// room for a full page. The empty parchment can be dragged to move the panel.
+/// is pinned. Looking away folds the table down to its pinned columns with a smooth
+/// resize. The empty parchment can be dragged to move the panel.
 ///
 /// Hovering or focusing a type icon fires the game's own
 /// <c>HighlightPointType</c> broadcast, exactly what the native legend items do.
@@ -90,8 +89,6 @@ internal sealed class RouteLegendPanel : IDisposable
     public event Action<int>? ColumnLockToggled;
     public event Action? ClearUnpinned;
     public event Action<int>? PageChanged;
-    public event Action<float>? HeightChanged;
-    public float Height => _panel.Size.Y;
 
     private readonly Control _panel;
     private readonly Control _screen;
@@ -100,6 +97,10 @@ internal sealed class RouteLegendPanel : IDisposable
     private Vector2 _dragGrabOffset;
     private float _middleRightTop = 336f;
     private const float ScreenMargin = 24f;
+    private const double ResizeSeconds = 0.18;
+    private Tween? _resizeTween;
+    private Vector2 _targetSize;
+    private bool _layoutReady;
     private HotkeyGlyph? _hotkeyGlyph;
     private readonly ColorRect _rowMark;
     private readonly Font? _font;
@@ -168,7 +169,13 @@ internal sealed class RouteLegendPanel : IDisposable
 
         // Bottom right, in the space the mod's old routes table held — out of the
         // rotated view's way — wearing the native legend parchment.
-        _panel = new Control { Name = "PathingPlusLegend", MouseFilter = Control.MouseFilterEnum.Stop };
+        _panel = new Control
+        {
+            Name = "PathingPlusLegend",
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            // New columns are revealed as the parchment expands to contain them.
+            ClipContents = true,
+        };
         // Interactive children stop their own mouse events. Only empty background
         // reaches this handler; Godot keeps sending the held gesture to this control
         // even when the pointer crosses a child or leaves the panel.
@@ -308,13 +315,13 @@ internal sealed class RouteLegendPanel : IDisposable
         {
             if (button.Pressed)
             {
+                StopResize();
                 _dragGrabOffset = PointerInScreen(button.Position) - _panel.Position;
                 _dragging = true;
             }
             else if (_dragging)
             {
-                _dragging = false;
-                PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+                EndDrag();
             }
             _panel.AcceptEvent();
         }
@@ -324,13 +331,19 @@ internal sealed class RouteLegendPanel : IDisposable
             // legend when the pointer returns with no button held.
             if ((motion.ButtonMask & MouseButtonMask.Left) == 0)
             {
-                _dragging = false;
-                PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+                EndDrag();
             }
             else
                 _panel.Position = ClampPosition(PointerInScreen(motion.Position) - _dragGrabOffset);
             _panel.AcceptEvent();
         }
+    }
+
+    private void EndDrag()
+    {
+        _dragging = false;
+        PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
+        ResizeToContents();
     }
 
     private Vector2 PointerInScreen(Vector2 localPoint) =>
@@ -380,47 +393,87 @@ internal sealed class RouteLegendPanel : IDisposable
     }
 
     /// <summary>
-    /// Reserve a full page while paging or pinning, including when alternatives
-    /// fold away. Small unpinned plans and the plain type legend still fit their
-    /// contents. The height follows the row block and visible footer controls.
+    /// Fit the visible columns and footer controls. A changed target retimes the
+    /// resize from its current dimensions; repeated redraws leave it running.
     /// </summary>
     private void FitPanel(int columnCount)
     {
         var clearing = _pinnedCount > 0;
         var paging = _routes.Count > 0 && _pageCount > 1;
-        var reservedColumns = clearing || paging ? Math.Max(columnCount, PathSolver.LegendThreshold) : columnCount;
-        var width = reservedColumns > 0
-            ? ColumnsStartX + reservedColumns * ColumnWidth + EdgePad
+        var width = columnCount > 0
+            ? ColumnsStartX + columnCount * ColumnWidth + EdgePad
             : ColumnsStartX + NamesWidth() + EdgePad;
         if (clearing || paging)
             width = Math.Max(width, 208f);
-        var actionY = FirstRowY + Rows.Length * RowHeight + ActionGap;
         var footerHeight = clearing ? ActionHeight + ActionGap : 0f;
         if (paging)
             footerHeight += ActionHeight + ActionGap;
         var height = FirstRowY + Rows.Length * RowHeight + BottomPad + footerHeight;
-        var heightChanged = !Mathf.IsEqualApprox(height, _panel.Size.Y);
-        _panel.Size = new Vector2(width, height);
-        if (heightChanged)
-            HeightChanged?.Invoke(height);
-        ApplyPlacement();
         SetActionVisible(_clearUnpinned.Control, clearing);
         SetActionVisible(_previousPage.Control, paging);
         SetActionVisible(_nextPage.Control, paging);
         _pageLabel.Visible = paging;
+        _clearUnpinned.SetAvailable(clearing);
+        _previousPage.SetAvailable(_page > 0);
+        _nextPage.SetAvailable(_page + 1 < _pageCount);
+        _pageLabel.Text = $"{_page + 1} / {_pageCount}";
+
+        var target = new Vector2(width, height);
+        var changed = !_targetSize.IsEqualApprox(target);
+        _targetSize = target;
+        if (!_layoutReady || !_panel.IsVisibleInTree())
+        {
+            _layoutReady = true;
+            StopResize();
+            LayoutPanel(target);
+        }
+        else
+        {
+            LayoutPanel(_panel.Size);
+            if (changed)
+                ResizeToContents();
+        }
+    }
+
+    private void StopResize()
+    {
+        _resizeTween?.Kill();
+        _resizeTween = null;
+    }
+
+    private void ResizeToContents()
+    {
+        StopResize();
+        if (_dragging)
+            return;
+        if (_panel.Size.IsEqualApprox(_targetSize) || !_panel.IsVisibleInTree())
+        {
+            LayoutPanel(_targetSize);
+            return;
+        }
+        _resizeTween = _panel.CreateTween();
+        _resizeTween.TweenMethod(Callable.From<Vector2>(size =>
+            Guard.Run("Resizing the legend", () => LayoutPanel(size))), _panel.Size, _targetSize, ResizeSeconds)
+            .SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+    }
+
+    /// <summary>Move the panel edges and footer widths together on every tween step.</summary>
+    private void LayoutPanel(Vector2 size)
+    {
+        _panel.Size = size;
+        ApplyPlacement();
+        var width = size.X;
+        var clearing = _clearUnpinned.Control.Visible;
+        var actionY = FirstRowY + Rows.Length * RowHeight + ActionGap;
         _clearUnpinned.Control.Position = new Vector2(ActionInset, actionY);
         _clearUnpinned.Control.Size = new Vector2(width - ActionInset * 2f, ActionHeight);
-        _clearUnpinned.SetAvailable(clearing);
         var pageY = actionY + (clearing ? ActionHeight + ActionGap : 0f);
         _previousPage.Control.Position = new Vector2(ActionInset, pageY);
         _previousPage.Control.Size = new Vector2(ActionHeight, ActionHeight);
         _nextPage.Control.Position = new Vector2(width - ActionInset - ActionHeight, pageY);
         _nextPage.Control.Size = new Vector2(ActionHeight, ActionHeight);
-        _previousPage.SetAvailable(_page > 0);
-        _nextPage.SetAvailable(_page + 1 < _pageCount);
         _pageLabel.Position = new Vector2(ActionInset + ActionHeight, pageY);
         _pageLabel.Size = new Vector2(width - 2f * (ActionInset + ActionHeight), ActionHeight);
-        _pageLabel.Text = $"{_page + 1} / {_pageCount}";
     }
 
     private void SetActionVisible(Control action, bool visible)
@@ -794,12 +847,13 @@ internal sealed class RouteLegendPanel : IDisposable
             PathingOptions.SaveLegendOffset(_panel.Position - PresetPosition);
         }
         _panel.Visible = visible;
-        if (visible)
-            ApplyPlacement();
+        StopResize();
+        LayoutPanel(_targetSize);
     }
 
     public void Dispose()
     {
+        StopResize();
         if (GodotObject.IsInstanceValid(_screen))
             _screen.Resized -= _screenResized;
         _hotkeyGlyph?.Dispose();

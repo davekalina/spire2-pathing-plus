@@ -196,10 +196,7 @@ internal sealed class PathingView : IDisposable
                 _overlay.HideCursor();
         });
         _options = new OptionsPanel(screen, _toolbar.Root);
-        _options.LegendTopChanged += _legend.SetMiddleRightTop;
-        _legend.HeightChanged += _options.SetLegendHeight;
-        _options.SetLegendHeight(_legend.Height);
-        _legend.SetMiddleRightTop(_options.LegendTop);
+        _legend.SetMiddleRightTop(_toolbar.Root.OffsetBottom + 8f);
         _help = new HelpTip(screen, _toolbar.Root);
         _autoPath = new AutoPathMenu(screen, _toolbar.Root);
         _autoPath.GoalChosen += goal => Guard.Run("Auto-pathing", () => ApplyAutoPath(goal));
@@ -220,7 +217,6 @@ internal sealed class PathingView : IDisposable
 
     private void OnOptionsChanged() => Guard.Run("Applying a settings change", () =>
     {
-        _options.RefreshLayout();
         _legend.ApplyPlacement();
         if (!_screen.IsOpen)
             return;

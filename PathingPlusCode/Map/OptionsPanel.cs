@@ -25,7 +25,6 @@ internal sealed class OptionsPanel : IDisposable
     private const float PanelPadding = 60f;
 
     private float PanelTop => _toolbar.OffsetBottom + 8f;
-    private float _legendHeight;
     private readonly Control _screen;
     private readonly Control _toolbar;
     private readonly Action _screenResized;
@@ -49,11 +48,6 @@ internal sealed class OptionsPanel : IDisposable
 
     /// <summary>Where the d-pad lands on this control coming from elsewhere.</summary>
     public Control Focusable => _gear;
-
-    public event Action<float>? LegendTopChanged;
-
-    /// <summary>The toolbar's lower edge, or the open dropdown's lower edge.</summary>
-    public float LegendTop => _panel.Visible ? _panel.OffsetBottom + 8f : PanelTop;
 
     public OptionsPanel(Control screen, Control toolbar)
     {
@@ -161,8 +155,8 @@ internal sealed class OptionsPanel : IDisposable
         margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         _panel.AddChild(margin);
 
-        // A docked legend needs space below this dropdown. Scroll the settings when
-        // necessary, including Advanced, and bring focused rows into view on a pad.
+        // Scroll settings that exceed the screen, including Advanced, and bring
+        // focused rows into view on a pad.
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -263,14 +257,6 @@ internal sealed class OptionsPanel : IDisposable
         _screen.Resized += _screenResized;
     }
 
-    public void SetLegendHeight(float height)
-    {
-        _legendHeight = height;
-        ResizePanel();
-    }
-
-    public void RefreshLayout() => ResizePanel();
-
     /// <summary>Hidden with the map screen, like every other panel this mod adds.</summary>
     public void SetShellVisible(bool visible)
     {
@@ -292,7 +278,6 @@ internal sealed class OptionsPanel : IDisposable
         _panel.Visible = open;
         _catcher.Visible = open;
         _gear.Modulate = open ? Colors.White : GearIdle;
-        LegendTopChanged?.Invoke(LegendTop);
         if (!open)
         {
             // Back where it came from, or a controller is left with focus on a panel
@@ -344,11 +329,9 @@ internal sealed class OptionsPanel : IDisposable
     /// </summary>
     private void ResizePanel()
     {
-        var reserved = PathingOptions.LegendMiddleRight ? _legendHeight + 8f : 0f;
-        var available = Math.Max(120f, _screen.Size.Y - PanelTop - 24f - reserved);
+        var available = Math.Max(120f, _screen.Size.Y - PanelTop - 24f);
         _panel.OffsetBottom = PanelTop
             + Math.Min(available, Math.Max(200f, _rows.GetCombinedMinimumSize().Y + PanelPadding));
-        LegendTopChanged?.Invoke(LegendTop);
     }
 
     private static void AddSpacer(Container into) => into.AddChild(new Control
