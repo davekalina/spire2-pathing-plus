@@ -408,13 +408,24 @@ whole tier at a time while they fit the legend. Legend rows carry the score
 ("Route 1 — 6/7"). Same-floor pins are meaningful and allowed. The native Clear
 drawings button clears the pins too.
 
-**Start in Wide View** (`PathingOptions.StartWide`, off by default) opens the map
-already rotated. `MapZoom.ShowInitialView` must run **after** the first `Refresh` and
-never in place of `Reset`: `Apply` drops back to the normal view when `_nodeCenters()`
-is empty, and it is empty until a refresh has read the point dictionary. It is
-deferred a frame on top of that, because the node rects it frames against are only
-final after a layout pass. It snaps rather than tweens — animating on open shows the
-normal map and then flips it, which reads as a glitch. `Toggled` therefore carries an
+**The map reopens in the view it was left in.** Every press of the Zoom button records
+its result in `PathingOptions.LastView`, and `MapZoom.ShowRememberedView` puts that view
+back on the way in — a player who reads the act in the wide view is otherwise zooming
+out again every single turn. **Start in Wide View** (`PathingOptions.StartWide`, off by
+default) survives as the memory's **starting value** and nothing more: its setter is
+what writes `LastView`, which is also what makes turning it on mid-run mean the *next*
+open rather than the next launch. `LastView` is deliberately never written to the
+settings file — a view is where the session got to, not a preference, and persisting it
+would leave that setting meaning nothing at all after the first press of the button.
+`Reset` and `ResetOutOfSight` put the map upright without touching it: tidying up after
+the mod is not the player choosing a view.
+
+`ShowRememberedView` must run **after** the first `Refresh` and never in place of
+`Reset`: `Apply` drops back to the normal view when `_nodeCenters()` is empty, and it
+is empty until a refresh has read the point dictionary. It is deferred a frame on top
+of that, because the node rects it frames against are only final after a layout pass.
+It snaps rather than tweens — animating on open shows the normal map and then flips
+it, which reads as a glitch. `Toggled` therefore carries an
 **instant** flag: the node icons counter-rotate in step with the map, and snapping the
 map while they tween leaves every icon visibly spinning into place on a map that has
 already arrived. Anything else that follows the view must honour that flag too.
@@ -467,8 +478,9 @@ true for the path tool and the eraser, and leaves the quill exactly native.
 **Travel works in every view.** `BeforeMapPointSelected` lets a node through when
 `IsEnabled` — the game offering it as a move — and only plans with the rest. It used to
 swallow travel outright while zoomed, on the reasoning that the zoomed views were a
-look at the act rather than somewhere to play from; once **Start in Wide View** could
-make one of them the default, that turned into "zoom in first" on every single turn.
+look at the act rather than somewhere to play from; once **Start in Wide View** — and
+now the remembered view — could make one of them what every open lands in, that turned
+into "zoom in first" on every single turn.
 Hit testing goes through `Polyline`, so what can be hovered is exactly what is
 drawn. Leaving the first leg *undrawn* while travel is live was tried and reverted:
 it read as the plan having a hole in it rather than as an invitation to click.
@@ -763,13 +775,19 @@ Game coupling that a game update can move (verify after every update):
   (boss at top) with its position and clamping.
 - Persistence: pins and locked route restored only onto their own map, pruned when
   stale, saved on every change; the Clear button empties the file's pin list too.
-- **Finish an act with Start in Wide View on.** The new act's icons must be upright
-  the moment its map appears, without touching the view — they are new nodes arriving
-  into an already-rotated view, which is its own case and not covered by toggling.
+- **Finish an act with the map left in the wide view.** The new act's icons must be
+  upright the moment its map appears, without touching the view — they are new nodes
+  arriving into an already-rotated view, which is its own case and not covered by
+  toggling.
 - Closing the map from the wide view: no turn should be visible at all, and none of
   the act should sweep off the edge on the way out. Reopen immediately afterwards and
-  the map must come back at full opacity, upright. Close from Normal too, where nothing
-  should fade early.
+  the map must come back at full opacity, in that same wide view, with its icons
+  upright. Close from Normal too, where nothing should fade early.
+- The remembered view: zoom out, close the map and reopen it — the same one of the two
+  zoomed states comes back, the button's label agrees, and the node grid is wired for
+  it. Travel a floor, and finish an act. Then restart the game, where the first open
+  must go back to whatever **Start in Wide View** says, and toggling that setting
+  mid-run must land on the next open rather than the next launch.
 - The Zoom button: label states, its Right Trigger glyph (controller only), full-map
   framing at any act size, drag/wheel while zoomed, and the snap back to the
   current row.

@@ -212,20 +212,27 @@ internal sealed class MapZoom : IDisposable
             _ => MapViewMode.Normal,
         };
         Apply();
+        // A view the player chose is the view the next open should find. Recorded
+        // after Apply, which is the one place the choice can be overruled: with
+        // nothing drawn to frame there is no zoomed view to remember.
+        PathingOptions.LastView = Mode;
         Toggled?.Invoke(false);
     }
 
     /// <summary>
-    /// The view a freshly opened map should start in. Applied **after** the first
-    /// refresh, never with <see cref="Reset" />: framing needs the node centres, and
-    /// <see cref="Apply" /> drops back to the normal view when there are none yet.
+    /// The view a freshly opened map should come back in: the one the player last
+    /// left it in, which at the start of a session is whatever Start in Wide View
+    /// says. Applied **after** the first refresh, never with <see cref="Reset" />:
+    /// framing needs the node centres, and <see cref="Apply" /> drops back to the
+    /// normal view when there are none yet.
     ///
     /// Snapped rather than tweened — on open, animating would show the normal map for
-    /// half a second and then flip it, which reads as a glitch rather than a setting.
+    /// half a second and then flip it, which reads as a glitch rather than a view the
+    /// map was already in.
     /// </summary>
-    public void ShowInitialView()
+    public void ShowRememberedView()
     {
-        var wanted = PathingOptions.StartWide ? MapViewMode.Rotated : MapViewMode.Normal;
+        var wanted = PathingOptions.LastView;
         if (Mode == wanted)
             return;
         Mode = wanted;
@@ -242,7 +249,9 @@ internal sealed class MapZoom : IDisposable
 
     /// <summary>
     /// Back to the normal view — on map change and map open. The map must not be left
-    /// scaled and rotated once the mod stops drawing it.
+    /// scaled and rotated once the mod stops drawing it. It does not touch what the
+    /// next open restores: this is the mod tidying up after itself, not the player
+    /// choosing a view.
     ///
     /// Tweened: snapping it upright is more jarring than watching it turn. Tried
     /// instant, reverted. Closing the map is the exception — see

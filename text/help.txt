@@ -18,7 +18,8 @@ How to use Pathing Plus:
 - Double-click on node types to select all nodes of that type.
 - When paths have been completed, the Legend will show node type counts.
 - Use the Legend to pin down a desired path.
-- Use the Zoom Out / Rotate button for alternate views of the map.
+- Use the Zoom Out / Rotate button for alternate views of the map. The map reopens
+  in the view you last used.
 
 This mod was also designed with FULL GAMEPAD SUPPORT in mind, specifically:
 - In zoomed out modes, you can use the d-pad to move a cursor around the map and select nodes.

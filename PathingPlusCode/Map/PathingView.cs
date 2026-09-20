@@ -670,7 +670,11 @@ internal sealed class PathingView : IDisposable
             hotkeys.RemoveHotkeyReleasedBinding(PathToolHotkey.Action, OnPathToolHotkey);
     });
 
-    /// <summary>Every map open starts in the normal view, never zoomed out.</summary>
+    /// <summary>
+    /// The map comes back in the view it was last left in — the Zoom button's choice
+    /// outlives the close, and Start in Wide View is only what that memory begins the
+    /// session holding.
+    /// </summary>
     public void OnOpened()
     {
         _zoom.Reset();
@@ -684,7 +688,7 @@ internal sealed class PathingView : IDisposable
         Refresh();
         // Deferred: the node rects this frames against are only final after a layout
         // pass, and framing on pre-layout positions puts the whole act off screen.
-        Callable.From(() => Guard.Run("Opening the map in its usual view", _zoom.ShowInitialView))
+        Callable.From(() => Guard.Run("Opening the map in its last view", _zoom.ShowRememberedView))
             .CallDeferred();
     }
 

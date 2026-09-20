@@ -24,10 +24,35 @@ internal static class PathingOptions
     public static bool OverrideDrawing { get; set; } = true;
 
     /// <summary>
-    /// Open the map already in the wide view — the whole act on its side, start at
-    /// the left and boss at the right — rather than the game's normal view.
+    /// Open the map in the wide view — the whole act on its side, start at the left
+    /// and boss at the right — rather than the game's normal view.
+    ///
+    /// It says where a session **begins**, not what every map open does: setting
+    /// it writes <see cref="LastView" />, and from there the map reopens in whichever
+    /// view the player last put it in. That is also why the setter does the seeding
+    /// rather than the map screen reading this on the way in — a player who turns it on
+    /// mid-run means the next open, not the next launch.
     /// </summary>
-    public static bool StartWide { get; set; }
+    public static bool StartWide
+    {
+        get => _startWide;
+        set
+        {
+            _startWide = value;
+            LastView = value ? MapViewMode.Rotated : MapViewMode.Normal;
+        }
+    }
+
+    private static bool _startWide;
+
+    /// <summary>
+    /// The view the map reopens in: whichever one the player last left it in. Changing
+    /// the view is not a setting, so this is deliberately **not** written to the
+    /// settings file — it is where this session got to. A restart starts from
+    /// <see cref="StartWide" /> again, which is what keeps that preference meaning
+    /// something after the first time the player touches the Zoom button.
+    /// </summary>
+    public static MapViewMode LastView { get; set; }
 
     /// <summary>Place the legend beneath the top-right settings controls.</summary>
     public static bool LegendMiddleRight { get; set; }
