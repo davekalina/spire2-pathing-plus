@@ -3,6 +3,7 @@ using MegaCrit.Sts2.addons.mega_text;
 using MegaCrit.Sts2.Core.ControllerInput;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using PathingPlus.PathingPlusCode.Pathing;
 
 namespace PathingPlus.PathingPlusCode.Map;
 
@@ -185,6 +186,10 @@ internal sealed class OptionsPanel : IDisposable
                 () => PathingOptions.LegendMiddleRight, PathingOptions.SetLegendPlacement);
         AddToggle(_rows, "Drawing Trail",
             () => PathingOptions.DrawingTrail, v => PathingOptions.DrawingTrail = v);
+        // Out here rather than under Advanced: it is asked for during a run, by
+        // someone tired of paging through the legend one route at a time.
+        AddSlider(_rows, "Routes per Page", 1f, PathSolver.MaxLegendRoutes, 1f,
+            () => PathingOptions.LegendRoutes, v => PathingOptions.LegendRoutes = (int)MathF.Round(v));
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.
@@ -407,7 +412,7 @@ internal sealed class OptionsPanel : IDisposable
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
 
-        var label = MakeLabel(17, Render(name, get()));
+        var label = MakeLabel(17, Render(name, get(), step));
         label.CustomMinimumSize = new Vector2(158f, 0f);
         label.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(label);
@@ -427,7 +432,7 @@ internal sealed class OptionsPanel : IDisposable
         slider.ValueChanged += value => Guard.Run($"Adjusting {name}", () =>
         {
             set((float)value);
-            label.Text = Render(name, get());
+            label.Text = Render(name, get(), step);
             PathingOptions.Notify();
         });
         // Writing Value fires ValueChanged, which would set the option right back —
@@ -435,14 +440,15 @@ internal sealed class OptionsPanel : IDisposable
         _refreshers.Add(() =>
         {
             slider.Value = get();
-            label.Text = Render(name, get());
+            label.Text = Render(name, get(), step);
         });
         row.AddChild(slider);
         into.AddChild(row);
     }
 
-    private static string Render(string name, float value) =>
-        $"{name}: {(Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
+    /// <summary>A whole-number slider reads as one: "Routes per Page: 5", not 5.00.</summary>
+    private static string Render(string name, float value, float step) =>
+        $"{name}: {(step < 1f && Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

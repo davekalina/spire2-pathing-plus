@@ -1269,7 +1269,8 @@ internal sealed class PathingView : IDisposable
 
     private void RefreshRouteDisplay()
     {
-        var display = RouteDisplay.Arrange(_rankedRoutes, _pinnedRoutes, _selectedRouteIds, _routePage);
+        var display = RouteDisplay.Arrange(
+            _rankedRoutes, _pinnedRoutes, _selectedRouteIds, _routePage, PathingOptions.LegendRoutes);
         _shownRoutes = display.Shown;
         _backdropRoutes = display.Backdrop.Concat(_incompleteRoutes).ToList();
         _pinnedRoutes = display.Pinned;
@@ -1437,7 +1438,7 @@ internal sealed class PathingView : IDisposable
         {
             _overlay.Clear();
         }
-        else if (_shownRoutes.Count <= PathSolver.LegendThreshold)
+        else if (_shownRoutes.Count <= PathingOptions.LegendRoutes)
         {
             var polylines = _shownRoutes.Select(route => Polyline(route).ToArray()).ToList();
             _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes),
@@ -1466,7 +1467,7 @@ internal sealed class PathingView : IDisposable
 
     private void UpdateLegend()
     {
-        if (_shownRoutes.Count is > 0 and <= PathSolver.LegendThreshold)
+        if (_shownRoutes.Count > 0 && _shownRoutes.Count <= PathingOptions.LegendRoutes)
             _legend.SetRoutes(_shownRoutes.Select((route, index) => (
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
                 string.Join("|", route),
@@ -1591,7 +1592,7 @@ internal sealed class PathingView : IDisposable
         var best = ranked[0].Counts[row];
         var chosen = ranked
             .Where(entry => entry.Counts[row] == best)
-            .Take(PathSolver.LegendThreshold)
+            .Take(PathingOptions.LegendRoutes)
             .Select(entry => entry.Route)
             .ToList();
 

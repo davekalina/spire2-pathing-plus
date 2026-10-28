@@ -27,7 +27,8 @@ game's `map_dot` texture (native jitter, flips, and rotation noise, seeded per r
 girth and spacing are sliders, and default to native girth at a tighter 10px pitch) in
 its own overlay layer inside `TheMap` (above the game's dotted connections, below the
 node icons). Colors come from `StsColors`; the >threshold union view is darkBlue at
-0.65 alpha — it is the entire display at act start, so it must not be faint. With five or fewer routes left, a legend panel above the native Share
+0.65 alpha — it is the entire display at act start, so it must not be faint. With a page's worth of routes or fewer left (five unless **Routes per Page** says
+otherwise, up to ten), a legend panel above the native Share
 button shows them as a table — one row per route, headed by a dash in the route's own
 line color (or a pin once it is locked), sorted most elites first then most fires, count columns
 headed by map icons in the fixed order
@@ -106,10 +107,10 @@ only separates once the parchment stops competing for the light end of the range
 
 `AutoPathMenu` is the pull-down on the toolbar's second row: pick Max Elites / Fires /
 Shops / Events / Combats and every complete route is scored by that legend row, the
-best up to five replacing the plan outright. It wears the pause-menu button face
+best up to a page's worth (**Routes per Page**) replacing the plan outright. It wears the pause-menu button face
 because a bare label is nearly invisible when focused — there is nothing to light up
 but the text. Treasure is not offered: an act carries one, so maximising it is not a
-choice. Selecting every node of five routes also selects pairs those routes never step
+choice. Selecting every node of several routes also selects pairs those routes never step
 between, and the edge model would draw them as extra routes nobody asked for, so
 `ApplyAutoPath` **cuts every step no chosen route uses**. That is what makes "the best
 five" mean five.
@@ -183,7 +184,11 @@ can add loc entries and then use any native widget that takes a `LocString` — 
 settings row title and the toolbar hover tip both do. Entries do **not** survive a
 language change (`LocManager` replaces its whole table dictionary), so every caller
 re-asserts them at the point of use — a prefix on `NInputSettingsEntry._Ready` for the
-row, and per-show for the tip — rather than once at startup.
+row, and per-show for the tip — rather than once at startup. Startup could not do it
+anyway: **the loader runs mod initializers before `LocManager.Initialize()`**, so
+`LocManager.Instance` is still null there. `ModStrings.Ensure` answers false quietly in
+that window; writing to it from `Install` put a `NullReferenceException` in every
+player's log on every launch (reported from the Workshop in v1.7.0).
 
 The shortcut is live only while the map is (`ListenForHotkey` on open and close).
 `NHotkeyManager`'s blocking-screen mechanism only covers `MegaInput.AllInputs`, so a mod
@@ -349,7 +354,7 @@ not reintroduce shortest-path bridging here.
 `AssembleRoutes` then stitches those steps back into whole
 routes, because the legend counts what a **path** holds, not what each link holds —
 a plan that forks yields one route per branch. **Every assembled route is drawn**; the
-legend's five are ranked by elites, then fires, then shops, and only those get a
+legend's page is ranked by elites, then fires, then shops, and only those get a
 colour and a column, the rest going down first as a faint backdrop. Cutting the extras
 instead would answer the player's own drawing with silence.
 
@@ -535,7 +540,9 @@ the native legend's order (unknown / shop / treasure / rest / monster / elite), 
 column per route headed by its colored letter; with zero routes it shows the type
 names instead, reading like the native legend. Route selection: up to
 `BestPickPool` (10) candidates survive `MatchByPins`, and the best
-`LegendThreshold` (5) are shown — ranked by pin hits first (a full match must never
+`PathingOptions.LegendRoutes` (the **Routes per Page** slider: `LegendThreshold`, 5,
+by default, `MaxLegendRoutes`, 10, at most — one per entry in `RouteColors`, so a page
+never repeats a colour) are shown — ranked by pin hits first (a full match must never
 lose its slot to a near-miss), then elites + fires, then "?" count; that ranking is
 also the display order, and the remainder go down as backdrop. **The best five are
 always named**, however wide the field: a large match set used to fall back to an
@@ -549,7 +556,7 @@ to the game's traveled-path ink. Turning a route black on hover reads as a commi
 not yet made, and throws away the colour tying the line to its column at the very
 moment the two are being matched. A hovered route with **no** column gets a headerless
 one appended to the legend (`SetPreview`), drawn in `TraceColor` — deliberately
-outside the five route colours, and display-only, since a column that vanishes on the
+outside the route colours, and display-only, since a column that vanishes on the
 next mouse move must not be lockable.
 
 Hovering works **both ways**: a column lights its route
@@ -751,12 +758,12 @@ Game coupling that a game update can move (verify after every update):
   legend threshold, ink highlight / fade states) and rust pin rings — which yield on
   directly-travelable nodes while `IsTravelEnabled`, so the game's own travel
   markers stay unambiguous; the pin itself keeps filtering.
-- The routes panel: header count, hint line, up to five route rows, lock marker,
+- The routes panel: header count, hint line, up to a page of route columns (check 5 and 10), lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
 - Column heads: a dash in the route's colour, the pin ring on the locked one, and a
   locked column under the cursor plainly different from a locked one that is not —
   check that last one with a pad, which is where it matters.
-- The panel's size at one, five and zero columns: plans fit the visible columns and
+- The panel's size at one, five, ten and zero columns: plans fit the visible columns and
   footer controls, and the plain legend fits the type names. Check smooth expansion,
   contraction, rapid reversals, hover previews and footer widths during the tween.
 - Background dragging, control clicks without dragging, no drawing through the

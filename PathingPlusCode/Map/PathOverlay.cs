@@ -16,7 +16,12 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal sealed class PathOverlay : IDisposable
 {
-    /// <summary>One colour per legend slot, straight from the game's palette.</summary>
+    /// <summary>
+    /// One colour per legend slot, straight from the game's palette — as many as
+    /// <see cref="Pathing.PathSolver.MaxLegendRoutes" />, so a full page never repeats
+    /// one. The last two are the palette's deep ones, which still read on parchment
+    /// and sit well clear of the pale blue and purple above them.
+    /// </summary>
     public static readonly Color[] RouteColors =
     [
         StsColors.blue,
@@ -27,6 +32,8 @@ internal sealed class PathOverlay : IDisposable
         StsColors.pink,
         StsColors.aqua,
         StsColors.cream,
+        StsColors.merchantBlue,
+        StsColors.cardTitleOutlineCurse,
     ];
 
     // Solid enough to read at a glance: this is the whole display before the first
@@ -47,7 +54,7 @@ internal sealed class PathOverlay : IDisposable
 
     /// <summary>
     /// A route with no colour of its own, picked out under the pointer. Deliberately
-    /// outside the five route colours so it is never mistaken for one of them, and
+    /// outside the route colours so it is never mistaken for one of them, and
     /// deliberately not the ink: nothing has been chosen yet.
     /// </summary>
     public static readonly Color TraceColor = new(1f, 0.78f, 0.24f);

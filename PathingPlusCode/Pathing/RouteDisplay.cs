@@ -13,20 +13,22 @@ public sealed record RouteDisplay(
         IReadOnlyList<IReadOnlyList<string>> ranked,
         IReadOnlyList<IReadOnlyList<string>> pinned,
         IReadOnlyList<string>? selected,
-        int page)
+        int page,
+        int pageSize = PathSolver.LegendThreshold)
     {
+        pageSize = Math.Clamp(pageSize, 1, PathSolver.MaxLegendRoutes);
         // Search the entire plan before applying the display limit. A pin must not
         // disappear just because a new, higher-scoring route took its column.
         pinned = MatchRemaining(ranked, pinned);
         selected = FindRemaining(ranked, selected);
         // Reserve the pins while there is room to browse alternatives. Once pins
         // fill a page, page the entire set with pins first; no artificial pin limit.
-        var reserve = pinned.Count < PathSolver.LegendThreshold;
+        var reserve = pinned.Count < pageSize;
         var pinnedSet = pinned.ToHashSet();
         var others = reserve
             ? ranked.Where(route => !pinnedSet.Contains(route)).ToList()
             : ranked.OrderByDescending(pinnedSet.Contains).ToList();
-        var capacity = PathSolver.LegendThreshold - (reserve ? pinned.Count : 0);
+        var capacity = pageSize - (reserve ? pinned.Count : 0);
         var pageCount = Math.Max(1, (others.Count + capacity - 1) / capacity);
         page = Math.Clamp(page, 0, pageCount - 1);
         if (selected is not null && others.Contains(selected))

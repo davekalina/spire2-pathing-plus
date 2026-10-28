@@ -54,6 +54,19 @@ internal static class PathingOptions
     /// </summary>
     public static MapViewMode LastView { get; set; }
 
+    /// <summary>
+    /// How many routes the legend shows on a page — and so how many get a colour on
+    /// the map. Five keeps the panel small; up to ten for a player who would rather
+    /// compare them all at once than page through, whatever the panel then covers.
+    /// </summary>
+    public static int LegendRoutes
+    {
+        get => _legendRoutes;
+        set => _legendRoutes = Math.Clamp(value, 1, Pathing.PathSolver.MaxLegendRoutes);
+    }
+
+    private static int _legendRoutes = Pathing.PathSolver.LegendThreshold;
+
     /// <summary>Place the legend beneath the top-right settings controls.</summary>
     public static bool LegendMiddleRight { get; set; }
 
@@ -158,6 +171,7 @@ internal static class PathingOptions
     {
         OverrideDrawing = true;
         StartWide = false;
+        LegendRoutes = Pathing.PathSolver.LegendThreshold;
         SetLegendPlacement(false);
         DrawingTrail = false;
         TrailFade = 0.5f;
@@ -199,6 +213,7 @@ internal static class PathingOptions
 
         public bool? OverrideDrawing { get; set; }
         public bool? StartWide { get; set; }
+        public int? LegendRoutes { get; set; }
         public bool? LegendMiddleRight { get; set; }
         public float? LegendOffsetX { get; set; }
         public float? LegendOffsetY { get; set; }
@@ -231,6 +246,7 @@ internal static class PathingOptions
             return;
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
         StartWide = saved.StartWide ?? StartWide;
+        LegendRoutes = saved.LegendRoutes ?? LegendRoutes;
         LegendMiddleRight = saved.LegendMiddleRight ?? LegendMiddleRight;
         LegendOffsetX = saved.LegendOffsetX is { } x && float.IsFinite(x) ? x : 0f;
         LegendOffsetY = saved.LegendOffsetY is { } y && float.IsFinite(y) ? y : 0f;
@@ -257,6 +273,7 @@ internal static class PathingOptions
         {
             OverrideDrawing = OverrideDrawing,
             StartWide = StartWide,
+            LegendRoutes = LegendRoutes,
             LegendMiddleRight = LegendMiddleRight,
             LegendOffsetX = LegendOffsetX,
             LegendOffsetY = LegendOffsetY,

@@ -54,9 +54,10 @@ internal static class PathToolHotkey
 
         // Each row resolves its title through an indirection: this table maps the action
         // to a loc key, and the row reads that key out of `settings_ui`. Both halves
-        // have to be there or the row throws while building itself — see EnsureTitle.
+        // have to be there or the row throws while building itself. The text half is not
+        // written here: mods initialise before the game builds its loc tables, so there
+        // is no table yet — InputSettingsTitlePatch writes it as each row is built.
         NInputSettingsEntry.commandToLocTitle[Action] = Action;
-        EnsureTitle();
 
         // The settings screen builds one row per action across the controller and
         // mouse-and-keyboard lists, so the second of those is what puts it on screen.
@@ -74,9 +75,10 @@ internal static class PathToolHotkey
     /// The row's visible text, in the table the row will look for it in.
     ///
     /// Re-asserted rather than set once: changing language replaces the whole table
-    /// dictionary, and this key would go with it. It is called from Install for the
-    /// normal case and again just before any row is built, which is the moment it has
-    /// to be true — see <see cref="InputSettingsTitlePatch" />.
+    /// dictionary, and this key would go with it. It is called just before any row is
+    /// built, which is the moment it has to be true — see
+    /// <see cref="InputSettingsTitlePatch" />. Not from Install: the tables do not exist
+    /// yet when mods initialise.
     /// </summary>
     public static void EnsureTitle() => ModStrings.Ensure(LocTable, TitleKey, SettingsTitle);
 

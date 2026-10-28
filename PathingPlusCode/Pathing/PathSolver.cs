@@ -13,8 +13,14 @@ public static class PathSolver
     /// </summary>
     public const int MaxPaths = 4096;
 
-    /// <summary>The most routes the legend ever shows at once.</summary>
+    /// <summary>How many routes the legend shows at once, unless the player asks for more.</summary>
     public const int LegendThreshold = 5;
+
+    /// <summary>
+    /// The most it can be asked for: one per route colour. Past this, two columns
+    /// would share a colour and the map could no longer say which line is which.
+    /// </summary>
+    public const int MaxLegendRoutes = 10;
 
     public static PathSet EnumeratePaths(SpireMapGraph graph, IEnumerable<string> startIds)
     {

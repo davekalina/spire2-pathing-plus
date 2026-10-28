@@ -9,8 +9,8 @@ namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
 /// The replacement Legend: the native legend's parchment, drawn in its place but 75%
-/// wider, transposed — node types as rows, one column per computed route (up to
-/// five), each headed by a dash of its own line colour, or by a pin once that route
+/// wider, transposed — node types as rows, one column per computed route (five a
+/// page unless Routes per Page says otherwise, up to ten), each headed by a dash of its own line colour, or by a pin once that route
 /// is pinned. Looking away folds the table down to its pinned columns with a smooth
 /// resize. The empty parchment can be dragged to move the panel.
 ///
@@ -501,7 +501,7 @@ internal sealed class RouteLegendPanel : IDisposable
 
     /// <summary>
     /// A headerless extra column for the route under the cursor when it is not one of
-    /// the five. Above the legend threshold most of what is drawn has no column, and
+    /// the page. Above the legend threshold most of what is drawn has no column, and
     /// hovering one of those used to light the map while the table said nothing — the
     /// one moment the counts are actually being asked for.
     /// </summary>

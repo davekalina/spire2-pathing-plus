@@ -175,4 +175,21 @@ public class RouteDisplayTests
         var display = RouteDisplay.Arrange([tail], [first, second], null, 0);
         Assert.Equal(tail, Assert.Single(display.Pinned));
     }
+
+    [Fact]
+    public void A_larger_page_shows_ten_routes_at_once_with_pins_kept()
+    {
+        var routes = Routes(12);
+        var display = RouteDisplay.Arrange(routes, [routes[11]], null, 0, 10);
+        Assert.Equal(10, display.Shown.Count);
+        Assert.Contains(routes[11], display.Shown);
+        Assert.Equal(2, display.PageCount);
+    }
+
+    [Fact]
+    public void A_page_size_past_the_colour_count_is_held_to_it()
+    {
+        var display = RouteDisplay.Arrange(Routes(30), [], null, 0, 50);
+        Assert.Equal(PathSolver.MaxLegendRoutes, display.Shown.Count);
+    }
 }

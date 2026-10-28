@@ -23,11 +23,19 @@ namespace PathingPlus.PathingPlusCode.Map;
 /// </summary>
 internal static class ModStrings
 {
-    /// <summary>Put <paramref name="text" /> at <paramref name="key" />, and say whether it took.</summary>
+    /// <summary>
+    /// Put <paramref name="text" /> at <paramref name="key" />, and say whether it took.
+    ///
+    /// Quietly false before the game has made its <c>LocManager</c>: the loader runs mod
+    /// initializers first and builds the tables after, so there is nothing to merge into
+    /// yet. That is not a failure worth a stack trace in every player's log — the
+    /// callers re-assert at the point of use, which is always later.
+    /// </summary>
     public static bool Ensure(string table, string key, string text) =>
+        LocManager.Instance is { } loc &&
         Guard.Run($"Registering the {table} text", () =>
         {
-            LocManager.Instance.GetTable(table).MergeWith(new Dictionary<string, string>
+            loc.GetTable(table).MergeWith(new Dictionary<string, string>
             {
                 [key] = text,
             });
