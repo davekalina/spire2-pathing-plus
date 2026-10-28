@@ -17,8 +17,9 @@ public static class PathSolver
     public const int LegendThreshold = 5;
 
     /// <summary>
-    /// The most it can be asked for: one per route colour. Past this, two columns
-    /// would share a colour and the map could no longer say which line is which.
+    /// The largest page the slider offers by number: one per route colour. Past this
+    /// the only choice is All, where colours repeat and hovering is what tells two
+    /// lines apart.
     /// </summary>
     public const int MaxLegendRoutes = 10;
 

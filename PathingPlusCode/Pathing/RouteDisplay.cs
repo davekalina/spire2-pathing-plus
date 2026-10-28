@@ -16,7 +16,8 @@ public sealed record RouteDisplay(
         int page,
         int pageSize = PathSolver.LegendThreshold)
     {
-        pageSize = Math.Clamp(pageSize, 1, PathSolver.MaxLegendRoutes);
+        // No upper bound: "All" asks for as many columns as the screen can hold.
+        pageSize = Math.Max(1, pageSize);
         // Search the entire plan before applying the display limit. A pin must not
         // disappear just because a new, higher-scoring route took its column.
         pinned = MatchRemaining(ranked, pinned);
@@ -29,7 +30,8 @@ public sealed record RouteDisplay(
             ? ranked.Where(route => !pinnedSet.Contains(route)).ToList()
             : ranked.OrderByDescending(pinnedSet.Contains).ToList();
         var capacity = pageSize - (reserve ? pinned.Count : 0);
-        var pageCount = Math.Max(1, (others.Count + capacity - 1) / capacity);
+        // Not (count + capacity - 1) / capacity: that overflows on a page of int.MaxValue.
+        var pageCount = others.Count == 0 ? 1 : (others.Count - 1) / capacity + 1;
         page = Math.Clamp(page, 0, pageCount - 1);
         if (selected is not null && others.Contains(selected))
             page = others.IndexOf(selected) / capacity;

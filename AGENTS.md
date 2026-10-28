@@ -542,7 +542,12 @@ names instead, reading like the native legend. Route selection: up to
 `BestPickPool` (10) candidates survive `MatchByPins`, and the best
 `PathingOptions.LegendRoutes` (the **Routes per Page** slider: `LegendThreshold`, 5,
 by default, `MaxLegendRoutes`, 10, at most — one per entry in `RouteColors`, so a page
-never repeats a colour) are shown — ranked by pin hits first (a full match must never
+never repeats a colour) are shown. The slider's last stop is **All**
+(`PathingOptions.ShowAllRoutes`): the panel grows a column per route and colours
+repeat, but the page is still `RouteLegendPanel.ColumnsThatFit` — the screen's width
+less a slot for the hover preview — because a column past the screen's edge can be
+neither read nor clicked. `RouteDisplay.Arrange` takes the page size without an upper
+bound, and its page count is written so a huge one cannot overflow — ranked by pin hits first (a full match must never
 lose its slot to a near-miss), then elites + fires, then "?" count; that ranking is
 also the display order, and the remainder go down as backdrop. **The best five are
 always named**, however wide the field: a large match set used to fall back to an
@@ -758,7 +763,7 @@ Game coupling that a game update can move (verify after every update):
   legend threshold, ink highlight / fade states) and rust pin rings — which yield on
   directly-travelable nodes while `IsTravelEnabled`, so the game's own travel
   markers stay unambiguous; the pin itself keeps filtering.
-- The routes panel: header count, hint line, up to a page of route columns (check 5 and 10), lock marker,
+- The routes panel: header count, hint line, up to a page of route columns (check 5, 10 and All with a wide fork), lock marker,
   hover/focus/select behavior, and its focus chain from the native map legend.
 - Column heads: a dash in the route's colour, the pin ring on the locked one, and a
   locked column under the cursor plainly different from a locked one that is not —

@@ -1267,10 +1267,14 @@ internal sealed class PathingView : IDisposable
         PersistState();
     }
 
+    /// <summary>The legend's page size: the slider's number, or with All, the screen's width.</summary>
+    private int RoutesPerPage =>
+        PathingOptions.ShowAllRoutes ? _legend.ColumnsThatFit : PathingOptions.LegendRoutes;
+
     private void RefreshRouteDisplay()
     {
         var display = RouteDisplay.Arrange(
-            _rankedRoutes, _pinnedRoutes, _selectedRouteIds, _routePage, PathingOptions.LegendRoutes);
+            _rankedRoutes, _pinnedRoutes, _selectedRouteIds, _routePage, RoutesPerPage);
         _shownRoutes = display.Shown;
         _backdropRoutes = display.Backdrop.Concat(_incompleteRoutes).ToList();
         _pinnedRoutes = display.Pinned;
@@ -1438,7 +1442,7 @@ internal sealed class PathingView : IDisposable
         {
             _overlay.Clear();
         }
-        else if (_shownRoutes.Count <= PathingOptions.LegendRoutes)
+        else if (_shownRoutes.Count <= RoutesPerPage)
         {
             var polylines = _shownRoutes.Select(route => Polyline(route).ToArray()).ToList();
             _overlay.ShowRoutes(polylines, EdgesOf(_backdropRoutes),
@@ -1467,7 +1471,7 @@ internal sealed class PathingView : IDisposable
 
     private void UpdateLegend()
     {
-        if (_shownRoutes.Count > 0 && _shownRoutes.Count <= PathingOptions.LegendRoutes)
+        if (_shownRoutes.Count > 0 && _shownRoutes.Count <= RoutesPerPage)
             _legend.SetRoutes(_shownRoutes.Select((route, index) => (
                 PathOverlay.RouteColors[index % PathOverlay.RouteColors.Length],
                 string.Join("|", route),
@@ -1592,7 +1596,7 @@ internal sealed class PathingView : IDisposable
         var best = ranked[0].Counts[row];
         var chosen = ranked
             .Where(entry => entry.Counts[row] == best)
-            .Take(PathingOptions.LegendRoutes)
+            .Take(RoutesPerPage)
             .Select(entry => entry.Route)
             .ToList();
 

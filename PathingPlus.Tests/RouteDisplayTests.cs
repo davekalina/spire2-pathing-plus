@@ -187,9 +187,20 @@ public class RouteDisplayTests
     }
 
     [Fact]
-    public void A_page_size_past_the_colour_count_is_held_to_it()
+    public void A_page_as_wide_as_the_plan_shows_every_route_on_one_page()
     {
-        var display = RouteDisplay.Arrange(Routes(30), [], null, 0, 50);
-        Assert.Equal(PathSolver.MaxLegendRoutes, display.Shown.Count);
+        var routes = Routes(30);
+        var display = RouteDisplay.Arrange(routes, [routes[29]], null, 0, 41);
+        Assert.Equal(30, display.Shown.Count);
+        Assert.Empty(display.Backdrop);
+        Assert.Equal(1, display.PageCount);
+    }
+
+    [Fact]
+    public void An_unbounded_page_does_not_overflow_the_page_count()
+    {
+        var display = RouteDisplay.Arrange(Routes(30), [], null, 0, int.MaxValue);
+        Assert.Equal(30, display.Shown.Count);
+        Assert.Equal(1, display.PageCount);
     }
 }

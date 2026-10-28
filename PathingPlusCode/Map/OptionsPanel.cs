@@ -187,9 +187,18 @@ internal sealed class OptionsPanel : IDisposable
         AddToggle(_rows, "Drawing Trail",
             () => PathingOptions.DrawingTrail, v => PathingOptions.DrawingTrail = v);
         // Out here rather than under Advanced: it is asked for during a run, by
-        // someone tired of paging through the legend one route at a time.
-        AddSlider(_rows, "Routes per Page", 1f, PathSolver.MaxLegendRoutes, 1f,
-            () => PathingOptions.LegendRoutes, v => PathingOptions.LegendRoutes = (int)MathF.Round(v));
+        // someone tired of paging through the legend one route at a time. One stop
+        // past the numbers is All, so a single control says how big a page is.
+        const float allRoutes = PathSolver.MaxLegendRoutes + 1;
+        AddSlider(_rows, "Routes per Page", 1f, allRoutes, 1f,
+            () => PathingOptions.ShowAllRoutes ? allRoutes : PathingOptions.LegendRoutes,
+            v =>
+            {
+                PathingOptions.ShowAllRoutes = v >= allRoutes;
+                if (!PathingOptions.ShowAllRoutes)
+                    PathingOptions.LegendRoutes = (int)MathF.Round(v);
+            },
+            v => v >= allRoutes ? "All" : v.ToString("0"));
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.
@@ -407,12 +416,12 @@ internal sealed class OptionsPanel : IDisposable
 
     private void AddSlider(
         Container into, string name, float min, float max, float step,
-        Func<float> get, Action<float> set)
+        Func<float> get, Action<float> set, Func<float, string>? format = null)
     {
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
 
-        var label = MakeLabel(17, Render(name, get(), step));
+        var label = MakeLabel(17, Render(name, get(), step, format));
         label.CustomMinimumSize = new Vector2(158f, 0f);
         label.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(label);
@@ -432,7 +441,7 @@ internal sealed class OptionsPanel : IDisposable
         slider.ValueChanged += value => Guard.Run($"Adjusting {name}", () =>
         {
             set((float)value);
-            label.Text = Render(name, get(), step);
+            label.Text = Render(name, get(), step, format);
             PathingOptions.Notify();
         });
         // Writing Value fires ValueChanged, which would set the option right back —
@@ -440,15 +449,15 @@ internal sealed class OptionsPanel : IDisposable
         _refreshers.Add(() =>
         {
             slider.Value = get();
-            label.Text = Render(name, get(), step);
+            label.Text = Render(name, get(), step, format);
         });
         row.AddChild(slider);
         into.AddChild(row);
     }
 
     /// <summary>A whole-number slider reads as one: "Routes per Page: 5", not 5.00.</summary>
-    private static string Render(string name, float value, float step) =>
-        $"{name}: {(step < 1f && Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
+    private static string Render(string name, float value, float step, Func<float, string>? format) =>
+        $"{name}: {format?.Invoke(value) ?? (step < 1f && Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

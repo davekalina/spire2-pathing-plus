@@ -58,6 +58,7 @@ internal static class PathingOptions
     /// How many routes the legend shows on a page — and so how many get a colour on
     /// the map. Five keeps the panel small; up to ten for a player who would rather
     /// compare them all at once than page through, whatever the panel then covers.
+    /// Ignored while <see cref="ShowAllRoutes" /> is on.
     /// </summary>
     public static int LegendRoutes
     {
@@ -66,6 +67,13 @@ internal static class PathingOptions
     }
 
     private static int _legendRoutes = Pathing.PathSolver.LegendThreshold;
+
+    /// <summary>
+    /// Every route at once: the legend grows a column per route, and only pages when
+    /// the next column would run off the screen. Colours repeat past the ten the
+    /// palette has; hovering a column or a line is what tells two of a colour apart.
+    /// </summary>
+    public static bool ShowAllRoutes { get; set; }
 
     /// <summary>Place the legend beneath the top-right settings controls.</summary>
     public static bool LegendMiddleRight { get; set; }
@@ -172,6 +180,7 @@ internal static class PathingOptions
         OverrideDrawing = true;
         StartWide = false;
         LegendRoutes = Pathing.PathSolver.LegendThreshold;
+        ShowAllRoutes = false;
         SetLegendPlacement(false);
         DrawingTrail = false;
         TrailFade = 0.5f;
@@ -214,6 +223,7 @@ internal static class PathingOptions
         public bool? OverrideDrawing { get; set; }
         public bool? StartWide { get; set; }
         public int? LegendRoutes { get; set; }
+        public bool? ShowAllRoutes { get; set; }
         public bool? LegendMiddleRight { get; set; }
         public float? LegendOffsetX { get; set; }
         public float? LegendOffsetY { get; set; }
@@ -247,6 +257,7 @@ internal static class PathingOptions
         OverrideDrawing = saved.OverrideDrawing ?? OverrideDrawing;
         StartWide = saved.StartWide ?? StartWide;
         LegendRoutes = saved.LegendRoutes ?? LegendRoutes;
+        ShowAllRoutes = saved.ShowAllRoutes ?? ShowAllRoutes;
         LegendMiddleRight = saved.LegendMiddleRight ?? LegendMiddleRight;
         LegendOffsetX = saved.LegendOffsetX is { } x && float.IsFinite(x) ? x : 0f;
         LegendOffsetY = saved.LegendOffsetY is { } y && float.IsFinite(y) ? y : 0f;
@@ -274,6 +285,7 @@ internal static class PathingOptions
             OverrideDrawing = OverrideDrawing,
             StartWide = StartWide,
             LegendRoutes = LegendRoutes,
+            ShowAllRoutes = ShowAllRoutes,
             LegendMiddleRight = LegendMiddleRight,
             LegendOffsetX = LegendOffsetX,
             LegendOffsetY = LegendOffsetY,

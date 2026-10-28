@@ -283,6 +283,22 @@ internal sealed class RouteLegendPanel : IDisposable
         _screen.Resized += _screenResized;
     }
 
+    /// <summary>
+    /// How many route columns fit across the screen, less one for the hover preview —
+    /// the page size behind Routes per Page: All. The panel grows as far as it is
+    /// asked to, but a column past the screen's edge cannot be read or clicked, so
+    /// beyond this the legend pages after all.
+    /// </summary>
+    public int ColumnsThatFit
+    {
+        get
+        {
+            // The viewport stands in until the screen's first layout gives it a size.
+            var width = _screen.Size.X > 0f ? _screen.Size.X : _screen.GetViewportRect().Size.X;
+            return Math.Max(1, (int)((width - 2f * ScreenMargin - ColumnsStartX - EdgePad) / ColumnWidth) - 1);
+        }
+    }
+
     private Vector2 PresetPosition => new(
         _screen.Size.X - ScreenMargin - _panel.Size.X,
         PathingOptions.LegendMiddleRight
