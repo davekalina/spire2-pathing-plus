@@ -7,8 +7,10 @@ using System.Reflection;
 namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
-/// The places where the game's current builds disagree, answered for all of them, so one
-/// DLL loads on the default branch (0.111) and on the beta (0.113) alike.
+/// The places where the game's recent builds disagree, answered for all of them, so one
+/// DLL loads on 0.111 (the previous beta, and the manifest's minimum) and on 0.113 (the
+/// current beta) alike. The default branch is still 0.107.1, which the mod does not
+/// support: the manifest refuses it.
 ///
 /// Each member here exists because a direct call compiled against one build fails on
 /// the other. That failure is not a compile error anyone sees. It is a
