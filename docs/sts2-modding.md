@@ -1,8 +1,8 @@
 # Authoring Slay the Spire 2 mods
 
 Platform reference. These are facts about the game and its mod loader, verified against
-the decompiled `sts2.dll` for game version 0.111.0 and against Mega Crit's official
-uploader. They are not project preferences — see `AGENTS.md` for those.
+the decompiled `sts2.dll` for game versions 0.111.0 and 0.113.0 and against Mega Crit's
+official uploader. They are not project preferences — see `AGENTS.md` for those.
 
 Steam app id: **2868840**.
 

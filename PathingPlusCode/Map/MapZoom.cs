@@ -36,8 +36,6 @@ internal sealed class MapZoom : IDisposable
 {
     private static readonly FieldInfo? TargetDragPosField =
         AccessTools.Field(typeof(NMapScreen), "_targetDragPos");
-    private static readonly FieldInfo? DistYField =
-        AccessTools.Field(typeof(NMapScreen), "_distY");
 
     /// <summary>Shared by every view-change animation, node icon counter-spin included.</summary>
     public const double TweenDuration = 0.55;
@@ -346,9 +344,8 @@ internal sealed class MapZoom : IDisposable
 
         if (Mode == MapViewMode.Normal)
         {
-            var row = RunManager.Instance?.DebugOnlyGetState()?.CurrentMapCoord?.row ?? 0;
-            var distY = DistYField?.GetValue(_screen) as float? ?? 155f;
-            AnimateTo(1f, 0f, new Vector2(0f, Mathf.Clamp(-600f + row * distY, -600f, 1800f)), instant);
+            var row = RunManager.Instance?.DebugOnlyGetState()?.CurrentMapCoord?.row;
+            AnimateTo(1f, 0f, new Vector2(0f, GameCompat.RowScrollTarget(_screen, row)), instant);
             return;
         }
 

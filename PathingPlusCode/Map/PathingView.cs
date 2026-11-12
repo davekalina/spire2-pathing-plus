@@ -665,9 +665,9 @@ internal sealed class PathingView : IDisposable
         if (NHotkeyManager.Instance is not { } hotkeys)
             return;
         if (listening)
-            hotkeys.PushHotkeyReleasedBinding(PathToolHotkey.Action, OnPathToolHotkey);
+            GameCompat.PushHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, OnPathToolHotkey);
         else
-            hotkeys.RemoveHotkeyReleasedBinding(PathToolHotkey.Action, OnPathToolHotkey);
+            GameCompat.RemoveHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, OnPathToolHotkey);
     });
 
     /// <summary>

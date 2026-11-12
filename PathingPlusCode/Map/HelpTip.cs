@@ -109,9 +109,7 @@ internal sealed class HelpTip : IDisposable
         // so the badge is drawn in the same hand as everything else on this screen.
         _circle = new TextureRect
         {
-            Texture = ResourceLoader.Load<Texture2D>(
-                "res://images/atlases/compressed.sprites/map/map_circle_4.tres",
-                null, ResourceLoader.CacheMode.Reuse),
+            Texture = GameArt.MapCircle.Load(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             Size = new Vector2(MapToolbar.HelpSize, MapToolbar.HelpSize),

@@ -682,10 +682,24 @@ Game coupling that a game update can move (verify after every update):
   `NInputManager.remappable*Inputs` lists being **mutable `List<StringName>` behind an
   `IReadOnlyList`** — if that ever becomes a genuinely immutable collection the row
   cannot be added, and the mod says so in the log rather than failing.
-- Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and
-  `NMapScreen._distY` (zoom-out restore).
-- Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800] and the
-  "-600 + row * _distY" current-row formula.
+- Reflection: `NMapScreen._mapPointDictionary`, `NMapScreen._targetDragPos`, and for
+  the zoom-in snap to the current row `NMapScreen.GetRowScrollPos(int)` (0.113) or
+  `NMapScreen._distY` (0.111) — see `GameCompat.RowScrollTarget`.
+- Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800], and on 0.111 the
+  "-600 + row * _distY" current-row formula that `GetRowScrollPos` replaced.
+- **One build serves every supported game version.** Where 0.111 and 0.113 differ, the
+  call goes through `GameCompat` / `GameArt` by name and takes whichever form the running
+  game has; never call a member that differs between them directly. A direct call
+  compiles against whichever `sts2.dll` is installed and then throws
+  `MissingMethodException` on the other build — inside `Guard.Run`, so all anyone sees
+  is a feature that quietly stopped working. The known differences:
+  `NHotkeyManager.Push/RemoveHotkeyReleasedBinding` (0.113 added a trailing
+  `long sequence = 0` and made Remove return it), the row scroll above, and the
+  `compressed` atlas (renamed `compressed_atlas` in 0.113 and flattened, so
+  `compressed.sprites/map/map_dot.tres` is now `compressed_atlas.sprites/map_dot.tres`).
+  To check a new build, compare the mod's `[sts2]` member references between a DLL
+  built against the old game and one built against the new (`ilspycmd -il`): any
+  difference is a signature that moved.
 - Input actions: `Controller.rightTrigger` for Zoom, `Controller.lStickPress` **and**
   `MegaInput.peek` (Steam Input commonly binds L3 to peek, so the game's own stick
   click never fires — the same class of gap as the analog stick) to reach for the
@@ -734,8 +748,8 @@ Game coupling that a game update can move (verify after every update):
   this.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),
-  `images/atlases/compressed.sprites/map/map_dot.tres`,
-  `images/atlases/compressed.sprites/map/map_circle_4.tres`,
+  `map_dot.tres` and `map_circle_4.tres` from the compressed atlas (two paths, see
+  `GameArt`),
   `images/packed/common_ui/submenu_panel_short.png` (the toolbar tray, the settings
   panel, and the help panel), `images/ui/reward_screen/reward_item_button.png` plus
   `hsv.gdshader` (the view button's face),

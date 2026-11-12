@@ -75,13 +75,6 @@ internal sealed class RouteLegendPanel : IDisposable
     /// <summary>The key mark heading a column, sized to sit inside the header band.</summary>
     private const float KeySize = 26f;
 
-    /// <summary>
-    /// The map's own dash, which is what the routes themselves are drawn from. A column
-    /// is headed by a sample of its line — and by <see cref="PinIcon" /> once that route
-    /// is locked.
-    /// </summary>
-    private const string DashTexture = "res://images/atlases/compressed.sprites/map/map_dot.tres";
-
     public event Action<MapPointType>? TypeHot;
     public event Action? TypeCold;
     public event Action<int>? ColumnHot;
@@ -788,8 +781,9 @@ internal sealed class RouteLegendPanel : IDisposable
             {
                 _columnKeys[i].Texture = locked
                     ? PinMark()
-                    : ResourceLoader.Load<Texture2D>(
-                        DashTexture, null, ResourceLoader.CacheMode.Reuse);
+                    // The map's own dash, which is what the routes themselves are drawn
+                    // from: a column is headed by a sample of its line.
+                    : GameArt.MapDot.Load();
                 // The dash texture runs along its own Y axis, so a quarter turn lays it
                 // across the column the way a length of route reads. The pin stands up.
                 _columnKeys[i].Rotation = locked ? 0f : Mathf.Pi / 2f;

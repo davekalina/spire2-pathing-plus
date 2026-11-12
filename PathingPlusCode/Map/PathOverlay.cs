@@ -467,9 +467,7 @@ internal sealed class PathOverlay : IDisposable
     /// </summary>
     private static TextureRect MakeInkRing(Vector2 center, Color color, float scale) => new()
     {
-        Texture = ResourceLoader.Load<Texture2D>(
-            "res://images/atlases/compressed.sprites/map/map_circle_4.tres",
-            null, ResourceLoader.CacheMode.Reuse),
+        Texture = GameArt.MapCircle.Load(),
         ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
         StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
         Size = new Vector2(200, 200),
@@ -504,9 +502,7 @@ internal sealed class PathOverlay : IDisposable
     /// </summary>
     private void ScatterDots(Vector2[] polyline, Color color, List<(TextureRect, Vector2)> sink)
     {
-        var texture = ResourceLoader.Load<Texture2D>(
-            "res://images/atlases/compressed.sprites/map/map_dot.tres",
-            null, ResourceLoader.CacheMode.Reuse);
+        var texture = GameArt.MapDot.Load();
         var random = new Random(SeedFor(polyline));
 
         var spacing = Mathf.Max(1f, PathingOptions.DashSpacing);
