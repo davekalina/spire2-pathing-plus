@@ -1,0 +1,73 @@
+# Every short piece of text the mod puts on screen, in English.
+#
+# One "key = value" per line. The key is what the code asks for; never change it.
+# The value is everything after the first "=", and is free to edit. Lines starting
+# with # are comments.
+#
+# Each language has its own copy of this file in text/<language>/strings.txt, named
+# with the game's own language code (zhs, zht, ...). A key missing from a translation
+# shows in English instead, so a translation can be partial. Text in {braces} is filled
+# in by the mod and must be kept, unchanged, in every language.
+#
+# The help panel is a separate file beside this one: help.txt.
+
+# The view button. It names the action it will take next, not the current view.
+view.zoom_out = Zoom Out
+view.rotate = Rotate
+view.zoom_in = Zoom In
+
+# The Auto-Path pull-down.
+autopath.header = Auto-Path
+autopath.elites = Max Elites
+autopath.fires = Max Fires
+autopath.shops = Max Shops
+autopath.events = Max Events
+autopath.combats = Max Combats
+
+# The settings panel, under the gear. {name} and {value} make up every slider's row.
+settings.value = {name}: {value}
+settings.right_drag = Right-Drag Draws Paths
+settings.start_wide = Start in Wide View
+settings.middle_right = Move to middle-right
+settings.trail = Drawing Trail
+settings.routes_per_page = Routes per Page
+settings.all = All
+settings.advanced = Advanced
+settings.thickness = Thickness
+settings.dash_length = Dash Length
+settings.length_jitter = Length Jitter
+settings.spacing = Spacing
+settings.route_gap = Route Gap
+settings.trail_fade = Trail Fade
+settings.trail_width = Trail Width
+settings.trail_step = Trail Step
+settings.trail_snap = Trail Snaps to Lines
+settings.trail_snap_range = Trail Snap Range
+settings.pen_snap = Pen Snap
+settings.wide_fit = Wide Fit
+settings.wide_zoom = Wide Zoom
+settings.wide_shift_x = Wide Shift X
+settings.wide_shift_y = Wide Shift Y
+settings.reset = Reset to defaults
+
+# The legend. The row names are shown before any route is drawn.
+legend.clear_unpinned = Clear unpinned
+legend.unknown = Unknown
+legend.merchant = Merchant
+legend.treasure = Treasure
+legend.rest_site = Rest Site
+legend.enemy = Enemy
+legend.elite = Elite
+
+# The path tool's hover tip in the drawing tray. {key} is its keyboard shortcut.
+tool.title = Pathing Plus
+tool.title_with_key = Pathing Plus ({key})
+tool.description = Draw straight line paths between nodes on the map.
+
+# The shortcut's row in Settings -> Input.
+input.path_tool = Pathing Plus: Path Tool
+
+# The help panel's heading, under the name and version.
+help.byline = by {author}
+# Stands in for {key} in help.txt when the path tool has no shortcut.
+help.no_key = unbound

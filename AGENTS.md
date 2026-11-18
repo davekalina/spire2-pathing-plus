@@ -85,7 +85,7 @@ Everything but those two lives under a collapsible **Advanced** heading.
 hover, pinned open by a click. It exists because the mod puts a new tool in the game's
 own tray and quietly widens what two of the existing ones do — the eraser, and Clear
 Drawings — so nothing on screen would otherwise say so. **Its prose lives in
-`text/help.txt`, not in the C#** — player-facing text is David's to edit, and should
+`text/<language>/help.txt`, not in the C#** — player-facing text is David's to edit, and should
 never need a code change or a JSON escape to reword. It is an `EmbeddedResource`, so
 there is no loose file to package and no way for the two to disagree; `#` lines are
 comments and the lines within a paragraph are joined, so the file can be hard-wrapped
@@ -96,6 +96,31 @@ list; a build target copies it into `PathingPlus.json`) and
 `workshop/workshop-description.txt` (the Workshop page; `package-workshop.ps1` copies
 it into `workshop.json`). Both syncs are one-way and never fail the build — the `.txt`
 wins, so never hand-edit those JSON fields.
+
+**Every label the mod draws is translated** (`ModText`, Simplified and Traditional
+Chinese so far). Short strings live in `text/<language>/strings.txt` as `key = value`,
+the help panel in `text/<language>/help.txt`, one folder per game language code
+(`LocManager.Language`), embedded as `<lang>/<file>`. Never put a player-facing literal in
+the C#: add a key to `text/eng/strings.txt` and every translation, or the
+`TextFilesTests` key-parity test fails. Lookups fall back to English key by key. Three
+things to keep:
+
+- **The language is read at the point of use, not cached.** The game only changes
+  language from the main menu, so every map screen is built in one language, but the
+  Settings → Input row (`PathToolHotkey.EnsureTitle`) is built on the very screen the
+  change is made from.
+- **Punctuation belongs to the translation.** The colon in a slider row
+  (`settings.value`) and the brackets around a shortcut (`tool.title_with_key`) are part
+  of the string, because Chinese writes them full-width as the game does.
+- **Fonts take care of themselves, as long as labels stay `MegaLabel`s** with their font
+  set before they enter the tree: `MegaLabel._Ready` swaps in the game's own CJK face
+  (`FontManager`) over whatever override it finds. A plain `Label` would render CJK with
+  whatever fallback Godot finds, or not at all.
+
+Shared terms come from the game's own `localization/<lang>/*.json` (extract them from the
+`.pck`); zht is a Taiwan-style translation of its own, not converted zhs. The manifest
+`description` and the Workshop page are English only — neither has a per-language form
+the mod can fill.
 
 Two things about that panel are load-bearing. Its text is laid out **absolutely, not
 in a container**: an autowrapping `Label` reports a near-zero minimum width, so inside
@@ -674,6 +699,8 @@ Game coupling that a game update can move (verify after every update):
   `NControllerMapDrawingInput._Process`, and — for the shortcut —
   `NInputManager.DefaultHotkeyInputMap` (a property getter) and
   `NInputSettingsEntry._Ready`.
+- Language and fonts: `LocManager.Instance.Language` (the game's three-letter codes)
+  and `MegaLabel._Ready` applying `FontManager`'s substitute font; see `ModText`.
 - Loc tables: `settings_ui` (`INPUT_SETTINGS.INPUT_TITLE.pathing_plus_path_tool`) and
   `map` (`PATHING_PLUS_TOOL.title` / `.description`), both added through
   `LocTable.MergeWith` at the point of use. See `ModStrings`.
@@ -830,6 +857,10 @@ Game coupling that a game update can move (verify after every update):
   manual (Auto Path off) planning with zero, one, and several pins.
 - The help badge: hover shows and unhover hides the panel, a click pins it open, and
   the text neither overruns the parchment nor wraps a word per line.
+- Every surface above in each shipped language (zhs, zht as well as English): labels
+  fit their buttons and rows, the legend's name column fits the translated names, the
+  help panel's Chinese wraps between characters with no stray spaces, and punctuation is
+  full-width where the game's own is.
 - Controller mode: the Right Trigger hotkey, all-node focus wiring and its
   restoration, the gold cursor ring, cursor retention across pin presses,
   select-to-pin versus select-to-travel, and the frozen native scroll/mouse

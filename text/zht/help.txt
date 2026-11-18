@@ -1,0 +1,18 @@
+# 說明面板 — 繁體中文 (Traditional Chinese). Same format as text/eng/help.txt:
+# a blank line starts a paragraph, "- " starts a bullet, and any other line
+# continues the one above (joined without a space, as Chinese is written).
+# {key} is the path tool's keyboard shortcut; keep it as written.
+
+Pathing Plus 使用說明：
+
+- 使用 Pathing Plus 繪圖工具（鍵盤 {key} 鍵）在地圖上繪製路線。
+- 也可以逐一點選你想前往的房間。
+- 雙擊某個房間，即可選取所有同類型的房間。
+- 路線完成後，圖例會顯示路線上各類房間的數量。
+- 可在圖例中鎖定想走的路線。
+- 使用「縮小／旋轉」按鈕切換地圖檢視。重新開啟地圖時，會維持上次使用的檢視。
+
+本模組在設計時便考慮了完整的控制器支援，包括：
+- 在縮小檢視中，可用方向鍵移動地圖上的游標並選取房間。
+- 在繪圖模式中，按下左搖桿即可在 Pathing Plus 繪圖工具與橡皮擦之間切換。
+- 選用：停用 Steam Input 後，選取圖例時即可捲動地圖（與《殺戮尖塔》初代相同）。

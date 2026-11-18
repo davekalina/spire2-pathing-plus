@@ -325,9 +325,9 @@ internal sealed class MapZoom : IDisposable
     /// </summary>
     private void UpdateLabel() => _label.Text = Mode switch
     {
-        MapViewMode.Normal => "Zoom Out",
-        MapViewMode.Zoomed => "Rotate",
-        _ => "Zoom In",
+        MapViewMode.Normal => ModText.Get("view.zoom_out"),
+        MapViewMode.Zoomed => ModText.Get("view.rotate"),
+        _ => ModText.Get("view.zoom_in"),
     };
 
     private void Apply(bool instant = false)

@@ -31,7 +31,14 @@ internal static class AutoPathGoals
         _ => 5,
     };
 
-    public static string Label(this AutoPathGoal goal) => $"Max {goal}";
+    public static string Label(this AutoPathGoal goal) => ModText.Get(goal switch
+    {
+        AutoPathGoal.Elites => "autopath.elites",
+        AutoPathGoal.Fires => "autopath.fires",
+        AutoPathGoal.Shops => "autopath.shops",
+        AutoPathGoal.Events => "autopath.events",
+        _ => "autopath.combats",
+    });
 }
 
 /// <summary>
@@ -100,7 +107,7 @@ internal sealed class AutoPathMenu : IDisposable
         });
         _header.AddChild(_face);
 
-        _headerLabel = MakeLabel(20, "Auto-Path  ▼");
+        _headerLabel = MakeLabel(20, Header(open: false));
         _headerLabel.HorizontalAlignment = HorizontalAlignment.Center;
         _headerLabel.VerticalAlignment = VerticalAlignment.Center;
         _headerLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -253,12 +260,14 @@ internal sealed class AutoPathMenu : IDisposable
         inputEvent.IsActionPressed(MegaInput.select) ||
         inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false };
 
+    private static string Header(bool open) => $"{ModText.Get("autopath.header")}  {(open ? "▲" : "▼")}";
+
     private void SetOpen(bool open)
     {
         _list.Visible = open;
         _catcher.Visible = open;
         Emphasize(open || _header.HasFocus());
-        _headerLabel.Text = open ? "Auto-Path  ▲" : "Auto-Path  ▼";
+        _headerLabel.Text = Header(open);
         if (!open)
             return;
         _root.MoveToFront();

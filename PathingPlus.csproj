@@ -25,9 +25,11 @@
     <!-- Human-facing text, kept out of the C# so it can be edited without touching
          code. Embedded rather than shipped beside the DLL: there is then no second
          file to package, and no way for the two to disagree. -->
-    <EmbeddedResource Include="text\help.txt" LogicalName="help.txt" />
-    <EmbeddedResource Include="text\clear-unpinned.txt" LogicalName="clear-unpinned.txt" />
-    <EmbeddedResource Include="text\move-to-middle-right.txt" LogicalName="move-to-middle-right.txt" />
+    <!-- One folder per language, named with the game's language code, embedded as
+         "<lang>/<file>" (see ModText). A new language is a new folder; nothing here
+         needs touching. -->
+    <EmbeddedResource Include="text\*\*.txt"
+                      LogicalName="$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)'))))/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Target Name="CheckDependencyPaths">

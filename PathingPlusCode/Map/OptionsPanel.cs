@@ -175,22 +175,19 @@ internal sealed class OptionsPanel : IDisposable
         _rows.AddThemeConstantOverride("separation", 4);
         scroll.AddChild(_rows);
 
-        AddToggle(_rows, "Right-Drag Draws Paths",
+        AddToggle(_rows, "settings.right_drag",
             () => PathingOptions.OverrideDrawing, v => PathingOptions.OverrideDrawing = v);
-        AddToggle(_rows, "Start in Wide View",
+        AddToggle(_rows, "settings.start_wide",
             () => PathingOptions.StartWide, v => PathingOptions.StartWide = v);
-        using (var stream = typeof(OptionsPanel).Assembly.GetManifestResourceStream("move-to-middle-right.txt")
-            ?? throw new InvalidOperationException("Missing move-to-middle-right.txt resource."))
-        using (var reader = new System.IO.StreamReader(stream))
-            AddToggle(_rows, reader.ReadToEnd().Trim(),
-                () => PathingOptions.LegendMiddleRight, PathingOptions.SetLegendPlacement);
-        AddToggle(_rows, "Drawing Trail",
+        AddToggle(_rows, "settings.middle_right",
+            () => PathingOptions.LegendMiddleRight, PathingOptions.SetLegendPlacement);
+        AddToggle(_rows, "settings.trail",
             () => PathingOptions.DrawingTrail, v => PathingOptions.DrawingTrail = v);
         // Out here rather than under Advanced: it is asked for during a run, by
         // someone tired of paging through the legend one route at a time. One stop
         // past the numbers is All, so a single control says how big a page is.
         const float allRoutes = PathSolver.MaxLegendRoutes + 1;
-        AddSlider(_rows, "Routes per Page", 1f, allRoutes, 1f,
+        AddSlider(_rows, "settings.routes_per_page", 1f, allRoutes, 1f,
             () => PathingOptions.ShowAllRoutes ? allRoutes : PathingOptions.LegendRoutes,
             v =>
             {
@@ -198,54 +195,54 @@ internal sealed class OptionsPanel : IDisposable
                 if (!PathingOptions.ShowAllRoutes)
                     PathingOptions.LegendRoutes = (int)MathF.Round(v);
             },
-            v => v >= allRoutes ? "All" : v.ToString("0"));
+            v => v >= allRoutes ? ModText.Get("settings.all") : v.ToString("0"));
 
         // Line-drawing and framing numbers, folded away: they were tuned once and are
         // no use during a run, but they crowded out the two settings that are.
         AddSpacer(_rows);
-        var advanced = AddSection(_rows, "Advanced");
-        AddSlider(advanced, "Thickness", 0.5f, 4f, 0.1f,
+        var advanced = AddSection(_rows, "settings.advanced");
+        AddSlider(advanced, "settings.thickness", 0.5f, 4f, 0.1f,
             () => PathingOptions.DashWidth, v => PathingOptions.DashWidth = v);
-        AddSlider(advanced, "Dash Length", 0.5f, 4f, 0.1f,
+        AddSlider(advanced, "settings.dash_length", 0.5f, 4f, 0.1f,
             () => PathingOptions.DashLength, v => PathingOptions.DashLength = v);
-        AddSlider(advanced, "Length Jitter", 0f, 2f, 0.1f,
+        AddSlider(advanced, "settings.length_jitter", 0f, 2f, 0.1f,
             () => PathingOptions.DashLengthVariance, v => PathingOptions.DashLengthVariance = v);
-        AddSlider(advanced, "Spacing", 6f, 30f, 1f,
+        AddSlider(advanced, "settings.spacing", 6f, 30f, 1f,
             () => PathingOptions.DashSpacing, v => PathingOptions.DashSpacing = v);
-        AddSlider(advanced, "Route Gap", 0f, 24f, 1f,
+        AddSlider(advanced, "settings.route_gap", 0f, 24f, 1f,
             () => PathingOptions.RouteSeparation, v => PathingOptions.RouteSeparation = v);
 
         // The drawing trail's feel. Grouped after the route geometry because it is the
         // same kind of number: tuned by eye, then left alone.
         AddSpacer(advanced);
-        AddSlider(advanced, "Trail Fade", 0.2f, 3f, 0.1f,
+        AddSlider(advanced, "settings.trail_fade", 0.2f, 3f, 0.1f,
             () => PathingOptions.TrailFade, v => PathingOptions.TrailFade = v);
         // Headroom past the default, which sat on the old ceiling.
-        AddSlider(advanced, "Trail Width", 1f, 24f, 0.5f,
+        AddSlider(advanced, "settings.trail_width", 1f, 24f, 0.5f,
             () => PathingOptions.TrailWidth, v => PathingOptions.TrailWidth = v);
-        AddSlider(advanced, "Trail Step", 1f, 20f, 1f,
+        AddSlider(advanced, "settings.trail_step", 1f, 20f, 1f,
             () => PathingOptions.TrailSpacing, v => PathingOptions.TrailSpacing = v);
-        AddToggle(advanced, "Trail Snaps to Lines",
+        AddToggle(advanced, "settings.trail_snap",
             () => PathingOptions.TrailSnap, v => PathingOptions.TrailSnap = v);
-        AddSlider(advanced, "Trail Snap Range", 10f, 300f, 5f,
+        AddSlider(advanced, "settings.trail_snap_range", 10f, 300f, 5f,
             () => PathingOptions.TrailSnapRadius, v => PathingOptions.TrailSnapRadius = v);
         // The tool's own snap, not the trail's: how near the pen must pass a node to
         // catch it. Next to the trail's because the two are read against each other.
-        AddSlider(advanced, "Pen Snap", 20f, 140f, 5f,
+        AddSlider(advanced, "settings.pen_snap", 20f, 140f, 5f,
             () => PathingOptions.SnapRadius, v => PathingOptions.SnapRadius = v);
 
         AddSpacer(advanced);
-        AddSlider(advanced, "Wide Fit", 0.5f, 1f, 0.01f,
+        AddSlider(advanced, "settings.wide_fit", 0.5f, 1f, 0.01f,
             () => PathingOptions.LandscapeFit, v => PathingOptions.LandscapeFit = v);
-        AddSlider(advanced, "Wide Zoom", 0.6f, 1.6f, 0.05f,
+        AddSlider(advanced, "settings.wide_zoom", 0.6f, 1.6f, 0.05f,
             () => PathingOptions.LandscapeZoom, v => PathingOptions.LandscapeZoom = v);
-        AddSlider(advanced, "Wide Shift X", -400f, 400f, 10f,
+        AddSlider(advanced, "settings.wide_shift_x", -400f, 400f, 10f,
             () => PathingOptions.LandscapeShiftX, v => PathingOptions.LandscapeShiftX = v);
-        AddSlider(advanced, "Wide Shift Y", -300f, 300f, 10f,
+        AddSlider(advanced, "settings.wide_shift_y", -300f, 300f, 10f,
             () => PathingOptions.LandscapeShiftY, v => PathingOptions.LandscapeShiftY = v);
 
         AddSpacer(_rows);
-        var reset = MakeLabel(17, "Reset to defaults");
+        var reset = MakeLabel(17, ModText.Get("settings.reset"));
         reset.MouseFilter = Control.MouseFilterEnum.Stop;
         reset.FocusMode = Control.FocusModeEnum.All;
         reset.Modulate = new Color(1f, 1f, 1f, 0.75f);
@@ -354,16 +351,21 @@ internal sealed class OptionsPanel : IDisposable
         MouseFilter = Control.MouseFilterEnum.Ignore,
     });
 
-    /// <summary>A row that reads as a checkbox and toggles on click or select.</summary>
-    private void AddToggle(Container into, string name, Func<bool> get, Action<bool> set)
+    /// <summary>
+    /// A row that reads as a checkbox and toggles on click or select. Rows take the key
+    /// of their text (<see cref="ModText" />) rather than the text, so the log names a
+    /// failing row the same way in every language.
+    /// </summary>
+    private void AddToggle(Container into, string key, Func<bool> get, Action<bool> set)
     {
+        var name = ModText.Get(key);
         var row = MakeLabel(20, Render(name, get()));
         row.MouseFilter = Control.MouseFilterEnum.Stop;
         row.FocusMode = Control.FocusModeEnum.All;
         Emphasise(row);
         _focusables.Add(row);
         _refreshers.Add(() => row.Text = Render(name, get()));
-        row.GuiInput += inputEvent => Guard.Run($"Toggling {name}", () =>
+        row.GuiInput += inputEvent => Guard.Run($"Toggling {key}", () =>
         {
             if (!inputEvent.IsActionPressed(MegaInput.select) &&
                 inputEvent is not InputEventMouseButton
@@ -380,8 +382,9 @@ internal sealed class OptionsPanel : IDisposable
     private static string Render(string name, bool on) => $"[{(on ? "X" : "  ")}] {name}";
 
     /// <summary>A collapsible heading; returns the box its rows go in.</summary>
-    private VBoxContainer AddSection(Container into, string name)
+    private VBoxContainer AddSection(Container into, string key)
     {
+        var name = ModText.Get(key);
         var body = new VBoxContainer
         {
             Visible = false,
@@ -395,7 +398,7 @@ internal sealed class OptionsPanel : IDisposable
         Emphasise(header);
         _focusables.Add(header);
         void RenderHeader() => header.Text = $"{name}  {(body.Visible ? "▲" : "▼")}";
-        header.GuiInput += inputEvent => Guard.Run($"Folding {name}", () =>
+        header.GuiInput += inputEvent => Guard.Run($"Folding {key}", () =>
         {
             if (!inputEvent.IsActionPressed(MegaInput.select) &&
                 inputEvent is not InputEventMouseButton
@@ -415,9 +418,10 @@ internal sealed class OptionsPanel : IDisposable
     }
 
     private void AddSlider(
-        Container into, string name, float min, float max, float step,
+        Container into, string key, float min, float max, float step,
         Func<float> get, Action<float> set, Func<float, string>? format = null)
     {
+        var name = ModText.Get(key);
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", 8);
 
@@ -438,7 +442,7 @@ internal sealed class OptionsPanel : IDisposable
             FocusMode = Control.FocusModeEnum.All,
         };
         _focusables.Add(slider);
-        slider.ValueChanged += value => Guard.Run($"Adjusting {name}", () =>
+        slider.ValueChanged += value => Guard.Run($"Adjusting {key}", () =>
         {
             set((float)value);
             label.Text = Render(name, get(), step, format);
@@ -455,9 +459,16 @@ internal sealed class OptionsPanel : IDisposable
         into.AddChild(row);
     }
 
-    /// <summary>A whole-number slider reads as one: "Routes per Page: 5", not 5.00.</summary>
+    /// <summary>
+    /// A whole-number slider reads as one: "Routes per Page: 5", not 5.00. The colon is
+    /// the translation's, not the code's (<c>settings.value</c>): Chinese writes it
+    /// full-width.
+    /// </summary>
     private static string Render(string name, float value, float step, Func<float, string>? format) =>
-        $"{name}: {format?.Invoke(value) ?? (step < 1f && Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))}";
+        ModText.Format("settings.value",
+            ("name", name),
+            ("value", format?.Invoke(value) ??
+                (step < 1f && Math.Abs(value) < 10f ? value.ToString("0.00") : value.ToString("0"))));
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

@@ -256,10 +256,7 @@ internal sealed class RouteLegendPanel : IDisposable
         });
 
         screen.AddChild(_panel);
-        using var labelStream = typeof(RouteLegendPanel).Assembly.GetManifestResourceStream("clear-unpinned.txt")
-            ?? throw new InvalidOperationException("Missing clear-unpinned.txt resource.");
-        using var labelReader = new System.IO.StreamReader(labelStream);
-        _clearUnpinned = new LegendActionButton("ClearUnpinned", labelReader.ReadToEnd().Trim(), _font,
+        _clearUnpinned = new LegendActionButton("ClearUnpinned", ModText.Get("legend.clear_unpinned"), _font,
             () => ClearUnpinned?.Invoke());
         _previousPage = new LegendActionButton("PreviousRoutes", "‹", _font, () => PageChanged?.Invoke(-1));
         _nextPage = new LegendActionButton("NextRoutes", "›", _font, () => PageChanged?.Invoke(1));
@@ -358,9 +355,21 @@ internal sealed class RouteLegendPanel : IDisposable
     private Vector2 PointerInScreen(Vector2 localPoint) =>
         _screen.GetGlobalTransform().AffineInverse() * (_panel.GetGlobalTransform() * localPoint);
 
-    /// <summary>Row names for the no-routes state, matching the native legend's wording.</summary>
-    private static readonly string[] TypeNames =
-        ["Unknown", "Merchant", "Treasure", "Rest Site", "Enemy", "Elite"];
+    /// <summary>
+    /// Row names for the no-routes state, in the native legend's order. The words are the
+    /// mod's own (<c>legend.*</c>) rather than the game's <c>LEGEND_*.title</c>, which in
+    /// English says "Rest" where this has always said "Rest Site"; the translations take
+    /// their terms from the game's.
+    /// </summary>
+    private static string[] TypeNames =>
+    [
+        ModText.Get("legend.unknown"),
+        ModText.Get("legend.merchant"),
+        ModText.Get("legend.treasure"),
+        ModText.Get("legend.rest_site"),
+        ModText.Get("legend.enemy"),
+        ModText.Get("legend.elite"),
+    ];
 
     /// <summary>
     /// How much room the type names actually need, measured from the font rather than

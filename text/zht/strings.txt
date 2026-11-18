@@ -1,0 +1,60 @@
+# Pathing Plus — Traditional Chinese (繁體中文). See text/eng/strings.txt for the format.
+#
+# The game's zht is a Taiwan-style translation in its own right, not a character
+# conversion of zhs, and this file follows it: 菁英 (not 精英), 休息處, 財寶, 圖例,
+# 恢復預設值, 滑鼠, 進階, 拖曳. Mod-only terms: 路線 (route), 房間 (map node, as the
+# game calls them), 鎖定 (pin a route), 筆跡 (drawing trail), 吸附 (snap), 全圖 (wide
+# view). Punctuation follows the game: full-width （） and ：.
+
+view.zoom_out = 縮小
+view.rotate = 旋轉
+view.zoom_in = 放大
+
+autopath.header = 自動規劃
+autopath.elites = 最多菁英
+autopath.fires = 最多休息處
+autopath.shops = 最多商店
+autopath.events = 最多事件
+autopath.combats = 最多戰鬥
+
+settings.value = {name}：{value}
+settings.right_drag = 滑鼠右鍵拖曳繪製路線
+settings.start_wide = 預設顯示全圖
+settings.middle_right = 圖例移至右側中間
+settings.trail = 顯示筆跡
+settings.routes_per_page = 每頁路線數
+settings.all = 全部
+settings.advanced = 進階
+settings.thickness = 線條粗細
+settings.dash_length = 虛線段長
+settings.length_jitter = 段長浮動
+settings.spacing = 虛線間距
+settings.route_gap = 路線間隔
+settings.trail_fade = 筆跡淡出
+settings.trail_width = 筆跡寬度
+settings.trail_step = 筆跡點距
+settings.trail_snap = 筆跡吸附連線
+settings.trail_snap_range = 筆跡吸附範圍
+settings.pen_snap = 畫筆吸附範圍
+settings.wide_fit = 全圖適配
+settings.wide_zoom = 全圖縮放
+settings.wide_shift_x = 全圖水平偏移
+settings.wide_shift_y = 全圖垂直偏移
+settings.reset = 恢復預設值
+
+legend.clear_unpinned = 清除未鎖定
+legend.unknown = 未知
+legend.merchant = 商人
+legend.treasure = 財寶
+legend.rest_site = 休息處
+legend.enemy = 敵人
+legend.elite = 菁英
+
+tool.title = Pathing Plus
+tool.title_with_key = Pathing Plus（{key}）
+tool.description = 在地圖上的房間之間繪製直線路線。
+
+input.path_tool = Pathing Plus：路線工具
+
+help.byline = 作者：{author}
+help.no_key = 未綁定

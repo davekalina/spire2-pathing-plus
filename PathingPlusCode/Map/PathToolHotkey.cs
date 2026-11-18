@@ -39,11 +39,6 @@ internal static class PathToolHotkey
     private const string LocTable = "settings_ui";
     private const string TitleKey = "INPUT_SETTINGS.INPUT_TITLE." + Action;
 
-    /// <summary>
-    /// The row's label. Says which mod it came from as well as what it does, because a
-    /// row appearing among the game's own bindings otherwise has no explanation.
-    /// </summary>
-    private const string SettingsTitle = "Pathing Plus: Path Tool";
 
     public static void Install()
     {
@@ -79,8 +74,13 @@ internal static class PathToolHotkey
     /// built, which is the moment it has to be true — see
     /// <see cref="InputSettingsTitlePatch" />. Not from Install: the tables do not exist
     /// yet when mods initialise.
+    ///
+    /// The text (<c>input.path_tool</c>) says which mod the row came from as well as what
+    /// it does, because a row appearing among the game's own bindings otherwise has no
+    /// explanation. It is read here, at the point of use, because this is the one piece of
+    /// the mod's text built on the very screen the language is changed from.
     /// </summary>
-    public static void EnsureTitle() => ModStrings.Ensure(LocTable, TitleKey, SettingsTitle);
+    public static void EnsureTitle() => ModStrings.Ensure(LocTable, TitleKey, ModText.Get("input.path_tool"));
 
     /// <summary>
     /// The key the shortcut is on right now, or null if it is unbound. Asked fresh each

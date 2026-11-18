@@ -41,9 +41,6 @@ internal sealed class PathToolButton : IDisposable
     /// </summary>
     private static readonly Vector2 TipOffset = new(10f, -132f);
 
-    /// <summary>The tip's own text. David's words; see the loc keys in <see cref="Tip" />.</summary>
-    private const string TipTitle = "Pathing Plus";
-    private const string TipDescription = "Draw straight line paths between nodes on the map.";
     private const string TipTable = "map";
     private const string TipTitleKey = "PATHING_PLUS_TOOL.title";
     private const string TipDescriptionKey = "PATHING_PLUS_TOOL.description";
@@ -237,9 +234,11 @@ internal sealed class PathToolButton : IDisposable
         // and "(Middle-Click)" — and it is read live, so a rebind is reflected the next
         // time the tip is shown. Unbound simply says nothing.
         var key = PathToolHotkey.CurrentKeyLabel();
-        var title = key is null ? TipTitle : $"{TipTitle} ({key})";
+        // The text is the mod's own (tool.* in text/<language>/strings.txt): the bracket
+        // around the key is part of it, because Chinese writes it full-width.
+        var title = key is null ? ModText.Get("tool.title") : ModText.Format("tool.title_with_key", ("key", key));
         if (!ModStrings.Ensure(TipTable, TipTitleKey, title) ||
-            !ModStrings.Ensure(TipTable, TipDescriptionKey, TipDescription))
+            !ModStrings.Ensure(TipTable, TipDescriptionKey, ModText.Get("tool.description")))
             return null;
         return new HoverTip(
             new LocString(TipTable, TipTitleKey),

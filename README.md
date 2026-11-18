@@ -17,6 +17,11 @@ This mod was also designed with FULL GAMEPAD SUPPORT in mind, specifically:
 - In drawing mode, you can switch between draw and eraser with the left analog stick button.
 - Optional:  Disable Steam Input and scroll the map while the legend is selected (like Spire 1)
 
+## Languages
+
+English, Simplified Chinese (简体中文) and Traditional Chinese (繁體中文). The mod
+follows the game's language setting.
+
 ## Install
 
 Subscribe on the Steam Workshop, then enable **Pathing Plus** in

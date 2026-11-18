@@ -79,7 +79,8 @@ internal sealed class HelpTip : IDisposable
         // near-zero minimum width, so inside a VBox it would collapse to one word per
         // line. Given an explicit rect it wraps to the width it was handed.
         const float bodyTop = 138f;
-        var title = MakeLabel(24, $"{MainFile.ModName} {MainFile.Version}\nby {MainFile.Author}");
+        var title = MakeLabel(24,
+            $"{MainFile.ModName} {MainFile.Version}\n{ModText.Format("help.byline", ("author", MainFile.Author))}");
         title.HorizontalAlignment = HorizontalAlignment.Center;
         title.Position = new Vector2(Pad, 44f);
         title.Size = new Vector2(TipWidth - Pad * 2f, 76f);
@@ -182,55 +183,25 @@ internal sealed class HelpTip : IDisposable
     }
 
     /// <summary>
-    /// The panel's prose, from <c>text/help.txt</c> — human-facing text belongs in a
-    /// file a human edits, not in a string literal behind a rebuild of the code.
+    /// The panel's prose, from <c>text/&lt;language&gt;/help.txt</c> — human-facing text
+    /// belongs in a file a human edits, not in a string literal behind a rebuild of the
+    /// code. See <see cref="ModText.Help" /> for the language fallback, and
+    /// <see cref="Text.TextFiles.ParseProse" /> for how the file is unwrapped.
     ///
-    /// Comment lines go, and the lines within a paragraph are joined so the file can
-    /// be hard-wrapped for editing without every one of those wraps turning into a
-    /// line break on screen.
+    /// <c>{key}</c> is the path tool's shortcut, read when the panel is built so a rebind
+    /// shows on the next map screen rather than leaving the text naming a key that no
+    /// longer does anything.
     /// </summary>
-    private static string Instructions => _instructions ??= Guard.Run("Reading the help text", () =>
-    {
-        using var stream = typeof(HelpTip).Assembly.GetManifestResourceStream("help.txt");
-        if (stream is null)
-            return MissingText;
-        using var reader = new StreamReader(stream);
-        var lines = reader.ReadToEnd()
-            .Replace("\r\n", "\n")
-            .Replace('\r', '\n')
-            .Split('\n')
-            .Where(line => !line.TrimStart().StartsWith('#'));
-
-        var paragraphs = new List<string>();
-        var current = new List<string>();
-        foreach (var line in lines)
-        {
-            var text = line.Trim();
-            if (text.Length == 0)
+    private static string Instructions => Guard.Run("Reading the help text", () =>
+        ModText.Help() is { } help
+            ? Text.TextFiles.Format(help, new Dictionary<string, string>
             {
-                if (current.Count > 0)
-                    paragraphs.Add(string.Join('\n', current));
-                current.Clear();
-                continue;
-            }
-            // A bullet is its own line; anything else continues the line above it. Without
-            // this a list would be joined into one run-on paragraph by the same rule that
-            // usefully unwraps prose.
-            if (current.Count == 0 || text.StartsWith("- ") || text.StartsWith("* "))
-                current.Add(text);
-            else
-                current[^1] = $"{current[^1]} {text}";
-        }
-        if (current.Count > 0)
-            paragraphs.Add(string.Join('\n', current));
-
-        return paragraphs.Count > 0 ? string.Join("\n\n", paragraphs) : MissingText;
-    }, MissingText);
+                ["key"] = PathToolHotkey.CurrentKeyLabel() ?? ModText.Get("help.no_key"),
+            })
+            : MissingText, MissingText);
 
     private const string MissingText =
-        "The help text could not be read. See text/help.txt in the mod's source.";
-
-    private static string? _instructions;
+        "The help text could not be read. See text/eng/help.txt in the mod's source.";
 
     private MegaLabel MakeLabel(int fontSize, string text)
     {

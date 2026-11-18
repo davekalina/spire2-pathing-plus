@@ -12,6 +12,7 @@
       Keep game-independent calculations in their own files so they can be linked here.
     -->
     <Compile Include="..\PathingPlusCode\Pathing\*.cs" LinkBase="Pathing" />
+    <Compile Include="..\PathingPlusCode\Text\*.cs" LinkBase="Text" />
 
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
