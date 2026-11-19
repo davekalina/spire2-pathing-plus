@@ -13,4 +13,4 @@ Feedback and feature requests always welcome!
 Source code and issue tracker:
 https://github.com/davekalina/spire2-pathing-plus
 
-Pathing Plus currently works with version 0.113.0 on the beta branch only.
+Pathing Plus works on both the main branch (version 0.111.1) and the beta branch (version 0.113.1).

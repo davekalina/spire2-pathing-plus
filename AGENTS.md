@@ -687,13 +687,13 @@ Game coupling that a game update can move (verify after every update):
   `NMapScreen._distY` (0.111) — see `GameCompat.RowScrollTarget`.
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800], and on 0.111 the
   "-600 + row * _distY" current-row formula that `GetRowScrollPos` replaced.
-- **Supported game versions.** `min_game_version` is 0.111.0, and the mod is
-  **beta-branch only** for now: the default (`public`) branch is still 0.107.1, which the
-  loader refuses. It is not "main is 0.111". Main support waits for Mega Crit to promote
-  a newer build. Until then the Workshop item's Steam branch range stays limited to the
-  beta: on the item's change notes page, set each uploaded version's minimum branch to
-  `public-beta` and leave the maximum unset. Clear the minimum once the default branch
-  reaches 0.111 or later. Never set it through `workshop.json` (see
+- **Supported game versions.** `min_game_version` is 0.111.0, and the mod runs on
+  **both branches**: as of 2026-11-18 the default (`public`) branch is 0.111.1 and the
+  beta is 0.113.1. The Workshop item's Steam branch range is therefore empty — no
+  minimum, no maximum, which is what a new upload gets by default. Until 2026-11-18 main
+  was 0.107.1, which the loader refuses, and each uploaded version had its minimum branch
+  set to `public-beta` on the item's change notes page; do that again only if main falls
+  below `min_game_version`. Never set it through `workshop.json` (see
   `docs/sts2-modding.md`).
 - **One build serves every supported game version.** Where 0.111 and 0.113 differ, the
   call goes through `GameCompat` / `GameArt` by name and takes whichever form the running
