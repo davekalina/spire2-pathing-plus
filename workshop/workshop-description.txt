@@ -1,3 +1,7 @@
+NEW: Pathing Plus is now in Simplified and Traditional Chinese (简体中文 / 繁體中文)! The translation is brand new, so if you play in Chinese, please let me know in the comments if anything reads wrong or awkward.
+现已支持简体中文！翻译刚刚完成，欢迎在评论区指出任何不准确或不自然的地方。
+現已支援繁體中文！翻譯剛完成，歡迎在留言區指出任何不準確或不自然的地方。
+
 Pathing Plus is designed to help you draw better paths (and hopefully make
 better pathing decisions as a result).
 
