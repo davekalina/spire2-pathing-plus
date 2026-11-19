@@ -136,3 +136,32 @@ internal sealed class GameArt(params string[] paths)
         return ResourceLoader.Load<Texture2D>(_resolved, null, ResourceLoader.CacheMode.Reuse);
     }
 }
+
+/// <summary>
+/// Fonts the mod borrows from the game, read at the point of use and never kept.
+///
+/// The game frees resources out from under anything that holds them. Every room change,
+/// <c>PreloadManager</c> unloads the assets the next room does not list — and every asset
+/// that was fetched through its cache without having been preloaded — by calling
+/// <c>Dispose()</c> on the managed wrapper. Godot hands out one wrapper per native object,
+/// so that is the same object any other C# code is holding: the font itself lives on in
+/// the scene that uses it, but the mod's reference to it is dead, and the next label made
+/// with it throws <c>ObjectDisposedException</c>.
+///
+/// The legend used to keep the header's font for the life of the map screen, and that is
+/// exactly the shape of a routes table that goes blank until a save and reload (reported
+/// on 0.113): once the font was disposed, every redraw cleared the table and then died
+/// building the first label of the new one. Asking the header each time costs nothing
+/// and always answers with a live wrapper.
+/// </summary>
+internal static class GameFont
+{
+    /// <summary>The native legend header's font: the face every mod label on the map wears.</summary>
+    public static Font? Header(Node screen)
+    {
+        if (!GodotObject.IsInstanceValid(screen))
+            return null;
+        var font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
+        return font is not null && GodotObject.IsInstanceValid(font) ? font : null;
+    }
+}

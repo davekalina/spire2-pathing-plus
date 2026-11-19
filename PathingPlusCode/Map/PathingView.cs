@@ -641,7 +641,7 @@ internal sealed class PathingView : IDisposable
 
     public bool ZoomActive => _zoom.Zoomed;
 
-    public void ToggleZoom() => _zoom.Toggle();
+    public void ToggleZoom(string cause) => _zoom.Toggle(cause);
 
     /// <summary>
     /// The path tool's keyboard shortcut, live only while the map is. The manager keys
@@ -677,7 +677,7 @@ internal sealed class PathingView : IDisposable
     /// </summary>
     public void OnOpened()
     {
-        _zoom.Reset();
+        _zoom.Reset("map open");
         ListenForHotkey(true);
         _toolbar.SetVisible(true);
         _zoom.SetButtonVisible(true);
@@ -685,7 +685,10 @@ internal sealed class PathingView : IDisposable
         _options.SetShellVisible(true);
         _help.SetShellVisible(true);
         _autoPath.SetShellVisible(true);
-        Refresh();
+        // Guarded on its own. The view below must come back whatever the routes do: a
+        // refresh that throws used to take the remembered view down with it, and the map
+        // then opened zoomed in, every time, until a save and reload rebuilt the screen.
+        Guard.Run("Refreshing routes on map open", Refresh);
         // Deferred: the node rects this frames against are only final after a layout
         // pass, and framing on pre-layout positions puts the whole act off screen.
         Callable.From(() => Guard.Run("Opening the map in its last view", _zoom.ShowRememberedView))
@@ -726,7 +729,7 @@ internal sealed class PathingView : IDisposable
 
     public void OnMapChanged()
     {
-        _zoom.Reset();
+        _zoom.Reset("a new map");
         ForgetIconRotations();
         _adapter = null;
         _pins.Clear();
@@ -1495,9 +1498,13 @@ internal sealed class PathingView : IDisposable
             .ToList();
     }
 
+    /// <summary>
+    /// Nothing to plan with. Deliberately leaves the view alone: the run state being
+    /// unreadable for a moment is no reason to zoom the map in under the player, and
+    /// nothing here would put the view they chose back afterwards.
+    /// </summary>
     private void Clear()
     {
-        _zoom.Reset();
         _navigator.SetNodes([], false);
         _legend.SetRoutes([]);
         _shownRoutes = [];

@@ -31,7 +31,10 @@ internal sealed class HelpTip : IDisposable
     private readonly Control _tip;
     private readonly Control _badge;
     private readonly TextureRect _circle;
-    private readonly Font? _font;
+    private readonly Control _screen;
+
+    /// <summary>The legend header's font, read at the point of use — see <see cref="GameFont" />.</summary>
+    private Font? Font => GameFont.Header(_screen);
 
     /// <summary>The panel's prose, re-rendered on every show: it names the current shortcut.</summary>
     private readonly MegaLabel _body;
@@ -41,7 +44,7 @@ internal sealed class HelpTip : IDisposable
 
     public HelpTip(Control screen, Control toolbar)
     {
-        _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
+        _screen = screen;
 
         _root = new Control { Name = "PathingPlusHelp", MouseFilter = Control.MouseFilterEnum.Ignore };
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -223,8 +226,8 @@ internal sealed class HelpTip : IDisposable
             VerticalAlignment = VerticalAlignment.Top,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        if (_font is { })
-            label.AddThemeFontOverride("font", _font);
+        if (Font is { } font)
+            label.AddThemeFontOverride("font", font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", Parchment);
         // A drop shadow, not an outline. An outline traces every glyph on all sides,

@@ -781,6 +781,14 @@ Game coupling that a game update can move (verify after every update):
   60px slot, spreads the row half a slot each way, and pushes the glyph back half a
   slot — and puts all three back on dispose. Any change to those scene offsets moves
   this.
+- **Never keep a game resource in a field.** On every room change `PreloadManager`
+  calls `Dispose()` on assets the next room does not list, and on everything fetched
+  through its cache without being preloaded (another mod's load counts). Godot has one
+  managed wrapper per native object, so that kills the mod's reference too, and the next
+  use throws `ObjectDisposedException`. The legend once held the header font this way —
+  a table blank until save and reload, and since the throw came out of the open's
+  refresh, a map that kept opening zoomed in. Read fonts and textures at the point of
+  use (`GameFont`, `GameArt`, `MapIcons`); a resource the mod generates itself is fine.
 - Resources: `images/atlases/ui_atlas.sprites/map/icons/map_*.tres`,
   `images/atlases/ui_atlas.sprites/map/map_legend.tres` (replacement legend bg),
   `map_dot.tres` and `map_circle_4.tres` from the compressed atlas (two paths, see

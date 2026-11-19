@@ -14,11 +14,25 @@ internal static class MapScreenPatches
 {
     private static readonly Dictionary<NMapScreen, PathingView> Views = [];
 
+    /// <summary>
+    /// Whether the map was already open. <c>Open</c> does nothing at all then — the game
+    /// calls it on a screen that is already up, from <c>NMapRoom.ReopenMap</c> for one —
+    /// and the view must not treat that as an opening either: an opening puts the map
+    /// upright first, so answering a call that changed nothing turned the act in front
+    /// of the player and pushed a second copy of the path tool's shortcut.
+    /// </summary>
+    [HarmonyPrefix]
+    [HarmonyPatch(nameof(NMapScreen.Open))]
+    private static void BeforeOpen(NMapScreen __instance, out bool __state) =>
+        __state = Guard.Run("Checking whether the map is already open", () => __instance.IsOpen, false);
+
     [HarmonyPostfix]
     [HarmonyPatch(nameof(NMapScreen.Open))]
-    private static void AfterOpen(NMapScreen __instance) =>
+    private static void AfterOpen(NMapScreen __instance, bool __state) =>
         Guard.Run("Attaching the pathing view", () =>
         {
+            if (__state)
+                return;
             if (!Views.TryGetValue(__instance, out var view))
             {
                 view = new PathingView(__instance);
@@ -290,7 +304,7 @@ internal static class MapScreenPatches
             if (Pulled(__0, Controller.rightTrigger, ref _rightTriggerHeld) &&
                 Ready(__instance) && Views.TryGetValue(__instance, out var view))
             {
-                view.ToggleZoom();
+                view.ToggleZoom("Right Trigger");
                 __instance.GetViewport().SetInputAsHandled();
             }
 

@@ -35,7 +35,8 @@ internal sealed class OptionsPanel : IDisposable
     private readonly Control _panel;
     private readonly VBoxContainer _rows;
     private readonly TextureRect _gear;
-    private readonly Font? _font;
+    /// <summary>The legend header's font, read at the point of use — see <see cref="GameFont" />.</summary>
+    private Font? Font => GameFont.Header(_screen);
 
     /// <summary>Each row's way of re-reading its option, for the reset button.</summary>
     private readonly List<Action> _refreshers = [];
@@ -55,7 +56,6 @@ internal sealed class OptionsPanel : IDisposable
         _screen = screen;
         _toolbar = toolbar;
         _screenResized = () => Guard.Run("Resizing settings to the screen", ResizePanel);
-        _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
         _root = new Control { Name = "PathingPlusOptions", MouseFilter = Control.MouseFilterEnum.Ignore };
         _root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -479,8 +479,8 @@ internal sealed class OptionsPanel : IDisposable
             HorizontalAlignment = HorizontalAlignment.Left,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        if (_font is { })
-            label.AddThemeFontOverride("font", _font);
+        if (Font is { } font)
+            label.AddThemeFontOverride("font", font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", Parchment);
         label.AddThemeColorOverride("font_outline_color", new Color(0.12f, 0.10f, 0.08f));

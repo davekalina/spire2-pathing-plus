@@ -96,7 +96,8 @@ internal sealed class RouteLegendPanel : IDisposable
     private bool _layoutReady;
     private HotkeyGlyph? _hotkeyGlyph;
     private readonly ColorRect _rowMark;
-    private readonly Font? _font;
+    /// <summary>The legend header's font, read at the point of use — see <see cref="GameFont" />.</summary>
+    private Font? Font => GameFont.Header(_screen);
     private readonly LegendActionButton _clearUnpinned;
     private readonly LegendActionButton _previousPage;
     private readonly LegendActionButton _nextPage;
@@ -158,7 +159,6 @@ internal sealed class RouteLegendPanel : IDisposable
     {
         _screen = screen;
         _screenResized = () => Guard.Run("Keeping the legend on screen", ApplyPlacement);
-        _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
 
         // Bottom right, in the space the mod's old routes table held — out of the
         // rotated view's way — wearing the native legend parchment.
@@ -257,10 +257,10 @@ internal sealed class RouteLegendPanel : IDisposable
         });
 
         screen.AddChild(_panel);
-        _clearUnpinned = new LegendActionButton("ClearUnpinned", ModText.Get("legend.clear_unpinned"), _font,
+        _clearUnpinned = new LegendActionButton("ClearUnpinned", ModText.Get("legend.clear_unpinned"), Font,
             () => ClearUnpinned?.Invoke());
-        _previousPage = new LegendActionButton("PreviousRoutes", "‹", _font, () => PageChanged?.Invoke(-1));
-        _nextPage = new LegendActionButton("NextRoutes", "›", _font, () => PageChanged?.Invoke(1));
+        _previousPage = new LegendActionButton("PreviousRoutes", "‹", Font, () => PageChanged?.Invoke(-1));
+        _nextPage = new LegendActionButton("NextRoutes", "›", Font, () => PageChanged?.Invoke(1));
         _pageLabel = MakeLabel(18, "", StsColors.legendText);
         foreach (var action in new[] { _clearUnpinned, _previousPage, _nextPage })
         {
@@ -388,7 +388,7 @@ internal sealed class RouteLegendPanel : IDisposable
     {
         if (_namesWidth > 0f)
             return _namesWidth;
-        if (_font is { } font)
+        if (Font is { } font)
             foreach (var name in TypeNames)
                 _namesWidth = Mathf.Max(_namesWidth,
                     font.GetStringSize(name, HorizontalAlignment.Left, -1f, NameFontSize).X);
@@ -962,8 +962,8 @@ internal sealed class RouteLegendPanel : IDisposable
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        if (_font is { })
-            label.AddThemeFontOverride("font", _font);
+        if (Font is { } font)
+            label.AddThemeFontOverride("font", font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", color);
         label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.15f));

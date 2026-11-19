@@ -173,7 +173,7 @@ internal sealed class MapZoom : IDisposable
                 inputEvent is not InputEventMouseButton
                     { ButtonIndex: MouseButton.Left, Pressed: false })
                 return;
-            Toggle();
+            Toggle("the Zoom button");
             button.AcceptEvent();
         });
 
@@ -201,8 +201,13 @@ internal sealed class MapZoom : IDisposable
     /// <summary>Glyph and visibility follow the current control scheme.</summary>
     public void RefreshHotkeyIcon() => _hotkeyGlyph?.Refresh();
 
-    public void Toggle()
+    /// <param name="cause">
+    /// What pressed it, for the log. A view that changes by itself is a report that is
+    /// hard to act on without knowing which input the mod thought it saw.
+    /// </param>
+    public void Toggle(string cause)
     {
+        var was = Mode;
         Mode = Mode switch
         {
             MapViewMode.Normal => MapViewMode.Zoomed,
@@ -214,6 +219,7 @@ internal sealed class MapZoom : IDisposable
         // after Apply, which is the one place the choice can be overruled: with
         // nothing drawn to frame there is no zoomed view to remember.
         PathingOptions.LastView = Mode;
+        MainFile.Logger.Info($"Map view {was} -> {Mode}, by {cause}.");
         Toggled?.Invoke(false);
     }
 
@@ -255,11 +261,13 @@ internal sealed class MapZoom : IDisposable
     /// instant, reverted. Closing the map is the exception — see
     /// <see cref="ResetOutOfSight" />.
     /// </summary>
-    public void Reset()
+    /// <param name="cause">Why, for the log, when the map is turned back in sight.</param>
+    public void Reset(string cause)
     {
         CancelHide();
         if (Mode == MapViewMode.Normal)
             return;
+        MainFile.Logger.Info($"Map view {Mode} -> {MapViewMode.Normal}, reset on {cause}.");
         Mode = MapViewMode.Normal;
         Apply();
         Toggled?.Invoke(false);
@@ -314,7 +322,7 @@ internal sealed class MapZoom : IDisposable
 
     public void Dispose()
     {
-        Reset();
+        Reset("the view being disposed");
         if (GodotObject.IsInstanceValid(_tray))
             _tray.QueueFree();
     }
@@ -338,6 +346,7 @@ internal sealed class MapZoom : IDisposable
         // Nothing drawn to frame yet: stay in the normal view, and say so.
         if (Mode != MapViewMode.Normal && centers.Count == 0)
         {
+            MainFile.Logger.Warn($"Map view {Mode} needs map nodes to frame and found none; showing Normal.");
             Mode = MapViewMode.Normal;
             UpdateLabel();
         }

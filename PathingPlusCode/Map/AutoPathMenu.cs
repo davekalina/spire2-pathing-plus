@@ -68,11 +68,14 @@ internal sealed class AutoPathMenu : IDisposable
     private readonly MegaLabel _headerLabel;
     private readonly TextureRect _face = null!;
     private readonly List<Control> _options = [];
-    private readonly Font? _font;
+    private readonly Control _screen;
+
+    /// <summary>The legend header's font, read at the point of use — see <see cref="GameFont" />.</summary>
+    private Font? Font => GameFont.Header(_screen);
 
     public AutoPathMenu(Control screen, Control toolbar)
     {
-        _font = screen.GetNodeOrNull<Label>("MapLegend/Header")?.GetThemeFont("font");
+        _screen = screen;
 
         _header = new Control
         {
@@ -291,8 +294,8 @@ internal sealed class AutoPathMenu : IDisposable
             Text = text,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
-        if (_font is { })
-            label.AddThemeFontOverride("font", _font);
+        if (Font is { } font)
+            label.AddThemeFontOverride("font", font);
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", Parchment);
         label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.55f));
