@@ -69,5 +69,7 @@ input.path_tool = Pathing Plus: Path Tool
 
 # The help panel's heading, under the name and version.
 help.byline = by {author}
-# Stands in for {key} in help.txt when the path tool has no shortcut.
-help.no_key = unbound
+# {shortcut} in help.txt: the path tool's keyboard shortcut as a phrase, or the
+# second line when it has none (keyboard-only mode, or unbound by the player).
+help.shortcut = {key} on the keyboard
+help.no_shortcut = no keyboard shortcut

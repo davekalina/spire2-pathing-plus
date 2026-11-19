@@ -1,11 +1,11 @@
 # 帮助面板 — 简体中文 (Simplified Chinese). Same format as text/eng/help.txt:
 # a blank line starts a paragraph, "- " starts a bullet, and any other line
 # continues the one above (joined without a space, as Chinese is written).
-# {key} is the path tool's keyboard shortcut; keep it as written.
+# {shortcut} is the path tool's shortcut (help.shortcut in strings.txt); keep it as written.
 
 Pathing Plus 使用方法：
 
-- 使用 Pathing Plus 绘制工具（键盘 {key} 键）在地图上绘制路线。
+- 使用 Pathing Plus 绘制工具（{shortcut}）在地图上绘制路线。
 - 也可以逐个点击你想去的房间。
 - 双击某个房间，即可选中所有同类型的房间。
 - 路线完整后，图例会显示路线上各类房间的数量。

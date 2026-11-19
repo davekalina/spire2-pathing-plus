@@ -57,4 +57,5 @@ tool.description = 在地图上的房间之间绘制直线路线。
 input.path_tool = Pathing Plus：路线工具
 
 help.byline = 作者：{author}
-help.no_key = 未绑定
+help.shortcut = 键盘 {key} 键
+help.no_shortcut = 未设置键盘快捷键

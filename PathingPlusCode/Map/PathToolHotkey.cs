@@ -39,7 +39,6 @@ internal static class PathToolHotkey
     private const string LocTable = "settings_ui";
     private const string TitleKey = "INPUT_SETTINGS.INPUT_TITLE." + Action;
 
-
     public static void Install()
     {
         // No key event of its own: NInputManager supplies the input, and a second

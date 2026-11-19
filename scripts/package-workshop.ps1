@@ -91,8 +91,10 @@ $workshopPath    = Join-Path $root 'workshop\workshop.json'
 # description is the lesser problem, so it warns and carries on.
 if ((Test-Path -LiteralPath $descriptionPath) -and (Test-Path -LiteralPath $workshopPath)) {
     try {
-        $description = (Get-Content -LiteralPath $descriptionPath -Raw).TrimEnd()
-        $workshop = Get-Content -LiteralPath $workshopPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        # Explicitly UTF-8: Windows PowerShell 5.1 reads a BOM-less file as ANSI, which
+        # would garble the Chinese in the description and changeNote on the way through.
+        $description = (Get-Content -LiteralPath $descriptionPath -Raw -Encoding utf8).TrimEnd()
+        $workshop = Get-Content -LiteralPath $workshopPath -Raw -Encoding utf8 | ConvertFrom-Json -ErrorAction Stop
         if ($workshop.PSObject.Properties.Name -notcontains 'description') {
             $workshop | Add-Member -NotePropertyName description -NotePropertyValue ''
         }

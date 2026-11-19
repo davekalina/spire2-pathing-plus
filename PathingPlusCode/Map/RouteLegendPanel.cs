@@ -201,6 +201,7 @@ internal sealed class RouteLegendPanel : IDisposable
         _rowMark.OffsetRight = -20f;
         _panel.AddChild(_rowMark);
 
+        var typeNames = TypeNames;
         for (var r = 0; r < Rows.Length; r++)
         {
             var row = r;
@@ -237,7 +238,7 @@ internal sealed class RouteLegendPanel : IDisposable
             _panel.AddChild(cell);
 
             // With no routes to tabulate this is a plain legend, so read like one.
-            var name = MakeLabel(NameFontSize, TypeNames[r], StsColors.legendText);
+            var name = MakeLabel(NameFontSize, typeNames[r], StsColors.legendText);
             name.HorizontalAlignment = HorizontalAlignment.Left;
             name.Position = new Vector2(ColumnsStartX, FirstRowY + r * RowHeight);
             name.Size = new Vector2(NamesWidth(), RowHeight);

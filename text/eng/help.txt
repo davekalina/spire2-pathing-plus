@@ -7,8 +7,8 @@
 # Translations live beside this file, in text/<language>/help.txt (zhs, zht, ...).
 # A language without one shows this English text.
 #
-# {key} is replaced with the path tool's current keyboard shortcut (Q unless the
-# player has rebound it). Keep it, unchanged, in every translation.
+# {shortcut} is replaced with the path tool's shortcut as a phrase ("Q on the
+# keyboard"; see help.shortcut in strings.txt). Keep it, unchanged, in every translation.
 #
 # Formatting:
 #   - A blank line starts a new paragraph.
@@ -19,7 +19,7 @@
 
 How to use Pathing Plus:
 
-- Use the Pathing Plus Drawing tool ({key} on the keyboard) to draw paths on the map.
+- Use the Pathing Plus Drawing tool ({shortcut}) to draw paths on the map.
 - Alternatively, click on individual nodes that you want to visit.
 - Double-click on node types to select all nodes of that type.
 - When paths have been completed, the Legend will show node type counts.

@@ -33,6 +33,9 @@ internal sealed class HelpTip : IDisposable
     private readonly TextureRect _circle;
     private readonly Font? _font;
 
+    /// <summary>The panel's prose, re-rendered on every show: it names the current shortcut.</summary>
+    private readonly MegaLabel _body;
+
     /// <summary>Clicked open, so it survives the pointer moving away to read it.</summary>
     private bool _pinned;
 
@@ -86,7 +89,7 @@ internal sealed class HelpTip : IDisposable
         title.Size = new Vector2(TipWidth - Pad * 2f, 76f);
         _tip.AddChild(title);
 
-        var body = MakeLabel(17, Instructions);
+        var body = _body = MakeLabel(17, Instructions);
         body.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         body.Position = new Vector2(Pad, bodyTop);
         body.Size = new Vector2(TipWidth - Pad * 2f, TipHeight - bodyTop - Pad);
@@ -176,6 +179,11 @@ internal sealed class HelpTip : IDisposable
 
     private void Show(bool shown)
     {
+        // The help names the path tool's shortcut, and the panel outlives a rebind in
+        // the pause menu: the map screen is built once a run. Reading it on the way
+        // in keeps it naming the key that works now, as the tray's tooltip does.
+        if (shown && !_tip.Visible)
+            _body.Text = Instructions;
         _tip.Visible = shown;
         _circle.Modulate = shown ? Colors.White : BadgeIdle;
         if (shown)
@@ -188,15 +196,17 @@ internal sealed class HelpTip : IDisposable
     /// code. See <see cref="ModText.Help" /> for the language fallback, and
     /// <see cref="Text.TextFiles.ParseProse" /> for how the file is unwrapped.
     ///
-    /// <c>{key}</c> is the path tool's shortcut, read when the panel is built so a rebind
-    /// shows on the next map screen rather than leaving the text naming a key that no
-    /// longer does anything.
+    /// <c>{shortcut}</c> is the path tool's shortcut as a whole phrase (<c>help.shortcut</c>,
+    /// or <c>help.no_shortcut</c> when it is unbound), so each language words both cases
+    /// naturally. Read on every show; see <see cref="Show" />.
     /// </summary>
     private static string Instructions => Guard.Run("Reading the help text", () =>
         ModText.Help() is { } help
             ? Text.TextFiles.Format(help, new Dictionary<string, string>
             {
-                ["key"] = PathToolHotkey.CurrentKeyLabel() ?? ModText.Get("help.no_key"),
+                ["shortcut"] = PathToolHotkey.CurrentKeyLabel() is { } key
+                    ? ModText.Format("help.shortcut", ("key", key))
+                    : ModText.Get("help.no_shortcut"),
             })
             : MissingText, MissingText);
 
