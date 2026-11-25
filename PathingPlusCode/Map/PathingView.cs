@@ -649,6 +649,10 @@ internal sealed class PathingView : IDisposable
     /// and taken off on the way out rather than held for the screen's whole lifetime —
     /// the map screen's root stays in the tree after the map closes, and a shortcut that
     /// outlived the map would fire over combat.
+    ///
+    /// The map screen owns the binding. From 0.114 the game fires a binding only while
+    /// its owner is visible and not behind an open screen, and removes it only for the
+    /// owner it was pushed with, so push and remove both name the screen.
     /// </summary>
     private void OnPathToolHotkey() => Guard.Run("The path tool shortcut", () =>
     {
@@ -665,9 +669,9 @@ internal sealed class PathingView : IDisposable
         if (NHotkeyManager.Instance is not { } hotkeys)
             return;
         if (listening)
-            GameCompat.PushHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, OnPathToolHotkey);
+            GameCompat.PushHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, _screen, OnPathToolHotkey);
         else
-            GameCompat.RemoveHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, OnPathToolHotkey);
+            GameCompat.RemoveHotkeyReleasedBinding(hotkeys, PathToolHotkey.Action, _screen, OnPathToolHotkey);
     });
 
     /// <summary>

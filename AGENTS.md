@@ -216,6 +216,9 @@ that window; writing to it from `Install` put a `NullReferenceException` in ever
 player's log on every launch (reported from the Workshop in v1.7.0).
 
 The shortcut is live only while the map is (`ListenForHotkey` on open and close).
+The binding is owned by the `NMapScreen`, and push and remove must both name it: from
+0.114 the manager fires a binding only while its owner is visible and not behind an
+open screen, and removes it only for the owner it was pushed with. On 0.111
 `NHotkeyManager`'s blocking-screen mechanism only covers `MegaInput.AllInputs`, so a mod
 action would still arrive from under a pause menu; the handler asks
 `ActiveScreenContext.IsCurrent` for the same reason the mod's other hotkeys do.
@@ -715,21 +718,24 @@ Game coupling that a game update can move (verify after every update):
 - Scroll assumptions: the `_targetDragPos` clamp range [-600, 1800], and on 0.111 the
   "-600 + row * _distY" current-row formula that `GetRowScrollPos` replaced.
 - **Supported game versions.** `min_game_version` is 0.111.0, and the mod runs on
-  **both branches**: as of 2026-11-18 the default (`public`) branch is 0.111.1 and the
-  beta is 0.113.1. The Workshop item's Steam branch range is therefore empty — no
+  **both branches**: as of 2026-11-25 the default (`public`) branch is 0.111.1 and the
+  beta is 0.114.0. The Workshop item's Steam branch range is therefore empty — no
   minimum, no maximum, which is what a new upload gets by default. Until 2026-11-18 main
   was 0.107.1, which the loader refuses, and each uploaded version had its minimum branch
   set to `public-beta` on the item's change notes page; do that again only if main falls
   below `min_game_version`. Never set it through `workshop.json` (see
   `docs/sts2-modding.md`).
-- **One build serves every supported game version.** Where 0.111 and 0.113 differ, the
+- **One build serves every supported game version** (0.111 main, 0.114 beta, and 0.113
+  before it). Where the builds differ, the
   call goes through `GameCompat` / `GameArt` by name and takes whichever form the running
   game has; never call a member that differs between them directly. A direct call
   compiles against whichever `sts2.dll` is installed and then throws
   `MissingMethodException` on the other build — inside `Guard.Run`, so all anyone sees
   is a feature that quietly stopped working. The known differences:
   `NHotkeyManager.Push/RemoveHotkeyReleasedBinding` (0.113 added a trailing
-  `long sequence = 0` and made Remove return it), the row scroll above, and the
+  `long sequence = 0` and made Remove return it; 0.114 added a `Node owner` after the
+  hotkey, so `GameCompat` takes the owner and fills arguments by type), the row scroll
+  above, and the
   `compressed` atlas (renamed `compressed_atlas` in 0.113 and flattened, so
   `compressed.sprites/map/map_dot.tres` is now `compressed_atlas.sprites/map_dot.tres`).
   To check a new build, compare the mod's `[sts2]` member references between a DLL

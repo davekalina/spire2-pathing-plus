@@ -8,9 +8,8 @@ namespace PathingPlus.PathingPlusCode.Map;
 
 /// <summary>
 /// The places where the game's recent builds disagree, answered for all of them, so one
-/// DLL loads on 0.111 (the previous beta, and the manifest's minimum) and on 0.113 (the
-/// current beta) alike. The default branch is still 0.107.1, which the mod does not
-/// support: the manifest refuses it.
+/// DLL loads on 0.111 (main, and the manifest's minimum) and on 0.114 (the current beta)
+/// alike, and on 0.113 (the previous beta) too.
 ///
 /// Each member here exists because a direct call compiled against one build fails on
 /// the other. That failure is not a compile error anyone sees. It is a
@@ -22,47 +21,73 @@ internal static class GameCompat
 {
     // ---- Hotkey bindings ------------------------------------------------------------
     //
-    // 0.113 gave NHotkeyManager's bindings a priority sequence: Push takes a trailing
-    // `long sequence = 0` and Remove returns the sequence it removed. Optional
-    // parameters are filled in by the compiler, not the runtime, so a call compiled
-    // against either signature is a MissingMethodException on the other.
+    // NHotkeyManager's binding methods have had three shapes:
+    //   0.111  void Push…Binding(string hotkey, Action action)
+    //          void Remove…Binding(string hotkey, Action action)
+    //   0.113  void Push…Binding(string hotkey, Action action, long sequence = 0)
+    //          long Remove…Binding(string hotkey, Action action)
+    //   0.114  void Push…Binding(string hotkey, Node owner, Action action, long sequence = 0)
+    //          long Remove…Binding(string hotkey, Node owner, Action action)
+    // Optional parameters are filled in by the compiler, not the runtime, so a call
+    // compiled against any one of them is a MissingMethodException on the others.
+    //
+    // On 0.114 a binding fires only while its owner is in the tree, visible, and not
+    // behind an open capstone screen, and Remove matches on owner and action together.
+    // So the owner is the node the shortcut belongs to, and Remove must be given the same
+    // one. Builds without an owner parameter ignore it.
 
     private static readonly MethodInfo? PushReleased = Binding("PushHotkeyReleasedBinding");
     private static readonly MethodInfo? RemoveReleased = Binding("RemoveHotkeyReleasedBinding");
 
-    public static void PushHotkeyReleasedBinding(NHotkeyManager hotkeys, string hotkey, Action action) =>
-        InvokeBinding(PushReleased, "PushHotkeyReleasedBinding", hotkeys, hotkey, action);
+    public static void PushHotkeyReleasedBinding(
+        NHotkeyManager hotkeys, string hotkey, Node owner, Action action) =>
+        InvokeBinding(PushReleased, "PushHotkeyReleasedBinding", hotkeys, hotkey, owner, action);
 
-    public static void RemoveHotkeyReleasedBinding(NHotkeyManager hotkeys, string hotkey, Action action) =>
-        InvokeBinding(RemoveReleased, "RemoveHotkeyReleasedBinding", hotkeys, hotkey, action);
+    public static void RemoveHotkeyReleasedBinding(
+        NHotkeyManager hotkeys, string hotkey, Node owner, Action action) =>
+        InvokeBinding(RemoveReleased, "RemoveHotkeyReleasedBinding", hotkeys, hotkey, owner, action);
 
+    /// <summary>
+    /// The public overload whose parameters start <c>(string, Action, …)</c> or
+    /// <c>(string, Node, Action, …)</c>, fewest parameters first.
+    /// </summary>
     private static MethodInfo? Binding(string name) =>
         typeof(NHotkeyManager)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .Where(m => m.Name == name)
-            .Where(m => m.GetParameters() is [{ } a, { } b, ..] &&
-                a.ParameterType == typeof(string) && b.ParameterType == typeof(Action))
+            .Where(m => m.Name == name && IsBindingShape(m.GetParameters()))
             .OrderBy(m => m.GetParameters().Length)
             .FirstOrDefault();
 
+    private static bool IsBindingShape(ParameterInfo[] parameters) =>
+        parameters.Length >= 2 &&
+        parameters[0].ParameterType == typeof(string) &&
+        (parameters[1].ParameterType == typeof(Action) ||
+         parameters.Length >= 3 &&
+         parameters[1].ParameterType == typeof(Node) &&
+         parameters[2].ParameterType == typeof(Action));
+
     /// <summary>
-    /// Any parameter past the first two gets its type's default. For 0.113's sequence that
-    /// is <c>noSequence</c> (0), meaning "a fresh binding at top priority", which is exactly
-    /// what the two-argument call meant before the parameter existed.
+    /// Arguments are filled by type: the string is the hotkey, the Node the owner, the
+    /// Action the action, and anything else gets its type's default. For the sequence
+    /// that is <c>noSequence</c> (0), meaning "a fresh binding at top priority", which is
+    /// exactly what the two-argument call meant before the parameter existed.
     /// </summary>
     private static void InvokeBinding(MethodInfo? method, string name, NHotkeyManager hotkeys,
-        string hotkey, Action action)
+        string hotkey, Node owner, Action action)
     {
         if (method is null)
             throw new MissingMethodException(nameof(NHotkeyManager), name);
         var parameters = method.GetParameters();
         var args = new object?[parameters.Length];
-        args[0] = hotkey;
-        args[1] = action;
-        for (var i = 2; i < parameters.Length; i++)
-            args[i] = parameters[i].ParameterType.IsValueType
-                ? Activator.CreateInstance(parameters[i].ParameterType)
-                : null;
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var type = parameters[i].ParameterType;
+            args[i] =
+                type == typeof(string) ? hotkey :
+                type == typeof(Node) ? owner :
+                type == typeof(Action) ? action :
+                type.IsValueType ? Activator.CreateInstance(type) : null;
+        }
         method.Invoke(hotkeys, args);
     }
 
